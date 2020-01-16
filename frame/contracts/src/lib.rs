@@ -16,50 +16,56 @@
 
 //! # Contract Module
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! smart-contracts.
 //!
 //! - [`contract::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
-//! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
-//! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
+//! This module extends accounts based on the `Currency` trait to have smart-contract functionality.
+//! It can be used with other modules that implement accounts based on `Currency`. These
+//! "smart-contract accounts" have the ability to instantiate smart-contracts and make calls to
+//! other contract and non-contract accounts.
 //!
-//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
-//! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
-//! the code each time.
+//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its
+//! `code_hash`. This means that multiple smart-contracts can be instantiated from the same
+//! `code_cache`, without replicating the code each time.
 //!
-//! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
-//! This call can alter the storage entries of the smart-contract account, instantiate new smart-contracts,
-//! or call other smart-contracts.
+//! When a smart-contract is called, its associated code is retrieved via the code hash and gets
+//! executed. This call can alter the storage entries of the smart-contract account, instantiate new
+//! smart-contracts, or call other smart-contracts.
 //!
-//! Finally, when an account is reaped, its associated code and storage of the smart-contract account
-//! will also be deleted.
+//! Finally, when an account is reaped, its associated code and storage of the smart-contract
+//! account will also be deleted.
 //!
 //! ### Gas
 //!
-//! Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-//! Unused gas is refunded after the call, regardless of the execution outcome.
+//! Senders must specify a gas limit with every call, as all instructions invoked by the
+//! smart-contract require gas. Unused gas is refunded after the call, regardless of the execution
+//! outcome.
 //!
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are only
-//! reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
-//! then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
-//! changes still persist.
+//! If the gas limit is reached, then all calls and state changes (including balance transfers) are
+//! only reverted at the current call's contract level. For example, if contract A calls B and B
+//! runs out of gas mid-call, then all of B's calls are reverted. Assuming correct error handling by
+//! contract A, A's other calls and state changes still persist.
 //!
 //! ### Notable Scenarios
 //!
-//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
-//! and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
-//! fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+//! Contract call failures are not always cascading. When failures occur in a sub-call, they do not
+//! "bubble up", and the call will only revert at the specific contract level. For example, if
+//! contract A calls contract B, and B fails, A can decide how to handle that failure, either
+//! proceeding or reverting A's changes.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable functions
 //!
-//! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
-//! * `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
+//! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its
+//!   `code_hash`.
+//! * `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring
+//!   some balance.
 //! This instantiates a new smart contract account and calls its contract deploy handler to
 //! initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
@@ -93,43 +99,48 @@ mod gas;
 
 mod account_db;
 mod exec;
-mod wasm;
 mod rent;
+mod wasm;
 
-#[cfg(test)]
-mod tests;
 #[cfg(test)]
 mod doughnut_integration;
+#[cfg(test)]
+mod tests;
 
-use crate::exec::ExecutionContext;
-use crate::account_db::{AccountDb, DirectAccountDb};
-use crate::wasm::{WasmLoader, WasmVm};
+use crate::{
+	account_db::{AccountDb, DirectAccountDb},
+	exec::ExecutionContext,
+	wasm::{WasmLoader, WasmVm},
+};
 
-pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
+pub use crate::{
+	exec::{ExecError, ExecResult, ExecReturnValue, StatusCode},
+	gas::{Gas, GasMeter},
+};
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
-use codec::{Codec, Encode, Decode};
+use codec::{Codec, Decode, Encode};
+use primitives::{crypto::UncheckedFrom, storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX};
+use rstd::{fmt::Debug, marker::PhantomData, prelude::*};
 use runtime_io::hashing::blake2_256;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{Hash, MaybeSerializeDeserialize, Member, SignedExtension, StaticLookup, Zero},
 	transaction_validity::{
-		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 	RuntimeDebug,
 };
-use support::dispatch::{Result, Dispatchable};
 use support::{
-	Parameter, decl_module, decl_event, decl_storage, storage::child,
-	parameter_types, IsSubType,
+	decl_event, decl_module, decl_storage,
+	dispatch::{Dispatchable, Result},
+	parameter_types,
+	storage::child,
+	traits::{Currency, Get, OnFreeBalanceZero, OnUnbalanced, Randomness, Time},
 	weights::DispatchInfo,
+	IsSubType, Parameter,
 };
-use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
-use system::{ensure_signed, RawOrigin, ensure_root, ensure_verified_contract_call};
-use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use system::{ensure_root, ensure_signed, ensure_verified_contract_call, RawOrigin};
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -161,6 +172,7 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
+
 	/// If contract is alive then return some reference to alive info
 	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
 		if let ContractInfo::Alive(ref alive) = self {
@@ -169,6 +181,7 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
+
 	/// If contract is alive then return some mutable reference to alive info
 	pub fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
 		if let ContractInfo::Alive(ref mut alive) = self {
@@ -186,6 +199,7 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
+
 	/// If contract is tombstone then return some reference to tombstone info
 	pub fn as_tombstone(&self) -> Option<&TombstoneContractInfo<T>> {
 		if let ContractInfo::Tombstone(ref tombstone) = self {
@@ -194,6 +208,7 @@ impl<T: Trait> ContractInfo<T> {
 			None
 		}
 	}
+
 	/// If contract is tombstone then return some mutable reference to tombstone info
 	pub fn as_tombstone_mut(&mut self) -> Option<&mut TombstoneContractInfo<T>> {
 		if let ContractInfo::Tombstone(ref mut tombstone) = self {
@@ -233,10 +248,16 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDeserialize+ Debug
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ rstd::hash::Hash + Codec,
-	Hasher: Hash<Output=H>,
+	H: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Default
+		+ rstd::hash::Hash
+		+ Codec,
+	Hasher: Hash<Output = H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {
 		let mut buf = Vec::new();
@@ -269,7 +290,7 @@ pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
 /// accountid_counter`.
 impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
 where
-	T::AccountId: AsRef<[u8]>
+	T::AccountId: AsRef<[u8]>,
 {
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
@@ -284,7 +305,8 @@ where
 		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
 
 		// TODO: see https://github.com/paritytech/substrate/issues/2325
-		CHILD_STORAGE_KEY_PREFIX.iter()
+		CHILD_STORAGE_KEY_PREFIX
+			.iter()
 			.chain(b"default:")
 			.chain(T::Hashing::hash(&buf[..]).as_ref().iter())
 			.cloned()
@@ -292,7 +314,8 @@ where
 	}
 }
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -337,7 +360,9 @@ pub trait Trait: system::Trait {
 	type Randomness: Randomness<Self::Hash>;
 
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
+	type Call: Parameter
+		+ Dispatchable<Origin = <Self as system::Trait>::Origin>
+		+ IsSubType<Module<Self>, Self>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -429,9 +454,13 @@ pub trait Trait: system::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
+	fn contract_address_for(
+		code_hash: &CodeHash<T>,
+		data: &[u8],
+		origin: &T::AccountId,
+	) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
 
 		let mut buf = Vec::new();
@@ -444,10 +473,12 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this only takes a fixed
-/// fee based on size. Unlike the balances module, weight-fee is applied.
+/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this
+/// only takes a fixed fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
-impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
+impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>>
+	for DefaultDispatchFeeComputor<T>
+{
 	fn compute_dispatch_fee(call: &<T as Trait>::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len() as u32);
 		let base_fee = T::TransactionBaseFee::get();
@@ -706,27 +737,31 @@ impl<T: Trait> Module<T> {
 		origin: T::AccountId,
 		gas_limit: Gas,
 		doughnut: Option<T::Doughnut>,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult,
 	) -> ExecResult {
 		// Pay for the gas upfront.
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		let (mut gas_meter, imbalance) =
-			try_or_exec_error!(
-				gas::buy_gas::<T>(&origin, gas_limit),
-				// We don't have a spare buffer here in the first place, so create a new empty one.
-				Vec::new()
-			);
+		let (mut gas_meter, imbalance) = try_or_exec_error!(
+			gas::buy_gas::<T>(&origin, gas_limit),
+			// We don't have a spare buffer here in the first place, so create a new empty one.
+			Vec::new()
+		);
 
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
 		let loader = WasmLoader::new(&cfg.schedule);
-		let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader, doughnut.as_ref());
+		let mut ctx =
+			ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader, doughnut.as_ref());
 
 		let result = func(&mut ctx, &mut gas_meter);
 
-		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
+		if result
+			.as_ref()
+			.map(|output| output.is_success())
+			.unwrap_or(false)
+		{
 			// Commit all changes that made it thus far into the persistent storage.
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
@@ -741,20 +776,14 @@ impl<T: Trait> Module<T> {
 		ctx.deferred.into_iter().for_each(|deferred| {
 			use self::exec::DeferredAction::*;
 			match deferred {
-				DepositEvent {
-					topics,
-					event,
-				} => <system::Module<T>>::deposit_event_indexed(
+				DepositEvent { topics, event } => <system::Module<T>>::deposit_event_indexed(
 					&*topics,
 					<T as Trait>::Event::from(event).into(),
 				),
-				DispatchRuntimeCall {
-					origin: who,
-					call,
-				} => {
+				DispatchRuntimeCall { origin: who, call } => {
 					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
 					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-				}
+				},
 				RestoreTo {
 					donor,
 					dest,
@@ -763,7 +792,7 @@ impl<T: Trait> Module<T> {
 					delta,
 				} => {
 					let _result = Self::restore_to(donor, dest, code_hash, rent_allowance, delta);
-				}
+				},
 			}
 		});
 
@@ -775,7 +804,7 @@ impl<T: Trait> Module<T> {
 		dest: T::AccountId,
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
-		delta: Vec<exec::StorageKey>
+		delta: Vec<exec::StorageKey>,
 	) -> Result {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
@@ -784,7 +813,7 @@ impl<T: Trait> Module<T> {
 		let current_block = <system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			return Err("Origin TrieId written in the current block");
+			return Err("Origin TrieId written in the current block")
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
@@ -797,7 +826,8 @@ impl<T: Trait> Module<T> {
 			origin_contract.last_write
 		};
 
-		let key_values_taken = delta.iter()
+		let key_values_taken = delta
+			.iter()
 			.filter_map(|key| {
 				child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
 					child::kill(&origin_contract.trie_id, &blake2_256(key));
@@ -818,22 +848,26 @@ impl<T: Trait> Module<T> {
 				child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
 			}
 
-			return Err("Tombstones don't match");
+			return Err("Tombstones don't match")
 		}
 
-		origin_contract.storage_size -= key_values_taken.iter()
+		origin_contract.storage_size -= key_values_taken
+			.iter()
 			.map(|(_, value)| value.len() as u32)
 			.sum::<u32>();
 
 		<ContractInfoOf<T>>::remove(&origin);
-		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
-			trie_id: origin_contract.trie_id,
-			storage_size: origin_contract.storage_size,
-			code_hash,
-			rent_allowance,
-			deduct_block: current_block,
-			last_write,
-		}));
+		<ContractInfoOf<T>>::insert(
+			&dest,
+			ContractInfo::Alive(RawAliveContractInfo {
+				trie_id: origin_contract.trie_id,
+				storage_size: origin_contract.storage_size,
+				code_hash,
+				rent_allowance,
+				deduct_block: current_block,
+				last_write,
+			}),
+		);
 
 		let origin_free_balance = T::Currency::free_balance(&origin);
 		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
@@ -1019,9 +1053,7 @@ impl Default for Schedule {
 pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
-	fn default() -> Self {
-		Self(PhantomData)
-	}
+	fn default() -> Self { Self(PhantomData) }
 }
 
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
@@ -1031,15 +1063,13 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
+	type Call = <T as Trait>::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -1058,12 +1088,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		};
 
 		match call {
-			Call::claim_surcharge(_, _) | Call::update_schedule(_) =>
-				Ok(ValidTransaction::default()),
+			Call::claim_surcharge(_, _) | Call::update_schedule(_) => {
+				Ok(ValidTransaction::default())
+			},
 			Call::put_code(gas_limit, _)
-				| Call::call(_, _, gas_limit, _, _)
-				| Call::instantiate(_, gas_limit, _, _, _)
-			=> {
+			| Call::call(_, _, gas_limit, _, _)
+			| Call::instantiate(_, gas_limit, _, _, _) => {
 				// Check if the specified amount of gas is available in the current block.
 				// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
 				let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
@@ -1074,7 +1104,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 					Ok(ValidTransaction::default())
 				}
 			},
-			Call::__PhantomItem(_, _)  => unreachable!("Variant is never constructed"),
+			Call::__PhantomItem(_, _) => unreachable!("Variant is never constructed"),
 		}
 	}
 }

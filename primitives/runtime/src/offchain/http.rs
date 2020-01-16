@@ -47,17 +47,15 @@
 //! assert_eq!(body.error(), &None);
 //! ```
 
-use rstd::str;
-use rstd::prelude::Vec;
+use primitives::{
+	offchain::{
+		HttpError, HttpRequestId as RequestId, HttpRequestStatus as RequestStatus, Timestamp,
+	},
+	RuntimeDebug,
+};
 #[cfg(not(feature = "std"))]
 use rstd::prelude::vec;
-use primitives::RuntimeDebug;
-use primitives::offchain::{
-	Timestamp,
-	HttpRequestId as RequestId,
-	HttpRequestStatus as RequestStatus,
-	HttpError,
-};
+use rstd::{prelude::Vec, str};
 
 /// Request method (HTTP verb)
 #[derive(Clone, PartialEq, Eq, RuntimeDebug)]
@@ -155,9 +153,7 @@ impl<T: Default> Default for Request<'static, T> {
 
 impl<'a> Request<'a> {
 	/// Start a simple GET request
-	pub fn get(url: &'a str) -> Self {
-		Self::new(url)
-	}
+	pub fn get(url: &'a str) -> Self { Self::new(url) }
 }
 
 impl<'a, T> Request<'a, T> {
@@ -177,9 +173,7 @@ impl<'a, T> Request<'a, T> {
 
 impl<'a, T: Default> Request<'a, T> {
 	/// Create new Request builder with given URL and body.
-	pub fn new(url: &'a str) -> Self {
-		Request::default().url(url)
-	}
+	pub fn new(url: &'a str) -> Self { Request::default().url(url) }
 
 	/// Change the method of the request
 	pub fn method(mut self, method: Method) -> Self {
@@ -212,7 +206,7 @@ impl<'a, T: Default> Request<'a, T> {
 	}
 }
 
-impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
+impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item = I>> Request<'a, T> {
 	/// Send the request and return a handle.
 	///
 	/// Err is returned in case the deadline is reached
@@ -221,19 +215,13 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = runtime_io::offchain::http_request_start(
-			self.method.as_ref(),
-			self.url,
-			meta,
-		).map_err(|_| HttpError::IoError)?;
+		let id = runtime_io::offchain::http_request_start(self.method.as_ref(), self.url, meta)
+			.map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
 		for header in &self.headers {
-			runtime_io::offchain::http_request_add_header(
-				id,
-				header.name(),
-				header.value(),
-			).map_err(|_| HttpError::IoError)?
+			runtime_io::offchain::http_request_add_header(id, header.name(), header.value())
+				.map_err(|_| HttpError::IoError)?
 		}
 
 		// write body
@@ -244,9 +232,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		// finalise the request
 		runtime_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
-		Ok(PendingRequest {
-			id,
-		})
+		Ok(PendingRequest { id })
 	}
 }
 
@@ -284,8 +270,13 @@ impl PendingRequest {
 
 	/// Attempts to wait for the request to finish,
 	/// but will return `Err` in case the deadline is reached.
-	pub fn try_wait(self, deadline: impl Into<Option<Timestamp>>) -> Result<HttpResult, PendingRequest> {
-		Self::try_wait_all(vec![self], deadline).pop().expect("One request passed, one status received; qed")
+	pub fn try_wait(
+		self,
+		deadline: impl Into<Option<Timestamp>>,
+	) -> Result<HttpResult, PendingRequest> {
+		Self::try_wait_all(vec![self], deadline)
+			.pop()
+			.expect("One request passed, one status received; qed")
 	}
 
 	/// Wait for all provided requests.
@@ -301,10 +292,11 @@ impl PendingRequest {
 
 	/// Attempt to wait for all provided requests, but up to given deadline.
 	///
-	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached` error.
+	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached`
+	/// error.
 	pub fn try_wait_all(
 		requests: Vec<PendingRequest>,
-		deadline: impl Into<Option<Timestamp>>
+		deadline: impl Into<Option<Timestamp>>,
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
 		let statuses = runtime_io::offchain::http_response_wait(&ids, deadline.into());
@@ -345,24 +337,22 @@ impl Response {
 	/// Retrieve the headers for this response.
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
-			self.headers = Some(
-				Headers { raw: runtime_io::offchain::http_response_headers(self.id) },
-			);
+			self.headers = Some(Headers {
+				raw: runtime_io::offchain::http_response_headers(self.id),
+			});
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
 	}
 
 	/// Retrieve the body of this response.
-	pub fn body(&self) -> ResponseBody {
-		ResponseBody::new(self.id)
-	}
+	pub fn body(&self) -> ResponseBody { ResponseBody::new(self.id) }
 }
 
 /// A buffered byte iterator over response body.
 ///
 /// Note that reading the body may return `None` in following cases:
 /// 1. Either the deadline you've set is reached (check via `#error`;
-///	   In such case you can resume the reader by setting a new deadline)
+/// 	   In such case you can resume the reader by setting a new deadline)
 /// 2. Or because of IOError. In such case the reader is not resumable and will keep
 ///    returning `None`.
 /// 3. The body has been returned. The reader will keep returning `None`.
@@ -412,9 +402,7 @@ impl ResponseBody {
 	///
 	/// If the error is `DeadlineReached` you can resume the iterator by setting
 	/// a new deadline.
-	pub fn error(&self) -> &Option<HttpError> {
-		&self.error
-	}
+	pub fn error(&self) -> &Option<HttpError> { &self.error }
 }
 
 impl Iterator for ResponseBody {
@@ -422,32 +410,31 @@ impl Iterator for ResponseBody {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.error.is_some() {
-			return None;
+			return None
 		}
 
 		if self.filled_up_to.is_none() {
 			let result = runtime_io::offchain::http_response_read_body(
 				self.id,
 				&mut self.buffer,
-				self.deadline);
+				self.deadline,
+			);
 			match result {
 				Err(e) => {
 					self.error = Some(e);
-					return None;
-				}
-				Ok(0) => {
-					return None;
-				}
+					return None
+				},
+				Ok(0) => return None,
 				Ok(size) => {
 					self.position = 0;
 					self.filled_up_to = Some(size as usize);
-				}
+				},
 			}
 		}
 
 		if Some(self.position) == self.filled_up_to {
 			self.filled_up_to = None;
-			return self.next();
+			return self.next()
 		}
 
 		let result = self.buffer[self.position];
@@ -482,7 +469,10 @@ impl Headers {
 
 	/// Convert this headers into an iterator.
 	pub fn into_iter(&self) -> HeadersIterator {
-		HeadersIterator { collection: &self.raw, index: None }
+		HeadersIterator {
+			collection: &self.raw,
+			index: None,
+		}
 	}
 }
 
@@ -507,19 +497,20 @@ impl<'a> HeadersIterator<'a> {
 	///
 	/// Note that you have to call `next` prior to calling this
 	pub fn current(&self) -> Option<(&str, &str)> {
-		self.collection.get(self.index?)
-			.map(|val| (str::from_utf8(&val.0).unwrap_or(""), str::from_utf8(&val.1).unwrap_or("")))
+		self.collection.get(self.index?).map(|val| {
+			(
+				str::from_utf8(&val.0).unwrap_or(""),
+				str::from_utf8(&val.1).unwrap_or(""),
+			)
+		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::offchain::{testing, OffchainExt};
 	use runtime_io::TestExternalities;
-	use primitives::offchain::{
-		OffchainExt,
-		testing,
-	};
 
 	#[test]
 	fn should_send_a_basic_request_and_get_response() {
@@ -529,10 +520,7 @@ mod tests {
 
 		t.execute_with(|| {
 			let request: Request = Request::get("http://localhost:1234");
-			let pending = request
-				.add_header("X-Auth", "hunter2")
-				.send()
-				.unwrap();
+			let pending = request.add_header("X-Auth", "hunter2").send().unwrap();
 			// make sure it's sent correctly
 			state.write().fulfill_pending_request(
 				0,

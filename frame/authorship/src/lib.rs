@@ -20,17 +20,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, prelude::*};
-use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage, ensure};
-use support::traits::{FindAuthor, VerifySeal, Get};
-use support::dispatch::Result as DispatchResult;
-use codec::{Encode, Decode};
-use system::ensure_none;
+use codec::{Decode, Encode};
+use inherents::{InherentData, InherentIdentifier, ProvideInherent};
+use rstd::{collections::btree_set::BTreeSet, prelude::*, result};
+use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use support::weights::SimpleDispatchInfo;
-use inherents::{InherentIdentifier, ProvideInherent, InherentData};
-use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
+use support::{
+	decl_module, decl_storage,
+	dispatch::Result as DispatchResult,
+	ensure,
+	traits::{FindAuthor, Get, VerifySeal},
+	weights::SimpleDispatchInfo,
+};
+use system::ensure_none;
 
 const MAX_UNCLES: usize = 10;
 
@@ -45,8 +47,8 @@ pub trait Trait: system::Trait {
 	/// further constraints on what uncles can be included, other than their ancestry.
 	///
 	/// For PoW, as long as the seals are checked, there is no need to use anything
-	/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
-	/// uncles is high.
+	/// but the `VerifySeal` implementation as the filter. This is because the cost of making many
+	/// equivocating uncles is high.
 	///
 	/// For PoS, there is no such limitation, so a further constraint must be imposed
 	/// beyond a seal check in order to prevent an arbitrary number of
@@ -82,15 +84,16 @@ pub trait FilterUncle<Header, Author> {
 
 	/// Do additional filtering on a seal-checked uncle block, with the accumulated
 	/// filter.
-	fn filter_uncle(header: &Header, acc: &mut Self::Accumulator)
-		-> Result<Option<Author>, &'static str>;
+	fn filter_uncle(
+		header: &Header,
+		acc: &mut Self::Accumulator,
+	) -> Result<Option<Author>, &'static str>;
 }
 
 impl<H, A> FilterUncle<H, A> for () {
 	type Accumulator = ();
-	fn filter_uncle(_: &H, _acc: &mut Self::Accumulator)
-		-> Result<Option<A>, &'static str>
-	{
+
+	fn filter_uncle(_: &H, _acc: &mut Self::Accumulator) -> Result<Option<A>, &'static str> {
 		Ok(None)
 	}
 }
@@ -100,14 +103,10 @@ impl<H, A> FilterUncle<H, A> for () {
 /// equivocating is high.
 pub struct SealVerify<T>(rstd::marker::PhantomData<T>);
 
-impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
-	for SealVerify<T>
-{
+impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author> for SealVerify<T> {
 	type Accumulator = ();
 
-	fn filter_uncle(header: &Header, _acc: &mut ())
-		-> Result<Option<Author>, &'static str>
-	{
+	fn filter_uncle(header: &Header, _acc: &mut ()) -> Result<Option<Author>, &'static str> {
 		T::verify_seal(header)
 	}
 }
@@ -118,8 +117,7 @@ impl<Header, Author, T: VerifySeal<Header, Author>> FilterUncle<Header, Author>
 /// This does O(n log n) work in the number of uncles included.
 pub struct OnePerAuthorPerHeight<T, N>(rstd::marker::PhantomData<(T, N)>);
 
-impl<Header, Author, T> FilterUncle<Header, Author>
-	for OnePerAuthorPerHeight<T, Header::Number>
+impl<Header, Author, T> FilterUncle<Header, Author> for OnePerAuthorPerHeight<T, Header::Number>
 where
 	Header: HeaderT + PartialEq,
 	Header::Number: Ord,
@@ -128,15 +126,16 @@ where
 {
 	type Accumulator = BTreeSet<(Header::Number, Author)>;
 
-	fn filter_uncle(header: &Header, acc: &mut Self::Accumulator)
-		-> Result<Option<Author>, &'static str>
-	{
+	fn filter_uncle(
+		header: &Header,
+		acc: &mut Self::Accumulator,
+	) -> Result<Option<Author>, &'static str> {
 		let author = T::verify_seal(header)?;
 		let number = header.number();
 
 		if let Some(ref author) = author {
 			if !acc.insert((number.clone(), author.clone())) {
-				return Err("more than one uncle per number per author included");
+				return Err("more than one uncle per number per author included")
 			}
 		}
 
@@ -207,7 +206,7 @@ impl<T: Trait> Module<T> {
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
 		if let Some(author) = <Self as Store>::Author::get() {
-			return author;
+			return author
 		}
 
 		let digest = <system::Module<T>>::digest();
@@ -229,11 +228,10 @@ impl<T: Trait> Module<T> {
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
 		for uncle in new_uncles {
-			let prev_uncles = uncles.iter().filter_map(|entry|
-				match entry {
-					UncleEntryItem::InclusionHeight(_) => None,
-					UncleEntryItem::Uncle(h, _) => Some(h),
-				});
+			let prev_uncles = uncles.iter().filter_map(|entry| match entry {
+				UncleEntryItem::InclusionHeight(_) => None,
+				UncleEntryItem::Uncle(h, _) => Some(h),
+			});
 			let author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
 			let hash = uncle.hash();
 
@@ -248,12 +246,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn verify_uncle<'a, I: IntoIterator<Item=&'a T::Hash>>(
+	fn verify_uncle<'a, I: IntoIterator<Item = &'a T::Hash>>(
 		uncle: &T::Header,
 		existing_uncles: I,
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
-	) -> Result<Option<T::AccountId>, &'static str>
-	{
+	) -> Result<Option<T::AccountId>, &'static str> {
 		let now = <system::Module<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {
@@ -270,23 +267,23 @@ impl<T: Trait> Module<T> {
 		let hash = uncle.hash();
 
 		if uncle.number() < &One::one() {
-			return Err("uncle is genesis");
+			return Err("uncle is genesis")
 		}
 
 		if uncle.number() > &maximum_height {
-			return Err("uncle is too high in chain");
+			return Err("uncle is too high in chain")
 		}
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
 			let parent_hash = <system::Module<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
-				return Err("uncle parent not in chain");
+				return Err("uncle parent not in chain")
 			}
 		}
 
 		if uncle.number() < &minimum_height {
-			return Err("uncle not recent enough to be included");
+			return Err("uncle not recent enough to be included")
 		}
 
 		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
@@ -316,6 +313,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
+
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
@@ -324,12 +322,13 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		if !uncles.is_empty() {
 			let prev_uncles = <Self as Store>::Uncles::get();
-			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
-				match entry {
+			let mut existing_hashes: Vec<_> = prev_uncles
+				.into_iter()
+				.filter_map(|entry| match entry {
 					UncleEntryItem::InclusionHeight(_) => None,
 					UncleEntryItem::Uncle(h, _) => Some(h),
-				}
-			).collect();
+				})
+				.collect();
 
 			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
 
@@ -343,10 +342,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 						if set_uncles.len() == MAX_UNCLES {
 							break
 						}
-					}
+					},
 					Err(_) => {
 						// skip this uncle
-					}
+					},
 				}
 			}
 		}
@@ -363,9 +362,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
 				Err(InherentError::Uncles("Too many uncles".into()))
 			},
-			_ => {
-				Ok(())
-			},
+			_ => Ok(()),
 		}
 	}
 }
@@ -375,11 +372,14 @@ mod tests {
 	use super::*;
 	use primitives::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
+		generic::DigestItem,
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
-	use support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
+	use support::{impl_outer_origin, parameter_types, weights::Weight, ConsensusEngineId};
 
-	impl_outer_origin!{
+	impl_outer_origin! {
 		pub enum Origin for Test {}
 	}
 
@@ -394,23 +394,23 @@ mod tests {
 	}
 
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 
 	parameter_types! {
@@ -418,10 +418,10 @@ mod tests {
 	}
 
 	impl Trait for Test {
+		type EventHandler = ();
+		type FilterUncle = SealVerify<VerifyBlock>;
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
-		type FilterUncle = SealVerify<VerifyBlock>;
-		type EventHandler = ();
 	}
 
 	type System = system::Module<Test>;
@@ -433,11 +433,12 @@ mod tests {
 
 	impl FindAuthor<u64> for AuthorGiven {
 		fn find_author<'a, I>(digests: I) -> Option<u64>
-			where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+		where
+			I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 		{
 			for (id, data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok();
+					return u64::decode(&mut &data[..]).ok()
 				}
 			}
 
@@ -463,10 +464,10 @@ mod tests {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
-								return Err("wrong author in seal");
+								return Err("wrong author in seal")
 							}
 							break
-						}
+						},
 					}
 				}
 			}
@@ -478,7 +479,9 @@ mod tests {
 	fn seal_header(mut header: Header, author: u64) -> Header {
 		{
 			let digest = header.digest_mut();
-			digest.logs.push(DigestItem::PreRuntime(TEST_ID, author.encode()));
+			digest
+				.logs
+				.push(DigestItem::PreRuntime(TEST_ID, author.encode()));
 			digest.logs.push(DigestItem::Seal(TEST_ID, author.encode()));
 		}
 
@@ -496,7 +499,9 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		t.into()
 	}
 
@@ -507,9 +512,14 @@ mod tests {
 			let hash = Default::default();
 			let author = Default::default();
 			let uncles = vec![
-				InclusionHeight(1u64), Uncle(hash, Some(author)), Uncle(hash, None), Uncle(hash, None),
-				InclusionHeight(2u64), Uncle(hash, None),
-				InclusionHeight(3u64), Uncle(hash, None),
+				InclusionHeight(1u64),
+				Uncle(hash, Some(author)),
+				Uncle(hash, None),
+				Uncle(hash, None),
+				InclusionHeight(2u64),
+				Uncle(hash, None),
+				InclusionHeight(3u64),
+				Uncle(hash, None),
 			];
 
 			<Authorship as Store>::Uncles::put(uncles);
@@ -530,35 +540,40 @@ mod tests {
 			}
 
 			impl CanonChain {
-				fn best_hash(&self) -> H256 {
-					self.inner.last().unwrap().hash()
-				}
+				fn best_hash(&self) -> H256 { self.inner.last().unwrap().hash() }
 
-				fn canon_hash(&self, index: usize) -> H256 {
-					self.inner[index].hash()
-				}
+				fn canon_hash(&self, index: usize) -> H256 { self.inner[index].hash() }
 
-				fn header(&self, index: usize) -> &Header {
-					&self.inner[index]
-				}
+				fn header(&self, index: usize) -> &Header { &self.inner[index] }
 
-				fn push(&mut self, header: Header) {
-					self.inner.push(header)
-				}
+				fn push(&mut self, header: Header) { self.inner.push(header) }
 			}
 
 			let mut canon_chain = CanonChain {
-				inner: vec![seal_header(create_header(0, Default::default(), Default::default()), 999)],
+				inner: vec![seal_header(
+					create_header(0, Default::default(), Default::default()),
+					999,
+				)],
 			};
 
 			for number in 1..8 {
-				System::initialize(&number, &canon_chain.best_hash(), &Default::default(), &Default::default());
+				System::initialize(
+					&number,
+					&canon_chain.best_hash(),
+					&Default::default(),
+					&Default::default(),
+				);
 				let header = seal_header(System::finalize(), author_a);
 				canon_chain.push(header);
 			}
 
 			// initialize so system context is set up correctly.
-			System::initialize(&8, &canon_chain.best_hash(), &Default::default(), &Default::default());
+			System::initialize(
+				&8,
+				&canon_chain.best_hash(),
+				&Default::default(),
+				&Default::default(),
+			);
 
 			// 2 of the same uncle at once
 			{
@@ -637,13 +652,16 @@ mod tests {
 	fn sets_author_lazily() {
 		new_test_ext().execute_with(|| {
 			let author = 42;
-			let mut header = seal_header(
-				create_header(1, Default::default(), [1; 32].into()),
-				author,
-			);
+			let mut header =
+				seal_header(create_header(1, Default::default(), [1; 32].into()), author);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), &Default::default(), header.digest());
+			System::initialize(
+				&1,
+				&Default::default(),
+				&Default::default(),
+				header.digest(),
+			);
 
 			assert_eq!(Authorship::author(), author);
 		});
@@ -675,9 +693,7 @@ mod tests {
 			author_a,
 		);
 
-		let mut check_filter = move |uncle| {
-			Filter::filter_uncle(uncle, &mut acc)
-		};
+		let mut check_filter = move |uncle| Filter::filter_uncle(uncle, &mut acc);
 
 		// same height, different author is OK.
 		assert_eq!(check_filter(&header_a1), Ok(Some(author_a)));

@@ -14,10 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::{
+	hash::{StorageHasher, Twox128},
+	storage::{self, unhashed},
+	traits::Len,
+};
+use codec::{Decode, Encode, EncodeAppend, EncodeLike, FullCodec};
 #[cfg(not(feature = "std"))]
 use rstd::prelude::*;
-use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -53,13 +57,9 @@ pub trait StorageValue<T: FullCodec> {
 impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
-	fn hashed_key() -> [u8; 32] {
-		Self::storage_value_final_key()
-	}
+	fn hashed_key() -> [u8; 32] { Self::storage_value_final_key() }
 
-	fn exists() -> bool {
-		unhashed::exists(&Self::storage_value_final_key())
-	}
+	fn exists() -> bool { unhashed::exists(&Self::storage_value_final_key()) }
 
 	fn get() -> Self::Query {
 		let value = unhashed::get(&Self::storage_value_final_key());
@@ -83,13 +83,9 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		Ok(maybe_new)
 	}
 
-	fn put<Arg: EncodeLike<T>>(val: Arg) {
-		unhashed::put(&Self::storage_value_final_key(), &val)
-	}
+	fn put<Arg: EncodeLike<T>>(val: Arg) { unhashed::put(&Self::storage_value_final_key(), &val) }
 
-	fn kill() {
-		unhashed::kill(&Self::storage_value_final_key())
-	}
+	fn kill() { unhashed::kill(&Self::storage_value_final_key()) }
 
 	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
 		let mut val = G::get();
@@ -118,23 +114,20 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
+		T: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
 		let key = Self::storage_value_final_key();
-		let encoded_value = unhashed::get_raw(&key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => vec![],
-				}
-			});
+		let encoded_value = unhashed::get_raw(&key).unwrap_or_else(|| {
+			match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
+				Some(value) => value.encode(),
+				None => vec![],
+			}
+		});
 
-		let new_val = T::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
+		let new_val =
+			T::append_or_new(encoded_value, items).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(&key, &new_val);
 		Ok(())
 	}
@@ -143,12 +136,13 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
+	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items)
+	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
-		Items::IntoIter: ExactSizeIterator
+		T: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<T>,
+		Items::IntoIter: ExactSizeIterator,
 	{
 		Self::append(items.clone()).unwrap_or_else(|_| Self::put(items));
 	}
@@ -160,7 +154,11 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
+	fn decode_len() -> Result<usize, &'static str>
+	where
+		T: codec::DecodeLength,
+		T: Len,
+	{
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.

@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
 //! Doughnut + Extrinsic + Executive integration tests
-//!
 #![cfg(test)]
 use balances::Call as BalancesCall;
 use codec::Encode;
 use keyring::AccountKeyring;
 use primitives::{crypto::UncheckedFrom, H256};
 use prml_doughnut::{DoughnutRuntime, PlugDoughnut};
-use sp_runtime::{
-	DispatchError, Doughnut, DoughnutV0, MultiSignature,
-	generic::{self, Era}, Perbill, testing::{Block, Digest, Header},
-	traits::{IdentifyAccount, IdentityLookup, Header as HeaderT, BlakeTwo256, Verify, ConvertInto, PlugDoughnutApi, DoughnutApi},
-	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction},
-};
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
+use sp_runtime::{
+	generic::{self, Era},
+	testing::{Block, Digest, Header},
+	traits::{
+		BlakeTwo256, ConvertInto, DoughnutApi, Header as HeaderT, IdentifyAccount, IdentityLookup,
+		PlugDoughnutApi, Verify,
+	},
+	transaction_validity::{
+		InvalidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
+	},
+	DispatchError, Doughnut, DoughnutV0, MultiSignature, Perbill,
+};
 use support::{
-	impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	additional_traits::{DelegatedDispatchVerifier},
+	additional_traits::DelegatedDispatchVerifier,
+	impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	traits::{Currency, Time},
 };
 type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
@@ -45,7 +49,7 @@ impl_outer_origin! {
 	pub enum Origin for Runtime { }
 }
 
-impl_outer_event!{
+impl_outer_event! {
 	pub enum MetaEvent for Runtime {
 		balances<T>,
 	}
@@ -59,9 +63,11 @@ impl_outer_dispatch! {
 
 pub struct MockDelegatedDispatchVerifier<T: system::Trait>(rstd::marker::PhantomData<T>);
 impl<T: system::Trait> DelegatedDispatchVerifier for MockDelegatedDispatchVerifier<T> {
-	type Doughnut = T::Doughnut;
 	type AccountId = T::AccountId;
+	type Doughnut = T::Doughnut;
+
 	const DOMAIN: &'static str = "test";
+
 	fn verify_dispatch(
 		doughnut: &T::Doughnut,
 		_module: &str,
@@ -78,8 +84,8 @@ impl<T: system::Trait> DelegatedDispatchVerifier for MockDelegatedDispatchVerifi
 }
 
 // Create a minimal runtime to verify doughnut's are properly integrated
-// This means we are using full-blown types i.e sr25519 Public Keys for AccountId and CheckedExtrinsic
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+// This means we are using full-blown types i.e sr25519 Public Keys for AccountId and
+// CheckedExtrinsic Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 parameter_types! {
@@ -89,27 +95,28 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = Index;
-	type Call = Call;
+	type AccountId = AccountId;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
+	type Call = Call;
+	type DelegatedDispatchVerifier = MockDelegatedDispatchVerifier<Runtime>;
+	type Doughnut = PlugDoughnut<Runtime>;
+	type Event = MetaEvent;
 	type Hash = primitives::H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = MetaEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type Index = Index;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = PlugDoughnut<Runtime>;
-	type DelegatedDispatchVerifier = MockDelegatedDispatchVerifier<Runtime>;
 }
 pub struct TimestampProvider;
 impl Time for TimestampProvider {
 	type Moment = u64;
+
 	fn now() -> Self::Moment {
 		// Return a fixed timestamp
 		// It should be > 0 to allow doughnut timestamp validation checks to pass
@@ -129,14 +136,14 @@ parameter_types! {
 }
 impl balances::Trait for Runtime {
 	type Balance = u64;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = MetaEvent;
+	type ExistentialDeposit = ExistentialDeposit;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type Event = MetaEvent;
-	type DustRemoval = ();
-	type TransferPayment = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 
 parameter_types! {
@@ -145,11 +152,11 @@ parameter_types! {
 }
 impl transaction_payment::Trait for Runtime {
 	type Currency = Balances;
+	type FeeMultiplierUpdate = ();
 	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
-	type FeeMultiplierUpdate = ();
 }
 
 #[allow(deprecated)] // Allow ValidateUnsigned
@@ -170,12 +177,18 @@ type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	transaction_payment::ChargeTransactionPayment<Runtime>
+	transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 
 type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>; // Just a `CheckedExtrinsic` with type parameters set
 type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>; // Just an `UnheckedExtrinsic` with type parameters set
-type Executive = frame_executive::Executive<Runtime, Block<UncheckedExtrinsic>, system::ChainContext<Runtime>, Runtime, ()>;
+type Executive = frame_executive::Executive<
+	Runtime,
+	Block<UncheckedExtrinsic>,
+	system::ChainContext<Runtime>,
+	Runtime,
+	(),
+>;
 
 /// Returns transaction extra.
 fn signed_extra(nonce: Index, fee: u64, doughnut: Option<PlugDoughnut<Runtime>>) -> SignedExtra {
@@ -194,22 +207,25 @@ fn signed_extra(nonce: Index, fee: u64, doughnut: Option<PlugDoughnut<Runtime>>)
 fn sign_extrinsic(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	match xt.signed {
 		Some((signed, extra)) => {
-			let raw_payload = generic::SignedPayload::new(xt.function, extra.clone()).expect("signed payload is valid");
+			let raw_payload = generic::SignedPayload::new(xt.function, extra.clone())
+				.expect("signed payload is valid");
 			let signed_ = UncheckedFrom::<[u8; 32]>::unchecked_from(signed.clone().into()); // `AccountId32` => `sr25519::Public`
 			let key = AccountKeyring::from_public(&signed_).unwrap();
-			let signature = raw_payload.using_encoded(|payload| {
-				if payload.len() > 256 {
-					key.sign(&runtime_io::hashing::blake2_256(payload))
-				} else {
-					key.sign(payload)
-				}
-			}).into();
+			let signature = raw_payload
+				.using_encoded(|payload| {
+					if payload.len() > 256 {
+						key.sign(&runtime_io::hashing::blake2_256(payload))
+					} else {
+						key.sign(payload)
+					}
+				})
+				.into();
 			let (function, extra, _) = raw_payload.deconstruct();
 			UncheckedExtrinsic {
 				signature: Some((signed, signature, extra)),
 				function,
 			}
-		}
+		},
 		None => UncheckedExtrinsic {
 			signature: None,
 			function: xt.function,
@@ -218,7 +234,13 @@ fn sign_extrinsic(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 }
 
 /// Create a valid `DoughnutV0` given an `issuer` and `holder`
-fn make_doughnut(issuer: AccountId, holder: AccountId, not_before: Option<u32>, expiry: Option<u32>, permission_domain_verify: bool) -> Doughnut {
+fn make_doughnut(
+	issuer: AccountId,
+	holder: AccountId,
+	not_before: Option<u32>,
+	expiry: Option<u32>,
+	permission_domain_verify: bool,
+) -> Doughnut {
 	let issuer_pk = UncheckedFrom::<[u8; 32]>::unchecked_from(issuer.clone().into()); // `AccountId32` => `sr25519::Public`
 	let issuer_key = AccountKeyring::from_public(&issuer_pk).unwrap();
 	let mut doughnut = DoughnutV0 {
@@ -247,31 +269,30 @@ fn delegated_dispatch_works() {
 	let receiver_charlie: AccountId = AccountKeyring::Charlie.into();
 
 	// Setup storage
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	balances::GenesisConfig::<Runtime> {
 		balances: vec![(issuer_alice.clone(), 10_011), (holder_bob.clone(), 10_011)],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 
 	// The doughnut proof is wrapped for embeddeding in extrinsic
-	let doughnut = PlugDoughnut::<Runtime>::new(
-		make_doughnut(
-			issuer_alice.clone(),
-			holder_bob.clone(),
-			None,
-			None,
-			true,
-		)
-	);
+	let doughnut = PlugDoughnut::<Runtime>::new(make_doughnut(
+		issuer_alice.clone(),
+		holder_bob.clone(),
+		None,
+		None,
+		true,
+	));
 
 	let mut t = runtime_io::TestExternalities::new(t);
 	t.execute_with(|| {
 		// Setup extrinsic
 		let xt = CheckedExtrinsic {
-			signed: Some((
-				holder_bob.clone(),
-				signed_extra(0, 0, Some(doughnut)),
-			)),
+			signed: Some((holder_bob.clone(), signed_extra(0, 0, Some(doughnut)))),
 			function: Call::Balances(BalancesCall::transfer(receiver_charlie.clone().into(), 69)),
 		};
 		let uxt = sign_extrinsic(xt);
@@ -287,45 +308,53 @@ fn delegated_dispatch_works() {
 		// Submit an extrinsic with attached doughnut proof to the test Runtime.
 		let r = Executive::apply_extrinsic(uxt);
 		assert!(r.is_ok());
-		assert_eq!(<balances::Module<Runtime>>::total_balance(&issuer_alice), 10_011 - 69); // 69 transferred
-		assert_eq!(<balances::Module<Runtime>>::total_balance(&holder_bob), 10_011 - 10 - 1024); // fees deducted
-		assert_eq!(<balances::Module<Runtime>>::total_balance(&receiver_charlie), 69); // Received 69
+		assert_eq!(
+			<balances::Module<Runtime>>::total_balance(&issuer_alice),
+			10_011 - 69
+		); // 69 transferred
+		assert_eq!(
+			<balances::Module<Runtime>>::total_balance(&holder_bob),
+			10_011 - 10 - 1024
+		); // fees deducted
+		assert_eq!(
+			<balances::Module<Runtime>>::total_balance(&receiver_charlie),
+			69
+		); // Received 69
 	});
 }
 
 #[test]
 fn delegated_dispatch_fails_when_extrinsic_signer_is_not_doughnut_holder() {
 	// Submit an extrinsic with attached doughnut proof to the test Runtime.
-	// The extrinsic is instigated by Charlie, however the doughnut proof is to Bob (doughnut holder) on Alice's authority (doughnut issuer)
-	// Funds are not transferred
+	// The extrinsic is instigated by Charlie, however the doughnut proof is to Bob (doughnut
+	// holder) on Alice's authority (doughnut issuer) Funds are not transferred
 	let issuer_alice: AccountId = AccountKeyring::Alice.into();
 	let holder_bob: AccountId = AccountKeyring::Bob.into();
 	let receiver_charlie: AccountId = AccountKeyring::Charlie.into();
 
 	// Setup storage
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	balances::GenesisConfig::<Runtime> {
 		balances: vec![(issuer_alice.clone(), 10_011), (holder_bob.clone(), 10_011)],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 
-	let doughnut = PlugDoughnut::<Runtime>::new(
-		make_doughnut(
-			issuer_alice.clone(),
-			holder_bob.clone(),
-			None,
-			None,
-			true,
-		)
-	);
+	let doughnut = PlugDoughnut::<Runtime>::new(make_doughnut(
+		issuer_alice.clone(),
+		holder_bob.clone(),
+		None,
+		None,
+		true,
+	));
 
 	let mut t = runtime_io::TestExternalities::new(t);
 	t.execute_with(|| {
 		let xt = CheckedExtrinsic {
-			signed: Some((
-				receiver_charlie.clone(),
-				signed_extra(0, 0, Some(doughnut)),
-			)),
+			signed: Some((receiver_charlie.clone(), signed_extra(0, 0, Some(doughnut)))),
 			function: Call::Balances(BalancesCall::transfer(receiver_charlie.clone().into(), 69)),
 		};
 		let uxt = sign_extrinsic(xt);
@@ -339,7 +368,12 @@ fn delegated_dispatch_fails_when_extrinsic_signer_is_not_doughnut_holder() {
 		));
 
 		let r = Executive::apply_extrinsic(uxt);
-		assert_eq!(r, Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(171))));
+		assert_eq!(
+			r,
+			Err(TransactionValidityError::Invalid(
+				InvalidTransaction::Custom(171)
+			))
+		);
 	});
 }
 
@@ -349,29 +383,28 @@ fn delegated_dispatch_fails_when_doughnut_is_expired() {
 	let holder_bob: AccountId = AccountKeyring::Bob.into();
 	let receiver_charlie: AccountId = AccountKeyring::Charlie.into();
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	balances::GenesisConfig::<Runtime> {
 		balances: vec![(issuer_alice.clone(), 10_011), (holder_bob.clone(), 10_011)],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 
-	let doughnut = PlugDoughnut::<Runtime>::new(
-		make_doughnut(
-			issuer_alice.clone(),
-			holder_bob.clone(),
-			None,
-			Some(100), // some expired timestamp
-			true,
-		)
-	);
+	let doughnut = PlugDoughnut::<Runtime>::new(make_doughnut(
+		issuer_alice.clone(),
+		holder_bob.clone(),
+		None,
+		Some(100), // some expired timestamp
+		true,
+	));
 
 	let mut t = runtime_io::TestExternalities::new(t);
 	t.execute_with(|| {
 		let xt = CheckedExtrinsic {
-			signed: Some((
-				holder_bob.clone(),
-				signed_extra(0, 0, Some(doughnut)),
-			)),
+			signed: Some((holder_bob.clone(), signed_extra(0, 0, Some(doughnut)))),
 			function: Call::Balances(BalancesCall::transfer(receiver_charlie.clone().into(), 69)),
 		};
 		let uxt = sign_extrinsic(xt);
@@ -385,7 +418,12 @@ fn delegated_dispatch_fails_when_doughnut_is_expired() {
 		));
 
 		let r = Executive::apply_extrinsic(uxt);
-		assert_eq!(r, Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(171))));
+		assert_eq!(
+			r,
+			Err(TransactionValidityError::Invalid(
+				InvalidTransaction::Custom(171)
+			))
+		);
 	});
 }
 
@@ -395,29 +433,28 @@ fn delegated_dispatch_fails_when_doughnut_is_premature() {
 	let holder_bob: AccountId = AccountKeyring::Bob.into();
 	let receiver_charlie: AccountId = AccountKeyring::Charlie.into();
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	balances::GenesisConfig::<Runtime> {
 		balances: vec![(issuer_alice.clone(), 10_011), (holder_bob.clone(), 10_011)],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 
-	let doughnut = PlugDoughnut::<Runtime>::new(
-		make_doughnut(
-			issuer_alice.clone(),
-			holder_bob.clone(),
-			Some(1_000), // Some future timestamp
-			None,
-			true,
-		)
-	);
+	let doughnut = PlugDoughnut::<Runtime>::new(make_doughnut(
+		issuer_alice.clone(),
+		holder_bob.clone(),
+		Some(1_000), // Some future timestamp
+		None,
+		true,
+	));
 
 	let mut t = runtime_io::TestExternalities::new(t);
 	t.execute_with(|| {
 		let xt = CheckedExtrinsic {
-			signed: Some((
-				holder_bob.clone(),
-				signed_extra(0, 0, Some(doughnut)),
-			)),
+			signed: Some((holder_bob.clone(), signed_extra(0, 0, Some(doughnut)))),
 			function: Call::Balances(BalancesCall::transfer(receiver_charlie.clone().into(), 69)),
 		};
 		let uxt = sign_extrinsic(xt);
@@ -429,7 +466,12 @@ fn delegated_dispatch_fails_when_doughnut_is_premature() {
 			Digest::default(),
 		));
 		let r = Executive::apply_extrinsic(uxt);
-		assert_eq!(r, Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(171))));
+		assert_eq!(
+			r,
+			Err(TransactionValidityError::Invalid(
+				InvalidTransaction::Custom(171)
+			))
+		);
 	});
 }
 
@@ -439,29 +481,28 @@ fn delegated_dispatch_fails_when_doughnut_domain_permission_is_unverified() {
 	let holder_bob: AccountId = AccountKeyring::Bob.into();
 	let receiver_charlie: AccountId = AccountKeyring::Charlie.into();
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	balances::GenesisConfig::<Runtime> {
 		balances: vec![(issuer_alice.clone(), 10_011), (holder_bob.clone(), 10_011)],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 
-	let doughnut = PlugDoughnut::<Runtime>::new(
-		make_doughnut(
-			issuer_alice.clone(),
-			holder_bob.clone(),
-			None,
-			None,
-			false,
-		)
-	);
+	let doughnut = PlugDoughnut::<Runtime>::new(make_doughnut(
+		issuer_alice.clone(),
+		holder_bob.clone(),
+		None,
+		None,
+		false,
+	));
 
 	let mut t = runtime_io::TestExternalities::new(t);
 	t.execute_with(|| {
 		let xt = CheckedExtrinsic {
-			signed: Some((
-				holder_bob.clone(),
-				signed_extra(0, 0, Some(doughnut)),
-			)),
+			signed: Some((holder_bob.clone(), signed_extra(0, 0, Some(doughnut)))),
 			function: Call::Balances(BalancesCall::transfer(receiver_charlie.clone().into(), 69)),
 		};
 		let uxt = sign_extrinsic(xt);
@@ -473,6 +514,13 @@ fn delegated_dispatch_fails_when_doughnut_domain_permission_is_unverified() {
 			Digest::default(),
 		));
 		let r = Executive::apply_extrinsic(uxt);
-		assert_eq!(r, Ok(Err(DispatchError { module: Some(1), error: 0, message: Some("dispatch unverified") })));
+		assert_eq!(
+			r,
+			Ok(Err(DispatchError {
+				module: Some(1),
+				error: 0,
+				message: Some("dispatch unverified")
+			}))
+		);
 	});
 }

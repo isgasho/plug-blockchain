@@ -16,8 +16,9 @@
 
 mod parse;
 
-use frame_support_procedural_tools::syn_ext as ext;
-use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use frame_support_procedural_tools::{
+	generate_crate_access, generate_hidden_includes, syn_ext as ext,
+};
 use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -54,10 +55,10 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		None => {
 			return Err(syn::Error::new(
 				modules_token.span,
-				"`System` module declaration is missing. \
-				 Please add this line: `System: system::{Module, Call, Storage, Config, Event},`",
+				"`System` module declaration is missing. Please add this line: `System: \
+				 system::{Module, Call, Storage, Config, Event},`",
 			))
-		}
+		},
 	};
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
@@ -280,16 +281,16 @@ fn decl_outer_event_or_origin<'a>(
 				let generics = &module_entry.generics;
 				if instance.is_some() && generics.params.len() == 0 {
 					let msg = format!(
-						"Instantiable module with no generic `{}` cannot \
-						 be constructed: module `{}` must have generic `{}`",
+						"Instantiable module with no generic `{}` cannot be constructed: module \
+						 `{}` must have generic `{}`",
 						kind_str, module_declaration.name, kind_str
 					);
-					return Err(syn::Error::new(module_declaration.name.span(), msg));
+					return Err(syn::Error::new(module_declaration.name.span(), msg))
 				}
 				let tokens = quote!(#module #instance #generics ,);
 				modules_tokens.extend(tokens);
-			}
-			None => {}
+			},
+			None => {},
 		}
 	}
 	let macro_call = match kind {

@@ -26,35 +26,34 @@ pub mod error;
 #[cfg(test)]
 mod tests;
 
-pub use txpool;
-pub use crate::api::{FullChainApi, LightChainApi};
-pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
-
-use std::{collections::HashMap, sync::Arc};
-use futures::{Future, FutureExt};
-
-use sp_runtime::{
-	generic::BlockId,
-	traits::Block as BlockT,
+pub use crate::{
+	api::{FullChainApi, LightChainApi},
+	maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer},
 };
+pub use txpool;
+
+use futures::{Future, FutureExt};
+use std::{collections::HashMap, sync::Arc};
+
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use txpool_api::{
-	TransactionPool, PoolStatus, ImportNotificationStream,
-	TxHash, TransactionFor, TransactionStatusStreamFor,
+	ImportNotificationStream, PoolStatus, TransactionFor, TransactionPool,
+	TransactionStatusStreamFor, TxHash,
 };
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
-	where
-		Block: BlockT,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
+where
+	Block: BlockT,
+	PoolApi: txpool::ChainApi<Block = Block, Hash = Block::Hash>,
 {
 	pool: Arc<txpool::Pool<PoolApi>>,
 }
 
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
-	where
-		Block: BlockT,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
+where
+	Block: BlockT,
+	PoolApi: txpool::ChainApi<Block = Block, Hash = Block::Hash>,
 {
 	/// Create new basic transaction pool with provided api.
 	pub fn new(options: txpool::Options, pool_api: PoolApi) -> Self {
@@ -64,26 +63,28 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	}
 
 	/// Gets shared reference to the underlying pool.
-	pub fn pool(&self) -> &Arc<txpool::Pool<PoolApi>> {
-		&self.pool
-	}
+	pub fn pool(&self) -> &Arc<txpool::Pool<PoolApi>> { &self.pool }
 }
 
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
-	where
-		Block: BlockT,
-		PoolApi: 'static + txpool::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+where
+	Block: BlockT,
+	PoolApi: 'static + txpool::ChainApi<Block = Block, Hash = Block::Hash, Error = error::Error>,
 {
 	type Block = PoolApi::Block;
+	type Error = error::Error;
 	type Hash = txpool::ExHash<PoolApi>;
 	type InPoolTransaction = txpool::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
-	type Error = error::Error;
 
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>> + Send + Unpin> {
+		xts: impl IntoIterator<Item = TransactionFor<Self>> + 'static,
+	) -> Box<
+		dyn Future<Output = Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>>
+			+ Send
+			+ Unpin,
+	> {
 		Box::new(self.pool.submit_at(at, xts, false))
 	}
 
@@ -91,7 +92,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<TxHash<Self>, Self::Error>> + Send + Unpin> {
+	) -> Box<dyn Future<Output = Result<TxHash<Self>, Self::Error>> + Send + Unpin> {
 		Box::new(self.pool.submit_one(at, xt))
 	}
 
@@ -99,10 +100,15 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin> {
+	) -> Box<
+		dyn Future<Output = Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>>
+			+ Send
+			+ Unpin,
+	> {
 		Box::new(
-			self.pool.submit_and_watch(at, xt)
-				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
+			self.pool
+				.submit_and_watch(at, xt)
+				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _)),
 		)
 	}
 
@@ -110,11 +116,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		self.pool.remove_invalid(hashes)
 	}
 
-	fn status(&self) -> PoolStatus {
-		self.pool.status()
-	}
+	fn status(&self) -> PoolStatus { self.pool.status() }
 
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
+	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>>> {
 		Box::new(self.pool.ready())
 	}
 
@@ -122,9 +126,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		self.pool.import_notification_stream()
 	}
 
-	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self> {
-		self.pool.hash_of(xt)
-	}
+	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self> { self.pool.hash_of(xt) }
 
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)

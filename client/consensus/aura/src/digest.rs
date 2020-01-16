@@ -19,10 +19,10 @@
 //! This implements the digests for AuRa, to allow the private
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
-use primitives::Pair;
 use aura_primitives::AURA_ENGINE_ID;
+use codec::{Codec, Encode};
+use primitives::Pair;
 use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
-use codec::{Encode, Codec};
 use std::fmt::Debug;
 
 type Signature<P> = <P as Pair>::Signature;
@@ -42,10 +42,11 @@ pub trait CompatibleDigestItem<P: Pair>: Sized {
 	fn as_aura_pre_digest(&self) -> Option<u64>;
 }
 
-impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
+impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash>
+where
 	P: Pair,
 	Signature<P>: Codec,
-	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
+	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static,
 {
 	fn aura_seal(signature: Signature<P>) -> Self {
 		DigestItem::Seal(AURA_ENGINE_ID, signature.encode())

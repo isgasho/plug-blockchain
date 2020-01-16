@@ -21,13 +21,11 @@
 use super::*;
 use crate::mock::*;
 use primitives::offchain::{
-	OpaquePeerId,
-	OffchainExt,
-	TransactionPoolExt,
 	testing::{TestOffchainExt, TestTransactionPoolExt},
+	OffchainExt, OpaquePeerId, TransactionPoolExt,
 };
-use support::{dispatch, assert_noop};
 use sp_runtime::testing::UintAuthorityId;
+use support::{assert_noop, dispatch};
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -73,17 +71,11 @@ fn should_report_offline_validators() {
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
-		assert_eq!(offences, vec![
-			(vec![], UnresponsivenessOffence {
-				session_index: 2,
-				validator_set_count: 3,
-				offenders: vec![
-					(1, 1),
-					(2, 2),
-					(3, 3),
-				],
-			})
-		]);
+		assert_eq!(offences, vec![(vec![], UnresponsivenessOffence {
+			session_index: 2,
+			validator_set_count: 3,
+			offenders: vec![(1, 1), (2, 2), (3, 3),],
+		})]);
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
@@ -93,16 +85,11 @@ fn should_report_offline_validators() {
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
-		assert_eq!(offences, vec![
-			(vec![], UnresponsivenessOffence {
-				session_index: 3,
-				validator_set_count: 6,
-				offenders: vec![
-					(5, 5),
-					(6, 6),
-				],
-			})
-		]);
+		assert_eq!(offences, vec![(vec![], UnresponsivenessOffence {
+			session_index: 3,
+			validator_set_count: 6,
+			offenders: vec![(5, 5), (6, 6),],
+		})]);
 	});
 }
 
@@ -127,11 +114,14 @@ fn heartbeat(
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))?;
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(
+		heartbeat.clone(),
+		signature.clone(),
+	))?;
 	ImOnline::heartbeat(
 		Origin::system(system::RawOrigin::None),
 		heartbeat,
-		signature
+		signature,
 	)
 }
 

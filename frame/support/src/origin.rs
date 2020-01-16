@@ -249,7 +249,9 @@ mod tests {
 			None,
 		}
 
-		impl<AccountId, Doughnut> From<(Option<AccountId>, Option<Doughnut>)> for RawOrigin<AccountId, Doughnut> {
+		impl<AccountId, Doughnut> From<(Option<AccountId>, Option<Doughnut>)>
+			for RawOrigin<AccountId, Doughnut>
+		{
 			fn from(s: (Option<AccountId>, Option<Doughnut>)) -> RawOrigin<AccountId, Doughnut> {
 				match s {
 					(Some(who), None) => RawOrigin::Signed(who),
@@ -270,7 +272,7 @@ mod tests {
 	mod origin_with_generic {
 		#[derive(Clone, PartialEq, Eq, Debug)]
 		pub struct Origin<T> {
-			t: T
+			t: T,
 		}
 	}
 

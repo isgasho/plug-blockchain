@@ -43,7 +43,9 @@ pub struct GenesisParameters {
 
 impl test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
+		crate::genesis::config(self.support_changes_trie, None)
+			.build_storage()
+			.unwrap()
 	}
 }
 
@@ -56,18 +58,14 @@ pub trait TestClientBuilderExt: Sized {
 	fn build(self) -> Client;
 }
 
-impl TestClientBuilderExt for test_client::TestClientBuilder<
-	client::LocalCallExecutor<Backend, Executor>,
-	Backend,
-	GenesisParameters,
-> {
-	fn new() -> Self{
-		Self::default()
-	}
+impl TestClientBuilderExt
+	for test_client::TestClientBuilder<
+		client::LocalCallExecutor<Backend, Executor>,
+		Backend,
+		GenesisParameters,
+	>
+{
+	fn new() -> Self { Self::default() }
 
-	fn build(self) -> Client {
-		self.build_with_native_executor(None).0
-	}
+	fn build(self) -> Client { self.build_with_native_executor(None).0 }
 }
-
-

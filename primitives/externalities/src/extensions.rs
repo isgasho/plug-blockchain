@@ -21,9 +21,14 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
+use std::{
+	any::{Any, TypeId},
+	collections::HashMap,
+	ops::DerefMut,
+};
 
-/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
+/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities)
+/// extension.
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
@@ -43,9 +48,9 @@ pub trait Extension: Send + Any {
 /// ```
 /// # use sp_externalities::decl_extension;
 /// decl_extension! {
-///     /// Some test extension
-///     struct TestExt(String);
-/// }
+/// /// Some test extension
+/// struct TestExt(String);
+/// 			}
 /// ```
 #[macro_export]
 macro_rules! decl_extension {
@@ -82,7 +87,8 @@ macro_rules! decl_extension {
 ///
 /// This is a super trait of the [`Externalities`](crate::Externalities).
 pub trait ExtensionStore {
-	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
+	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn
+	/// Any`.
 	///
 	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
 	/// instead of this function to get type system support and automatic type downcasting.
@@ -97,9 +103,7 @@ pub struct Extensions {
 
 impl Extensions {
 	/// Create new instance of `Self`.
-	pub fn new() -> Self {
-		Self::default()
-	}
+	pub fn new() -> Self { Self::default() }
 
 	/// Register the given extension.
 	pub fn register<E: Extension>(&mut self, ext: E) {
@@ -108,7 +112,10 @@ impl Extensions {
 
 	/// Return a mutable reference to the requested extension.
 	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
-		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
+		self.extensions
+			.get_mut(&ext_type_id)
+			.map(DerefMut::deref_mut)
+			.map(Extension::as_mut_any)
 	}
 }
 
@@ -129,7 +136,9 @@ mod tests {
 		exts.register(DummyExt(1));
 		exts.register(DummyExt2(2));
 
-		let ext = exts.get_mut(TypeId::of::<DummyExt>()).expect("Extension is registered");
+		let ext = exts
+			.get_mut(TypeId::of::<DummyExt>())
+			.expect("Extension is registered");
 		let ext_ty = ext.downcast_mut::<DummyExt>().expect("Downcasting works");
 
 		assert_eq!(ext_ty.0, 1);

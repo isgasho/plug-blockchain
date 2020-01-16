@@ -17,7 +17,6 @@
 //! Shareable Substrate types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Initialize a key-value collection from array.
@@ -31,16 +30,15 @@ macro_rules! map {
 	);
 }
 
-use rstd::prelude::*;
-use rstd::ops::Deref;
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+#[doc(hidden)]
+pub use codec::{Decode, Encode};
+use rstd::{ops::Deref, prelude::*};
 #[cfg(feature = "std")]
 pub use serde;
-#[doc(hidden)]
-pub use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -50,31 +48,33 @@ pub use impl_serde::serialize as bytes;
 #[cfg(feature = "full_crypto")]
 pub mod hashing;
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
+pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
+pub mod crypto;
 #[cfg(feature = "std")]
 pub mod hexdisplay;
-pub mod crypto;
 
 pub mod u32_trait;
 
-pub mod ed25519;
-pub mod sr25519;
+mod changes_trie;
 pub mod ecdsa;
+pub mod ed25519;
 pub mod hash;
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
-pub mod uint;
-mod changes_trie;
+pub mod sr25519;
+pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
-pub mod testing;
+pub mod uint;
 
 #[cfg(test)]
 mod tests;
 
-pub use self::hash::{H160, H256, H512, convert_hash};
-pub use self::uint::U256;
+pub use self::{
+	hash::{convert_hash, H160, H256, H512},
+	uint::U256,
+};
 pub use changes_trie::ChangesTrieConfiguration;
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
@@ -109,8 +109,7 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction =>
-				offchain::Capabilities::none(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
 			// Enable keystore by default for offchain calls. CC @bkchr
 			OffchainCall(None) => [offchain::Capability::Keystore][..].into(),
 			OffchainCall(Some((_, capabilities))) => *capabilities,
@@ -121,7 +120,7 @@ impl ExecutionContext {
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
@@ -133,6 +132,7 @@ impl From<OpaqueMetadata> for Bytes {
 
 impl Deref for Bytes {
 	type Target = [u8];
+
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
@@ -142,17 +142,13 @@ pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {
 	/// Creates a new instance with the given metadata blob.
-	pub fn new(metadata: Vec<u8>) -> Self {
-		OpaqueMetadata(metadata)
-	}
+	pub fn new(metadata: Vec<u8>) -> Self { OpaqueMetadata(metadata) }
 }
 
 impl rstd::ops::Deref for OpaqueMetadata {
 	type Target = Vec<u8>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Something that is either a native or an encoded value.
@@ -161,7 +157,7 @@ pub enum NativeOrEncoded<R> {
 	/// The native representation.
 	Native(R),
 	/// The encoded representation.
-	Encoded(Vec<u8>)
+	Encoded(Vec<u8>),
 }
 
 #[cfg(feature = "std")]
@@ -195,9 +191,10 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
-			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
-			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref(),
+			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e))
+			| (NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) => {
+				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref()
+			},
 			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
 		}
 	}

@@ -14,11 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
-use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
-	SaturatedConversion};
-use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
-use support::StorageMap;
+use crate::{
+	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait,
+};
+use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero};
+use support::{
+	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason},
+	StorageMap,
+};
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]
@@ -66,7 +69,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let n = effective_block_number.saturating_sub(contract.deduct_block);
 		if n.is_zero() {
 			// Rent has already been paid
-			return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)));
+			return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)))
 		}
 		n
 	};
@@ -90,7 +93,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
 		// gets the rent for free.
-		return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)));
+		return (RentOutcome::Exempted, Some(ContractInfo::Alive(contract)))
 	}
 
 	// The minimal amount of funds required for a contract not to be evicted.
@@ -100,7 +103,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
 		runtime_io::storage::child_storage_kill(&contract.trie_id);
-		return (RentOutcome::Evicted, None);
+		return (RentOutcome::Evicted, None)
 	}
 
 	let dues = fee_per_block
@@ -148,16 +151,14 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// Note: this operation is heavy.
 		let child_storage_root = runtime_io::storage::child_root(&contract.trie_id);
 
-		let tombstone = <TombstoneContractInfo<T>>::new(
-			&child_storage_root[..],
-			contract.code_hash,
-		);
+		let tombstone =
+			<TombstoneContractInfo<T>>::new(&child_storage_root[..], contract.code_hash);
 		let tombstone_info = ContractInfo::Tombstone(tombstone);
 		<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
 		runtime_io::storage::child_storage_kill(&contract.trie_id);
 
-		return (RentOutcome::Evicted, Some(tombstone_info));
+		return (RentOutcome::Evicted, Some(tombstone_info))
 	}
 
 	if pay_rent {
@@ -169,7 +170,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 
 		<ContractInfoOf<T>>::insert(account, &contract_info);
 
-		return (RentOutcome::Ok, Some(contract_info));
+		return (RentOutcome::Ok, Some(contract_info))
 	}
 
 	(RentOutcome::Ok, Some(ContractInfo::Alive(contract)))

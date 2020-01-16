@@ -14,22 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::{Serialize, de::DeserializeOwned};
-use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
+use crate::{
+	types::{Query, Range, Target, TimeseriesData},
+	Error, DATABASE,
+};
 use chrono::{Duration, Utc};
-use futures_util::{FutureExt, future::{Future, select, Either}};
 use futures_timer::Delay;
-use crate::{DATABASE, Error, types::{Target, Query, TimeseriesData, Range}};
+use futures_util::{
+	future::{select, Either, Future},
+	FutureExt,
+};
+use hyper::{
+	header,
+	service::{make_service_fn, service_fn},
+	Body, Request, Response, Server,
+};
+use serde::{de::DeserializeOwned, Serialize};
 
 async fn api_response(req: Request<Body>) -> Result<Response<Body>, Error> {
 	match req.uri().path() {
 		"/search" => {
 			map_request_to_response(req, |target: Target| {
 				// Filter and return metrics relating to the target
-				DATABASE.read()
+				DATABASE
+					.read()
 					.keys_starting_with(&target.target)
 					.collect::<Vec<_>>()
-			}).await
+			})
+			.await
 		},
 		"/query" => {
 			map_request_to_response(req, |query: Query| {
@@ -37,38 +49,44 @@ async fn api_response(req: Request<Body>) -> Result<Response<Body>, Error> {
 
 				let Query {
 					range: Range { from, to },
-					max_datapoints, ..
+					max_datapoints,
+					..
 				} = query;
 
 				// Return timeseries data related to the specified metrics
-				query.targets.iter()
+				query
+					.targets
+					.iter()
 					.map(|target| {
-						let datapoints = metrics.datapoints_between(&target.target, from, to, max_datapoints)
+						let datapoints = metrics
+							.datapoints_between(&target.target, from, to, max_datapoints)
 							.unwrap_or_else(Vec::new);
 
 						TimeseriesData {
-							target: target.target.clone(), datapoints
+							target: target.target.clone(),
+							datapoints,
 						}
 					})
 					.collect::<Vec<_>>()
-			}).await
+			})
+			.await
 		},
 		_ => Ok(Response::new(Body::empty())),
 	}
 }
 
-async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -> Result<Response<Body>, Error>
-	where
-		Req: DeserializeOwned,
-		Res: Serialize,
-		T: Fn(Req) -> Res + Send + Sync + 'static
+async fn map_request_to_response<Req, Res, T>(
+	req: Request<Body>,
+	transformation: T,
+) -> Result<Response<Body>, Error>
+where
+	Req: DeserializeOwned,
+	Res: Serialize,
+	T: Fn(Req) -> Res + Send + Sync + 'static,
 {
 	use futures_util_alpha::TryStreamExt;
 
-	let body = req.into_body()
-		.try_concat()
-		.await
-		.map_err(Error::Hyper)?;
+	let body = req.into_body().try_concat().await.map_err(Error::Hyper)?;
 
 	let req = serde_json::from_slice(body.as_ref()).map_err(Error::Serde)?;
 	let res = transformation(req);
@@ -86,9 +104,9 @@ pub struct Executor;
 
 #[cfg(not(target_os = "unknown"))]
 impl<T> tokio_executor::TypedExecutor<T> for Executor
-	where
-		T: Future + Send + 'static,
-		T::Output: Send + 'static,
+where
+	T: Future + Send + 'static,
+	T::Output: Send + 'static,
 {
 	fn spawn(&mut self, future: T) -> Result<(), tokio_executor::SpawnError> {
 		async_std::task::spawn(future);
@@ -99,8 +117,8 @@ impl<T> tokio_executor::TypedExecutor<T> for Executor
 /// Start the data source server.
 #[cfg(not(target_os = "unknown"))]
 pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> {
-	use async_std::{net, io};
 	use crate::networking::Incoming;
+	use async_std::{io, net};
 
 	let listener = loop {
 		let listener = net::TcpListener::bind(&address).await;
@@ -110,24 +128,22 @@ pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> 
 				break listener
 			},
 			Err(err) => match err.kind() {
-				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied if address.port() != 0 => {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied
+					if address.port() != 0 =>
+				{
 					log::warn!(
 						"Unable to bind grafana data source server to {}. Trying random port.",
 						address
 					);
 					address.set_port(0);
-					continue;
-				},
+					continue
+				}
 				_ => Err(err)?,
-			}
+			},
 		}
 	};
 
-	let service = make_service_fn(|_| {
-		async {
-			Ok::<_, Error>(service_fn(api_response))
-		}
-	});
+	let service = make_service_fn(|_| async { Ok::<_, Error>(service_fn(api_response)) });
 
 	let server = Server::builder(Incoming(listener.incoming()))
 		.executor(Executor)
@@ -135,21 +151,18 @@ pub async fn run_server(mut address: std::net::SocketAddr) -> Result<(), Error> 
 		.boxed();
 
 	let every = std::time::Duration::from_secs(24 * 3600);
-	let clean = clean_up(every, Duration::weeks(1))
-		.boxed();
+	let clean = clean_up(every, Duration::weeks(1)).boxed();
 
 	let result = match select(server, clean).await {
 		Either::Left((result, _)) => result.map_err(Into::into),
-		Either::Right((result, _)) => result
+		Either::Right((result, _)) => result,
 	};
 
 	result
 }
 
 #[cfg(target_os = "unknown")]
-pub async fn run_server(_: std::net::SocketAddr) -> Result<(), Error> {
-	Ok(())
-}
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), Error> { Ok(()) }
 
 /// Periodically remove old metrics.
 async fn clean_up(every: std::time::Duration, before: Duration) -> Result<(), Error> {

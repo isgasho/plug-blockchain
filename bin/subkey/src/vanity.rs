@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{PublicOf, PublicT, Crypto};
+use super::{Crypto, PublicOf, PublicT};
 use primitives::Pair;
 use rand::{rngs::OsRng, RngCore};
 
@@ -32,11 +32,11 @@ fn next_seed(seed: &mut [u8]) {
 		match seed[i] {
 			255 => {
 				seed[i] = 0;
-			}
+			},
 			_ => {
 				seed[i] += 1;
-				break;
-			}
+				break
+			},
 		}
 	}
 }
@@ -56,17 +56,18 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			return (47 - pos) + (snip_size * 48);
+			return (47 - pos) + (snip_size * 48)
 		}
 	}
 	0
 }
 
-pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> where
-		PublicOf<C>: PublicT,
+pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
+where
+	PublicOf<C>: PublicT,
 {
 	if desired.is_empty() {
-		return Err("Pattern must not be empty");
+		return Err("Pattern must not be empty")
 	}
 
 	println!("Generating key containing pattern '{}'", desired);
@@ -91,11 +92,11 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 			let keypair = KeyPair {
 				pair: p,
 				seed: seed.clone(),
-				score: score,
+				score,
 			};
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(keypair);
+				return Ok(keypair)
 			}
 		}
 		done += 1;
@@ -108,8 +109,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 
 #[cfg(test)]
 mod tests {
-	use super::super::Ed25519;
-	use super::*;
+	use super::{super::Ed25519, *};
 	use primitives::{crypto::Ss58Codec, Pair};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
@@ -164,13 +164,9 @@ mod tests {
 
 	#[cfg(feature = "bench")]
 	#[bench]
-	fn bench_paranoiac(b: &mut Bencher) {
-		b.iter(|| generate_key("polk"));
-	}
+	fn bench_paranoiac(b: &mut Bencher) { b.iter(|| generate_key("polk")); }
 
 	#[cfg(feature = "bench")]
 	#[bench]
-	fn bench_not_paranoiac(b: &mut Bencher) {
-		b.iter(|| generate_key("polk"));
-	}
+	fn bench_not_paranoiac(b: &mut Bencher) { b.iter(|| generate_key("polk")); }
 }

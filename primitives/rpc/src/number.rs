@@ -16,9 +16,9 @@
 
 //! Chain RPC Block number type.
 
-use serde::{Serialize, Deserialize};
-use std::{convert::TryFrom, fmt::Debug};
 use primitives::U256;
+use serde::{Deserialize, Serialize};
+use std::{convert::TryFrom, fmt::Debug};
 
 /// RPC Block number type
 ///
@@ -46,7 +46,10 @@ impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> 
 			NumberOrHex::Hex(h) => {
 				let l = h.low_u64();
 				if U256::from(l) != h {
-					return Err(format!("`{}` does not fit into u64 type; unsupported for now.", h))
+					return Err(format!(
+						"`{}` does not fit into u64 type; unsupported for now.",
+						h
+					))
 				} else {
 					Number::try_from(l)
 						.map_err(|_| format!("`{}` does not fit into block number type.", h))?
@@ -55,22 +58,21 @@ impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> 
 		};
 		// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 		if num > Number::from(u32::max_value()) {
-			return Err(format!("`{:?}` > u32::max_value(), the max block number is u32.", num))
+			return Err(format!(
+				"`{:?}` > u32::max_value(), the max block number is u32.",
+				num
+			))
 		}
 		Ok(num)
 	}
 }
 
 impl From<u64> for NumberOrHex<u64> {
-	fn from(n: u64) -> Self {
-		NumberOrHex::Number(n)
-	}
+	fn from(n: u64) -> Self { NumberOrHex::Number(n) }
 }
 
 impl<Number> From<U256> for NumberOrHex<Number> {
-	fn from(n: U256) -> Self {
-		NumberOrHex::Hex(n)
-	}
+	fn from(n: U256) -> Self { NumberOrHex::Hex(n) }
 }
 
 #[cfg(test)]

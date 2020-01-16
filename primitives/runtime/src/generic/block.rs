@@ -22,11 +22,13 @@ use std::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-use rstd::prelude::*;
+use crate::{
+	codec::{Codec, Decode, Encode},
+	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, Member},
+	Justification,
+};
 use primitives::RuntimeDebug;
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
-use crate::Justification;
+use rstd::prelude::*;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
@@ -42,23 +44,17 @@ pub enum BlockId<Block: BlockT> {
 
 impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a hash.
-	pub fn hash(hash: Block::Hash) -> Self {
-		BlockId::Hash(hash)
-	}
+	pub fn hash(hash: Block::Hash) -> Self { BlockId::Hash(hash) }
 
 	/// Create a block ID from a number.
-	pub fn number(number: <Block::Header as HeaderT>::Number) -> Self {
-		BlockId::Number(number)
-	}
+	pub fn number(number: <Block::Header as HeaderT>::Number) -> Self { BlockId::Number(number) }
 }
 
 impl<Block: BlockT> Copy for BlockId<Block> {}
 
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?}", self)
-	}
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self) }
 }
 
 /// Abstraction over a substrate block.
@@ -79,21 +75,19 @@ where
 	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
-	type Header = Header;
 	type Hash = <Self::Header as traits::Header>::Hash;
+	type Header = Header;
 
-	fn header(&self) -> &Self::Header {
-		&self.header
-	}
-	fn extrinsics(&self) -> &[Self::Extrinsic] {
-		&self.extrinsics[..]
-	}
-	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
-		(self.header, self.extrinsics)
-	}
+	fn header(&self) -> &Self::Header { &self.header }
+
+	fn extrinsics(&self) -> &[Self::Extrinsic] { &self.extrinsics[..] }
+
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) { (self.header, self.extrinsics) }
+
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
 	}
+
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
 		(header, extrinsics).encode()
 	}

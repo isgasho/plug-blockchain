@@ -16,17 +16,16 @@
 
 //! Chain Spec extensions helpers.
 
-use std::fmt::Debug;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Debug};
 
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// A `ChainSpec` extension.
 ///
 /// This trait is implemented automatically by `ChainSpecGroup` macro.
 pub trait Group: Clone + Sized {
 	/// An associated type containing fork definition.
-	type Fork: Fork<Base=Self>;
+	type Fork: Fork<Base = Self>;
 
 	/// Convert to fork type.
 	fn to_fork(self) -> Self::Fork;
@@ -41,7 +40,7 @@ pub trait Group: Clone + Sized {
 /// a complete set of parameters
 pub trait Fork: Serialize + DeserializeOwned + Clone + Sized {
 	/// A base `Group` type.
-	type Base: Group<Fork=Self>;
+	type Base: Group<Fork = Self>;
 
 	/// Combine with another struct.
 	///
@@ -88,9 +87,7 @@ impl_trivial!((), u8, u16, u32, u64, usize, String, Vec<u8>);
 impl<T: Group> Group for Option<T> {
 	type Fork = Option<T::Fork>;
 
-	fn to_fork(self) -> Self::Fork {
-		self.map(|a| a.to_fork())
-	}
+	fn to_fork(self) -> Self::Fork { self.map(|a| a.to_fork()) }
 }
 
 impl<T: Fork> Fork for Option<T> {
@@ -106,9 +103,7 @@ impl<T: Fork> Fork for Option<T> {
 		};
 	}
 
-	fn to_base(self) -> Option<Self::Base> {
-		self.map(|x| x.to_base())
-	}
+	fn to_base(self) -> Option<Self::Base> { self.map(|x| x.to_base()) }
 }
 
 /// A collection of `ChainSpec` extensions.
@@ -122,7 +117,8 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 	fn get<T: 'static>(&self) -> Option<&T>;
 
 	/// Get forkable extensions of specific type.
-	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>>
+	where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
 		<Self::Forks as IsForks>::Extension: Extension,
@@ -166,13 +162,12 @@ impl<B: Ord, T: Group + Default> Default for Forks<B, T> {
 	}
 }
 
-impl<B: Ord, T: Group> Forks<B, T> where
+impl<B: Ord, T: Group> Forks<B, T>
+where
 	T::Fork: Debug,
 {
 	/// Create new fork definition given the base and the forks.
-	pub fn new(base: T, forks: BTreeMap<B, T::Fork>) -> Self {
-		Self { base, forks }
-	}
+	pub fn new(base: T, forks: BTreeMap<B, T::Fork>) -> Self { Self { base, forks } }
 
 	/// Return a set of parameters for `Group` including all forks up to `block` (inclusive).
 	pub fn at_block(&self, block: B) -> T {
@@ -188,7 +183,8 @@ impl<B: Ord, T: Group> Forks<B, T> where
 	}
 }
 
-impl<B, T> IsForks for Forks<B, T> where
+impl<B, T> IsForks for Forks<B, T>
+where
 	B: Ord + 'static,
 	T: Group + 'static,
 {
@@ -196,36 +192,38 @@ impl<B, T> IsForks for Forks<B, T> where
 	type Extension = T;
 }
 
-impl<B: Ord + Clone, T: Group + Extension> Forks<B, T> where
+impl<B: Ord + Clone, T: Group + Extension> Forks<B, T>
+where
 	T::Fork: Extension,
 {
 	/// Get forks definition for a subset of this extension.
 	///
 	/// Returns the `Forks` struct, but limited to a particular type
 	/// within the extension.
-	pub fn for_type<X>(&self) -> Option<Forks<B, X>> where
+	pub fn for_type<X>(&self) -> Option<Forks<B, X>>
+	where
 		X: Group + 'static,
 	{
 		let base = self.base.get::<X>()?.clone();
-		let forks = self.forks.iter().filter_map(|(k, v)| {
-			Some((k.clone(), v.get::<Option<X::Fork>>()?.clone()?))
-		}).collect();
+		let forks = self
+			.forks
+			.iter()
+			.filter_map(|(k, v)| Some((k.clone(), v.get::<Option<X::Fork>>()?.clone()?)))
+			.collect();
 
-		Some(Forks {
-			base,
-			forks,
-		})
+		Some(Forks { base, forks })
 	}
 }
 
-impl<B, E> Extension for Forks<B, E> where
+impl<B, E> Extension for Forks<B, E>
+where
 	B: Serialize + DeserializeOwned + Ord + Clone + 'static,
 	E: Extension + Group + 'static,
 {
 	type Forks = Self;
 
 	fn get<T: 'static>(&self) -> Option<&T> {
-		use std::any::{TypeId, Any};
+		use std::any::{Any, TypeId};
 
 		match TypeId::of::<T>() {
 			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
@@ -233,13 +231,14 @@ impl<B, E> Extension for Forks<B, E> where
 		}
 	}
 
-	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>>
+	where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
 		<Self::Forks as IsForks>::Extension: Extension,
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
-		use std::any::{TypeId, Any};
+		use std::any::{Any, TypeId};
 
 		if TypeId::of::<BlockNumber>() == TypeId::of::<B>() {
 			Any::downcast_ref(&self.for_type::<T>()?).cloned()
@@ -253,7 +252,7 @@ impl<B, E> Extension for Forks<B, E> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
+	use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 	// Make the proc macro work for tests and doc tests.
 	use crate as sc_chain_spec;
 
@@ -269,7 +268,9 @@ mod tests {
 		pub test: u8,
 	}
 
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+	#[derive(
+		Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension,
+	)]
 	#[serde(deny_unknown_fields)]
 	pub struct Extensions {
 		pub ext1: Extension1,
@@ -287,11 +288,12 @@ mod tests {
 
 	#[test]
 	fn forks_should_work_correctly() {
-		use super::Extension as _ ;
+		use super::Extension as _;
 
 		// We first need to deserialize into a `Value` because of the following bug:
 		// https://github.com/serde-rs/json/issues/505
-		let ext_val: serde_json::Value = serde_json::from_str(r#"
+		let ext_val: serde_json::Value = serde_json::from_str(
+			r#"
 {
 	"test": 11,
 	"forkable": {
@@ -314,13 +316,13 @@ mod tests {
 		}
 	}
 }
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		let ext: Ext2 = serde_json::from_value(ext_val).unwrap();
 
-		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 {
-			test: 11
-		}));
+		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 { test: 11 }));
 
 		// get forks definition
 		let forks = ext.get::<Forks<u64, Extensions>>().unwrap();

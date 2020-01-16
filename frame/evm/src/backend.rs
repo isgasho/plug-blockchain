@@ -1,15 +1,16 @@
-use rstd::marker::PhantomData;
-use rstd::vec::Vec;
+use crate::{AccountCodes, AccountStorages, Accounts, Event, Module, Trait};
+use codec::{Decode, Encode};
+use evm::{
+	backend::{Apply, ApplyBackend, Backend as BackendT},
+	Config,
+};
+use primitives::{H160, H256, U256};
+use rstd::{marker::PhantomData, vec::Vec};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
-use primitives::{U256, H256, H160};
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
 use sp_runtime::traits::UniqueSaturatedInto;
-use support::storage::{StorageMap, StorageDoubleMap};
-use sha3::{Keccak256, Digest};
-use evm::Config;
-use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, Accounts, AccountStorages, AccountCodes, Module, Event};
+use support::storage::{StorageDoubleMap, StorageMap};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -56,12 +57,16 @@ pub struct Backend<'vicinity, T> {
 impl<'vicinity, T> Backend<'vicinity, T> {
 	/// Create a new backend with given vicinity.
 	pub fn new(vicinity: &'vicinity Vicinity) -> Self {
-		Self { vicinity, _marker: PhantomData }
+		Self {
+			vicinity,
+			_marker: PhantomData,
+		}
 	}
 }
 
 impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	fn gas_price(&self) -> U256 { self.vicinity.gas_price }
+
 	fn origin(&self) -> H160 { self.vicinity.origin }
 
 	fn block_hash(&self, number: U256) -> H256 {
@@ -78,30 +83,20 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 		U256::from(number)
 	}
 
-	fn block_coinbase(&self) -> H160 {
-		H160::default()
-	}
+	fn block_coinbase(&self) -> H160 { H160::default() }
 
 	fn block_timestamp(&self) -> U256 {
 		let now: u128 = timestamp::Module::<T>::get().unique_saturated_into();
 		U256::from(now)
 	}
 
-	fn block_difficulty(&self) -> U256 {
-		U256::zero()
-	}
+	fn block_difficulty(&self) -> U256 { U256::zero() }
 
-	fn block_gas_limit(&self) -> U256 {
-		U256::zero()
-	}
+	fn block_gas_limit(&self) -> U256 { U256::zero() }
 
-	fn chain_id(&self) -> U256 {
-		U256::from(runtime_io::misc::chain_id())
-	}
+	fn chain_id(&self) -> U256 { U256::from(runtime_io::misc::chain_id()) }
 
-	fn exists(&self, _address: H160) -> bool {
-		true
-	}
+	fn exists(&self, _address: H160) -> bool { true }
 
 	fn basic(&self, address: H160) -> evm::backend::Basic {
 		let account = Accounts::get(&address);
@@ -112,38 +107,32 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 		}
 	}
 
-	fn code_size(&self, address: H160) -> usize {
-		AccountCodes::decode_len(&address).unwrap_or(0)
-	}
+	fn code_size(&self, address: H160) -> usize { AccountCodes::decode_len(&address).unwrap_or(0) }
 
 	fn code_hash(&self, address: H160) -> H256 {
 		H256::from_slice(Keccak256::digest(&AccountCodes::get(&address)).as_slice())
 	}
 
-	fn code(&self, address: H160) -> Vec<u8> {
-		AccountCodes::get(&address)
-	}
+	fn code(&self, address: H160) -> Vec<u8> { AccountCodes::get(&address) }
 
-	fn storage(&self, address: H160, index: H256) -> H256 {
-		AccountStorages::get(address, index)
-	}
+	fn storage(&self, address: H160, index: H256) -> H256 { AccountStorages::get(address, index) }
 }
 
 impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
-	fn apply<A, I, L>(
-		&mut self,
-		values: A,
-		logs: L,
-		delete_empty: bool,
-	) where
-		A: IntoIterator<Item=Apply<I>>,
-		I: IntoIterator<Item=(H256, H256)>,
-		L: IntoIterator<Item=evm::backend::Log>,
+	fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool)
+	where
+		A: IntoIterator<Item = Apply<I>>,
+		I: IntoIterator<Item = (H256, H256)>,
+		L: IntoIterator<Item = evm::backend::Log>,
 	{
 		for apply in values {
 			match apply {
 				Apply::Modify {
-					address, basic, code, storage, reset_storage,
+					address,
+					basic,
+					code,
+					storage,
+					reset_storage,
 				} => {
 					Accounts::mutate(&address, |account| {
 						account.balance = basic.balance;
@@ -170,9 +159,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 						Module::<T>::remove_account_if_empty(&address);
 					}
 				},
-				Apply::Delete { address } => {
-					Module::<T>::remove_account(&address)
-				},
+				Apply::Delete { address } => Module::<T>::remove_account(&address),
 			}
 		}
 

@@ -19,13 +19,12 @@
 //! Keeps only recent extrinsic and discard the ones kept for a significant amount of time.
 //! Discarded extrinsics are banned so that they don't get re-imported again.
 
+use parking_lot::RwLock;
 use std::{
 	collections::HashMap,
-	hash,
-	iter,
+	hash, iter,
 	time::{Duration, Instant},
 };
-use parking_lot::RwLock;
 
 use crate::base_pool::Transaction;
 
@@ -54,12 +53,10 @@ impl<Hash: hash::Hash + Eq> Default for PoolRotator<Hash> {
 
 impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	/// Returns `true` if extrinsic hash is currently banned.
-	pub fn is_banned(&self, hash: &Hash) -> bool {
-		self.banned_until.read().contains_key(hash)
-	}
+	pub fn is_banned(&self, hash: &Hash) -> bool { self.banned_until.read().contains_key(hash) }
 
 	/// Bans given set of hashes.
-	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item=Hash>) {
+	pub fn ban(&self, now: &Instant, hashes: impl IntoIterator<Item = Hash>) {
 		let mut banned = self.banned_until.write();
 
 		for hash in hashes {
@@ -75,13 +72,17 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 		}
 	}
 
-
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
-	pub fn ban_if_stale<Ex>(&self, now: &Instant, current_block: u64, xt: &Transaction<Hash, Ex>) -> bool {
+	pub fn ban_if_stale<Ex>(
+		&self,
+		now: &Instant,
+		current_block: u64,
+		xt: &Transaction<Hash, Ex>,
+	) -> bool {
 		if xt.valid_till > current_block {
-			return false;
+			return false
 		}
 
 		self.ban(now, iter::once(xt.hash.clone()));
@@ -156,7 +157,6 @@ mod tests {
 		assert!(rotator.is_banned(&hash));
 	}
 
-
 	#[test]
 	fn should_clear_banned() {
 		// given
@@ -196,14 +196,14 @@ mod tests {
 		let past_block = 0;
 
 		// when
-		for i in 0..2*EXPECTED_SIZE {
+		for i in 0..2 * EXPECTED_SIZE {
 			let tx = tx_with(i as u64, past_block);
 			assert!(rotator.ban_if_stale(&now, past_block, &tx));
 		}
-		assert_eq!(rotator.banned_until.read().len(), 2*EXPECTED_SIZE);
+		assert_eq!(rotator.banned_until.read().len(), 2 * EXPECTED_SIZE);
 
 		// then
-		let tx = tx_with(2*EXPECTED_SIZE as u64, past_block);
+		let tx = tx_with(2 * EXPECTED_SIZE as u64, past_block);
 		// trigger a garbage collection
 		assert!(rotator.ban_if_stale(&now, past_block, &tx));
 		assert_eq!(rotator.banned_until.read().len(), EXPECTED_SIZE);

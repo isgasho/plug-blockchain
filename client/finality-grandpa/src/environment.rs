@@ -14,52 +14,51 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::BTreeMap;
-use std::iter::FromIterator;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+	collections::BTreeMap,
+	iter::FromIterator,
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
-use log::{debug, warn, info};
 use codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use log::{debug, info, warn};
 use parking_lot::RwLock;
-use sp_blockchain::{HeaderBackend, Error as ClientError};
+use sp_blockchain::{Error as ClientError, HeaderBackend};
+use tokio_timer::Delay;
 
+use client::{apply_aux, Client};
 use client_api::{
-	BlockchainEvents,
-	backend::{Backend},
+	backend::Backend, call_executor::CallExecutor, utils::is_descendent_of, BlockchainEvents,
 	Finalizer,
-	call_executor::CallExecutor,
-	utils::is_descendent_of,
-};
-use client::{
-	apply_aux, Client,
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	round::State as RoundState, voter, voter_set::VoterSet, BlockNumberOps, Equivocation,
+	Error as GrandpaError,
 };
-use primitives::{Blake2Hasher, H256, Pair};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
-};
+use primitives::{Blake2Hasher, Pair, H256};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Zero},
+};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	CommandOrError, Commit, Config, Error, Network, NewAuthoritySet, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, VoterCommand,
 };
 
 use consensus_common::SelectChain;
 
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
-use crate::consensus_changes::SharedConsensusChanges;
-use crate::justification::GrandpaJustification;
-use crate::until_imported::UntilVoteTargetImported;
-use crate::voting_rule::VotingRule;
-use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use crate::{
+	authorities::{AuthoritySet, SharedAuthoritySet},
+	consensus_changes::SharedConsensusChanges,
+	justification::GrandpaJustification,
+	until_imported::UntilVoteTargetImported,
+	voting_rule::VotingRule,
+};
+use fg_primitives::{AuthorityId, AuthoritySignature, RoundNumber, SetId};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -108,12 +107,13 @@ impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
-		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
-			.map(|(rounds, set_id, voters)| CompletedRounds {
+		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value).map(
+			|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
 				set_id,
 				voters,
-			})
+			},
+		)
 	}
 }
 
@@ -123,29 +123,28 @@ impl<Block: BlockT> CompletedRounds<Block> {
 		genesis: CompletedRound<Block>,
 		set_id: SetId,
 		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
-	)
-		-> CompletedRounds<Block>
-	{
+	) -> CompletedRounds<Block> {
 		let mut rounds = Vec::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		rounds.push(genesis);
 
 		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
-		CompletedRounds { rounds, set_id, voters }
+		CompletedRounds {
+			rounds,
+			set_id,
+			voters,
+		}
 	}
 
 	/// Get the set-id and voter set of the completed rounds.
-	pub fn set_info(&self) -> (SetId, &[AuthorityId]) {
-		(self.set_id, &self.voters[..])
-	}
+	pub fn set_info(&self) -> (SetId, &[AuthorityId]) { (self.set_id, &self.voters[..]) }
 
 	/// Iterate over all completed rounds.
-	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
-		self.rounds.iter().rev()
-	}
+	pub fn iter(&self) -> impl Iterator<Item = &CompletedRound<Block>> { self.rounds.iter().rev() }
 
 	/// Returns the last (latest) completed round.
 	pub fn last(&self) -> &CompletedRound<Block> {
-		self.rounds.first()
+		self.rounds
+			.first()
 			.expect("inner is never empty; always contains at least genesis; qed")
 	}
 
@@ -154,10 +153,11 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	pub fn push(&mut self, completed_round: CompletedRound<Block>) {
 		use std::cmp::Reverse;
 
-		match self.rounds.binary_search_by_key(
-			&Reverse(completed_round.number),
-			|completed_round| Reverse(completed_round.number),
-		) {
+		match self
+			.rounds
+			.binary_search_by_key(&Reverse(completed_round.number), |completed_round| {
+				Reverse(completed_round.number)
+			}) {
 			Ok(idx) => self.rounds[idx] = completed_round,
 			Err(idx) => self.rounds.insert(idx, completed_round),
 		};
@@ -226,38 +226,43 @@ impl<Block: BlockT> VoterSetState<Block> {
 	/// Returns the last completed rounds.
 	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
 		match self {
-			VoterSetState::Live { completed_rounds, .. } =>
-				completed_rounds.clone(),
-			VoterSetState::Paused { completed_rounds } =>
-				completed_rounds.clone(),
+			VoterSetState::Live {
+				completed_rounds, ..
+			} => completed_rounds.clone(),
+			VoterSetState::Paused { completed_rounds } => completed_rounds.clone(),
 		}
 	}
 
 	/// Returns the last completed round.
 	pub(crate) fn last_completed_round(&self) -> CompletedRound<Block> {
 		match self {
-			VoterSetState::Live { completed_rounds, .. } =>
-				completed_rounds.last().clone(),
-			VoterSetState::Paused { completed_rounds } =>
-				completed_rounds.last().clone(),
+			VoterSetState::Live {
+				completed_rounds, ..
+			} => completed_rounds.last().clone(),
+			VoterSetState::Paused { completed_rounds } => completed_rounds.last().clone(),
 		}
 	}
 
 	/// Returns the voter set state validating that it includes the given round
 	/// in current rounds and that the voter isn't paused.
-	pub fn with_current_round(&self, round: RoundNumber)
-		-> Result<(&CompletedRounds<Block>, &CurrentRounds<Block>), Error>
-	{
-		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
+	pub fn with_current_round(
+		&self,
+		round: RoundNumber,
+	) -> Result<(&CompletedRounds<Block>, &CurrentRounds<Block>), Error> {
+		if let VoterSetState::Live {
+			completed_rounds,
+			current_rounds,
+		} = self
+		{
 			if current_rounds.contains_key(&round) {
-				return Ok((completed_rounds, current_rounds));
+				return Ok((completed_rounds, current_rounds))
 			} else {
 				let msg = "Voter acting on a live round we are not tracking.";
-				return Err(Error::Safety(msg.to_string()));
+				return Err(Error::Safety(msg.to_string()))
 			}
 		} else {
 			let msg = "Voter acting while in paused state.";
-			return Err(Error::Safety(msg.to_string()));
+			return Err(Error::Safety(msg.to_string()))
 		}
 	}
 }
@@ -279,17 +284,20 @@ pub enum Vote<Block: BlockT> {
 	/// Has cast a prevote.
 	Prevote(Option<PrimaryPropose<Block>>, Prevote<Block>),
 	/// Has cast a precommit (implies prevote.)
-	Precommit(Option<PrimaryPropose<Block>>, Prevote<Block>, Precommit<Block>),
+	Precommit(
+		Option<PrimaryPropose<Block>>,
+		Prevote<Block>,
+		Precommit<Block>,
+	),
 }
 
 impl<Block: BlockT> HasVoted<Block> {
 	/// Returns the proposal we should vote with (if any.)
 	pub fn propose(&self) -> Option<&PrimaryPropose<Block>> {
 		match self {
-			HasVoted::Yes(_, Vote::Propose(propose)) =>
-				Some(propose),
-			HasVoted::Yes(_, Vote::Prevote(propose, _)) | HasVoted::Yes(_, Vote::Precommit(propose, _, _)) =>
-				propose.as_ref(),
+			HasVoted::Yes(_, Vote::Propose(propose)) => Some(propose),
+			HasVoted::Yes(_, Vote::Prevote(propose, _))
+			| HasVoted::Yes(_, Vote::Precommit(propose, _, _)) => propose.as_ref(),
 			_ => None,
 		}
 	}
@@ -297,8 +305,8 @@ impl<Block: BlockT> HasVoted<Block> {
 	/// Returns the prevote we should vote with (if any.)
 	pub fn prevote(&self) -> Option<&Prevote<Block>> {
 		match self {
-			HasVoted::Yes(_, Vote::Prevote(_, prevote)) | HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) =>
-				Some(prevote),
+			HasVoted::Yes(_, Vote::Prevote(_, prevote))
+			| HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) => Some(prevote),
 			_ => None,
 		}
 	}
@@ -306,26 +314,19 @@ impl<Block: BlockT> HasVoted<Block> {
 	/// Returns the precommit we should vote with (if any.)
 	pub fn precommit(&self) -> Option<&Precommit<Block>> {
 		match self {
-			HasVoted::Yes(_, Vote::Precommit(_, _, precommit)) =>
-				Some(precommit),
+			HasVoted::Yes(_, Vote::Precommit(_, _, precommit)) => Some(precommit),
 			_ => None,
 		}
 	}
 
 	/// Returns true if the voter can still propose, false otherwise.
-	pub fn can_propose(&self) -> bool {
-		self.propose().is_none()
-	}
+	pub fn can_propose(&self) -> bool { self.propose().is_none() }
 
 	/// Returns true if the voter can still prevote, false otherwise.
-	pub fn can_prevote(&self) -> bool {
-		self.prevote().is_none()
-	}
+	pub fn can_prevote(&self) -> bool { self.prevote().is_none() }
 
 	/// Returns true if the voter can still precommit, false otherwise.
-	pub fn can_precommit(&self) -> bool {
-		self.precommit().is_none()
-	}
+	pub fn can_precommit(&self) -> bool { self.precommit().is_none() }
 }
 
 /// A voter set state meant to be shared safely across multiple owners.
@@ -335,15 +336,15 @@ pub struct SharedVoterSetState<Block: BlockT> {
 }
 
 impl<Block: BlockT> From<VoterSetState<Block>> for SharedVoterSetState<Block> {
-	fn from(set_state: VoterSetState<Block>) -> Self {
-		SharedVoterSetState::new(set_state)
-	}
+	fn from(set_state: VoterSetState<Block>) -> Self { SharedVoterSetState::new(set_state) }
 }
 
 impl<Block: BlockT> SharedVoterSetState<Block> {
 	/// Create a new shared voter set tracker with the given state.
 	pub(crate) fn new(state: VoterSetState<Block>) -> Self {
-		SharedVoterSetState { inner: Arc::new(RwLock::new(state)) }
+		SharedVoterSetState {
+			inner: Arc::new(RwLock::new(state)),
+		}
 	}
 
 	/// Read the inner voter set state.
@@ -354,21 +355,21 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	/// Return vote status information for the current round.
 	pub(crate) fn has_voted(&self, round: RoundNumber) -> HasVoted<Block> {
 		match &*self.inner.read() {
-			VoterSetState::Live { current_rounds, .. } => {
-				current_rounds.get(&round).and_then(|has_voted| match has_voted {
-					HasVoted::Yes(id, vote) =>
-						Some(HasVoted::Yes(id.clone(), vote.clone())),
+			VoterSetState::Live { current_rounds, .. } => current_rounds
+				.get(&round)
+				.and_then(|has_voted| match has_voted {
+					HasVoted::Yes(id, vote) => Some(HasVoted::Yes(id.clone(), vote.clone())),
 					_ => None,
 				})
-				.unwrap_or(HasVoted::No)
-			},
+				.unwrap_or(HasVoted::No),
 			_ => HasVoted::No,
 		}
 	}
 
 	// NOTE: not exposed outside of this module intentionally.
 	fn with<F, R>(&self, f: F) -> R
-		where F: FnOnce(&mut VoterSetState<Block>) -> R
+	where
+		F: FnOnce(&mut VoterSetState<Block>) -> R,
 	{
 		f(&mut *self.inner.write())
 	}
@@ -392,8 +393,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
-	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error> where
-		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>
+	pub(crate) fn update_voter_set_state<F>(&self, f: F) -> Result<(), Error>
+	where
+		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>,
 	{
 		self.voter_set_state.with(|voter_set_state| {
 			if let Some(set_state) = f(&voter_set_state)? {
@@ -404,9 +406,8 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
-	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
+impl<Block: BlockT<Hash = H256>, B, E, N, RA, SC, VR> grandpa::Chain<Block::Hash, NumberFor<Block>>
+	for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -418,7 +419,11 @@ where
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
 	}
 
@@ -428,7 +433,7 @@ where
 		//       before activating the new set. the `authority_set` is updated immediately thus we
 		//       restrict the voter based on that.
 		if self.set_id != self.authority_set.inner().read().current().0 {
-			return None;
+			return None
 		}
 
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
@@ -440,7 +445,10 @@ where
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
+				let base_header = self
+					.client
+					.header(&BlockId::Hash(block))
+					.ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				if let Some(limit) = limit {
@@ -451,11 +459,14 @@ where
 							block,
 							limit,
 						);
-						return None;
+						return None
 					}
 				}
 
-				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
+				let best_header = self
+					.client
+					.header(&BlockId::Hash(best_hash))
+					.ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
@@ -469,17 +480,19 @@ where
 					loop {
 						if *target_header.number() < target_number {
 							unreachable!(
-								"we are traversing backwards from a known block; \
-								 blocks are stored contiguously; \
-								 qed"
+								"we are traversing backwards from a known block; blocks are \
+								 stored contiguously; qed"
 							);
 						}
 
 						if *target_header.number() == target_number {
-							break;
+							break
 						}
 
-						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
+						target_header = self
+							.client
+							.header(&BlockId::Hash(*target_header.parent_hash()))
+							.ok()?
 							.expect("Header known to exist after `best_containing` call; qed");
 					}
 
@@ -506,33 +519,35 @@ where
 					.restrict_vote(&*self.client, &base_header, &best_header, target_header)
 					.filter(|(_, restricted_number)| {
 						// we can only restrict votes within the interval [base, target]
-						restricted_number >= base_header.number() &&
-							restricted_number < target_header.number()
+						restricted_number >= base_header.number()
+							&& restricted_number < target_header.number()
 					})
 					.or(Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
 				None
-			}
+			},
 			Err(e) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
 				None
-			}
+			},
 		}
 	}
 }
 
-
-pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn ancestry<B, Block: BlockT<Hash = H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: Block::Hash,
 	block: Block::Hash,
-) -> Result<Vec<Block::Hash>, GrandpaError> where
+) -> Result<Vec<Block::Hash>, GrandpaError>
+where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 {
-	if base == block { return Err(GrandpaError::NotDescendent) }
+	if base == block {
+		return Err(GrandpaError::NotDescendent)
+	}
 
 	let tree_route_res = sp_blockchain::tree_route(client, block, base);
 
@@ -542,22 +557,26 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
 				   block, base, e);
 
-			return Err(GrandpaError::NotDescendent);
-		}
+			return Err(GrandpaError::NotDescendent)
+		},
 	};
 
 	if tree_route.common_block().hash != base {
-		return Err(GrandpaError::NotDescendent);
+		return Err(GrandpaError::NotDescendent)
 	}
 
 	// skip one because our ancestry is meant to start from the parent of `block`,
 	// and `tree_route` includes it.
-	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
+	Ok(tree_route
+		.retracted()
+		.iter()
+		.skip(1)
+		.map(|e| e.hash)
+		.collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
-	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block: BlockT<Hash = H256>, N, RA, SC, VR>
+	voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -569,21 +588,28 @@ where
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = AuthorityId;
-	type Signature = AuthoritySignature;
-
-	// regular round message streams
-	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
-		Error = Self::Error,
-	> + Send>;
-	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
-	> + Send>;
-
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
+	type Id = AuthorityId;
+	// regular round message streams
+	type In = Box<
+		dyn Stream<
+				Item = ::grandpa::SignedMessage<
+					Block::Hash,
+					NumberFor<Block>,
+					Self::Signature,
+					Self::Id,
+				>,
+				Error = Self::Error,
+			> + Send,
+	>;
+	type Out = Box<
+		dyn Sink<
+				SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+				SinkError = Self::Error,
+			> + Send,
+	>;
+	type Signature = AuthoritySignature;
+	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 
 	fn round_data(
 		&self,
@@ -597,7 +623,11 @@ where
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
-				if local_key.as_ref().map(|k| k.public() == id).unwrap_or(false) {
+				if local_key
+					.as_ref()
+					.map(|k| k.public() == id)
+					.unwrap_or(false)
+				{
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
@@ -616,13 +646,16 @@ where
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = Box::new(UntilVoteTargetImported::new(
-			self.client.import_notification_stream(),
-			self.network.clone(),
-			self.client.clone(),
-			incoming,
-			"round",
-		).map_err(Into::into));
+		let incoming = Box::new(
+			UntilVoteTargetImported::new(
+				self.client.import_notification_stream(),
+				self.network.clone(),
+				self.client.clone(),
+				incoming,
+				"round",
+			)
+			.map_err(Into::into),
+		);
 
 		// schedule network message cleanup when sink drops.
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
@@ -636,7 +669,11 @@ where
 		}
 	}
 
-	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+	fn proposed(
+		&self,
+		round: RoundNumber,
+		propose: PrimaryPropose<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
@@ -646,18 +683,20 @@ where
 
 		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
-			let current_round = current_rounds.get(&round)
+			let current_round = current_rounds
+				.get(&round)
 				.expect("checked in with_current_round that key exists; qed.");
 
 			if !current_round.can_propose() {
 				// we've already proposed in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			let mut current_rounds = current_rounds.clone();
-			let current_round = current_rounds.get_mut(&round)
+			let current_round = current_rounds
+				.get_mut(&round)
 				.expect("checked previously that key exists; qed.");
 
 			*current_round = HasVoted::Yes(local_id, Vote::Propose(propose));
@@ -685,20 +724,22 @@ where
 
 		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
-			let current_round = current_rounds.get(&round)
+			let current_round = current_rounds
+				.get(&round)
 				.expect("checked in with_current_round that key exists; qed.");
 
 			if !current_round.can_prevote() {
 				// we've already prevoted in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			let propose = current_round.propose();
 
 			let mut current_rounds = current_rounds.clone();
-			let current_round = current_rounds.get_mut(&round)
+			let current_round = current_rounds
+				.get_mut(&round)
 				.expect("checked previously that key exists; qed.");
 
 			*current_round = HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote));
@@ -716,7 +757,11 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, round: RoundNumber, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(
+		&self,
+		round: RoundNumber,
+		precommit: Precommit<Block>,
+	) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
@@ -726,14 +771,15 @@ where
 
 		self.update_voter_set_state(|voter_set_state| {
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
-			let current_round = current_rounds.get(&round)
+			let current_round = current_rounds
+				.get(&round)
 				.expect("checked in with_current_round that key exists; qed.");
 
 			if !current_round.can_precommit() {
 				// we've already precommitted in this round (in a previous run),
 				// ignore the given vote and don't update the voter set
 				// state
-				return Ok(None);
+				return Ok(None)
 			}
 
 			let propose = current_round.propose();
@@ -741,12 +787,13 @@ where
 				HasVoted::Yes(_, Vote::Prevote(_, prevote)) => prevote,
 				_ => {
 					let msg = "Voter precommitting before prevoting.";
-					return Err(Error::Safety(msg.to_string()));
+					return Err(Error::Safety(msg.to_string()))
 				},
 			};
 
 			let mut current_rounds = current_rounds.clone();
-			let current_round = current_rounds.get_mut(&round)
+			let current_round = current_rounds
+				.get_mut(&round)
 				.expect("checked previously that key exists; qed.");
 
 			*current_round = HasVoted::Yes(
@@ -787,13 +834,16 @@ where
 			// NOTE: we don't use `with_current_round` here, it is possible that
 			// we are not currently tracking this round if it is a round we
 			// caught up to.
-			let (completed_rounds, current_rounds) =
-				if let VoterSetState::Live { completed_rounds, current_rounds } = voter_set_state {
-					(completed_rounds, current_rounds)
-				} else {
-					let msg = "Voter acting while in paused state.";
-					return Err(Error::Safety(msg.to_string()));
-				};
+			let (completed_rounds, current_rounds) = if let VoterSetState::Live {
+				completed_rounds,
+				current_rounds,
+			} = voter_set_state
+			{
+				(completed_rounds, current_rounds)
+			} else {
+				let msg = "Voter acting while in paused state.";
+				return Err(Error::Safety(msg.to_string()))
+			};
 
 			let mut completed_rounds = completed_rounds.clone();
 
@@ -844,25 +894,34 @@ where
 		self.update_voter_set_state(|voter_set_state| {
 			// NOTE: we don't use `with_current_round` here, because a concluded
 			// round is completed and cannot be current.
-			let (completed_rounds, current_rounds) =
-				if let VoterSetState::Live { completed_rounds, current_rounds } = voter_set_state {
-					(completed_rounds, current_rounds)
-				} else {
-					let msg = "Voter acting while in paused state.";
-					return Err(Error::Safety(msg.to_string()));
-				};
+			let (completed_rounds, current_rounds) = if let VoterSetState::Live {
+				completed_rounds,
+				current_rounds,
+			} = voter_set_state
+			{
+				(completed_rounds, current_rounds)
+			} else {
+				let msg = "Voter acting while in paused state.";
+				return Err(Error::Safety(msg.to_string()))
+			};
 
 			let mut completed_rounds = completed_rounds.clone();
 
-			if let Some(already_completed) = completed_rounds.rounds
-				.iter_mut().find(|r| r.number == round)
+			if let Some(already_completed) = completed_rounds
+				.rounds
+				.iter_mut()
+				.find(|r| r.number == round)
 			{
 				let n_existing_votes = already_completed.votes.len();
 
 				// the interface of Environment guarantees that the previous `historical_votes`
 				// from `completable` is a prefix of what is passed to `concluded`.
 				already_completed.votes.extend(
-					historical_votes.seen().iter().skip(n_existing_votes).cloned()
+					historical_votes
+						.seen()
+						.iter()
+						.skip(n_existing_votes)
+						.cloned(),
 				);
 				already_completed.state = state;
 				crate::aux_schema::write_concluded_round(&*self.client, &already_completed)?;
@@ -902,17 +961,18 @@ where
 	fn round_commit_timer(&self) -> Self::Timer {
 		use rand::{thread_rng, Rng};
 
-		//random between 0-1 seconds.
+		// random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
+		Box::new(
+			Delay::new(Instant::now() + Duration::from_millis(delay))
+				.map_err(|e| Error::Timer(e).into()),
+		)
 	}
 
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
@@ -921,7 +981,7 @@ where
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
+		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
@@ -949,7 +1009,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn finalize_block<B, Block: BlockT<Hash = H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -957,7 +1017,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
-) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
+) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
+where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
@@ -969,16 +1030,16 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 	let status = client.info().chain;
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
-		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
-		// the voter will be restarted at the median last finalized block, which can be lower than the local best
-		// finalized block.
+		// This can happen after a forced change (triggered by the finality tracker when finality is
+		// stalled), since the voter will be restarted at the median last finalized block, which can
+		// be lower than the local best finalized block.
 		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
 				hash,
 				number,
 				status.finalized_number,
 		);
 
-		return Ok(());
+		return Ok(())
 	}
 
 	// FIXME #1483: clone only when changed
@@ -994,29 +1055,31 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	};
 
 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
-		let status = authority_set.apply_standard_changes(
-			hash,
-			number,
-			&is_descendent_of::<_, _, Block::Hash>(client, None),
-		).map_err(|e| Error::Safety(e.to_string()))?;
+		let status = authority_set
+			.apply_standard_changes(
+				hash,
+				number,
+				&is_descendent_of::<_, _, Block::Hash>(client, None),
+			)
+			.map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
-		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
-			.finalize((number, hash), &canon_at_height)?;
+		let (alters_consensus_changes, finalizes_consensus_changes) =
+			consensus_changes.finalize((number, hash), &canon_at_height)?;
 
 		if alters_consensus_changes {
 			old_consensus_changes = Some(consensus_changes.clone());
 
-			let write_result = crate::aux_schema::update_consensus_changes(
-				&*consensus_changes,
-				|insert| apply_aux(import_op, insert, &[]),
-			);
+			let write_result =
+				crate::aux_schema::update_consensus_changes(&*consensus_changes, |insert| {
+					apply_aux(import_op, insert, &[])
+				});
 
 			if let Err(e) = write_result {
 				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
 
-				return Err(e.into());
+				return Err(e.into())
 			}
 		}
 
@@ -1041,18 +1104,16 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				if !justification_required {
 					if let Some(justification_period) = justification_period {
 						let last_finalized_number = client.info().chain.finalized_number;
-						justification_required =
-							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
-							(last_finalized_number / justification_period != number / justification_period);
+						justification_required = (!last_finalized_number.is_zero()
+							|| number - last_finalized_number == justification_period)
+							&& (last_finalized_number / justification_period
+								!= number / justification_period);
 					}
 				}
 
 				if justification_required {
-					let justification = GrandpaJustification::from_commit(
-						client,
-						round_number,
-						commit,
-					)?;
+					let justification =
+						GrandpaJustification::from_commit(client, round_number, commit)?;
 
 					Some(justification.encode())
 				} else {
@@ -1065,10 +1126,12 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			e
-		})?;
+		client
+			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
+			.map_err(|e| {
+				warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				e
+			})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
@@ -1078,7 +1141,10 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			let (new_id, set_ref) = authority_set.current();
 
 			if set_ref.len() > 16 {
-				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+				info!(
+					"Applying GRANDPA set change to new set with {} authorities",
+					set_ref.len()
+				);
 			} else {
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
@@ -1109,7 +1175,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
 
-				return Err(e.into());
+				return Err(e.into())
 			}
 		}
 
@@ -1127,30 +1193,30 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			}
 
 			Err(CommandOrError::Error(e))
-		}
+		},
 	}
 }
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<Block: BlockT<Hash=H256>, C: HeaderBackend<Block>>(
+pub(crate) fn canonical_at_height<Block: BlockT<Hash = H256>, C: HeaderBackend<Block>>(
 	provider: C,
 	base: (Block::Hash, NumberFor<Block>),
 	base_is_canonical: bool,
 	height: NumberFor<Block>,
 ) -> Result<Option<Block::Hash>, ClientError> {
 	if height > base.1 {
-		return Ok(None);
+		return Ok(None)
 	}
 
 	if height == base.1 {
 		if base_is_canonical {
-			return Ok(Some(base.0));
+			return Ok(Some(base.0))
 		} else {
-			return Ok(provider.hash(height).unwrap_or(None));
+			return Ok(provider.hash(height).unwrap_or(None))
 		}
 	} else if base_is_canonical {
-		return Ok(provider.hash(height).unwrap_or(None));
+		return Ok(provider.hash(height).unwrap_or(None))
 	}
 
 	let one = NumberFor::<Block>::one();

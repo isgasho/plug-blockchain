@@ -15,17 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Uncles functionality for Substrate.
-//!
 #![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
-use consensus_common::SelectChain;
-use inherents::{InherentDataProviders};
-use log::warn;
 use client_api::ProvideUncles;
+use consensus_common::SelectChain;
+use inherents::InherentDataProviders;
+use log::warn;
+use sp_authorship;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::sync::Arc;
-use sp_authorship;
 
 /// Maximum uncles generations we may provide to the runtime.
 const MAX_UNCLE_GENERATIONS: u32 = 8;
@@ -35,7 +34,8 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	client: Arc<C>,
 	select_chain: SC,
 	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), consensus_common::Error> where
+) -> Result<(), consensus_common::Error>
+where
 	B: BlockT,
 	C: ProvideUncles<B> + Send + Sync + 'static,
 	SC: SelectChain<B> + 'static,
@@ -43,25 +43,22 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	if !inherent_data_providers.has_provider(&sp_authorship::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(sp_authorship::InherentDataProvider::new(move || {
-				{
-					let chain_head = match select_chain.best_chain() {
-						Ok(x) => x,
-						Err(e) => {
-							warn!(target: "uncles", "Unable to get chain head: {:?}", e);
-							return Vec::new();
-						}
-					};
-					match client.uncles(chain_head.hash(), MAX_UNCLE_GENERATIONS.into()) {
-						Ok(uncles) => uncles,
-						Err(e) => {
-							warn!(target: "uncles", "Unable to get uncles: {:?}", e);
-							Vec::new()
-						}
-					}
+				let chain_head = match select_chain.best_chain() {
+					Ok(x) => x,
+					Err(e) => {
+						warn!(target: "uncles", "Unable to get chain head: {:?}", e);
+						return Vec::new()
+					},
+				};
+				match client.uncles(chain_head.hash(), MAX_UNCLE_GENERATIONS.into()) {
+					Ok(uncles) => uncles,
+					Err(e) => {
+						warn!(target: "uncles", "Unable to get uncles: {:?}", e);
+						Vec::new()
+					},
 				}
 			}))
-		.map_err(|err| consensus_common::Error::InherentData(err.into()))?;
+			.map_err(|err| consensus_common::Error::InherentData(err.into()))?;
 	}
 	Ok(())
 }
-

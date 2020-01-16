@@ -28,33 +28,42 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut dyn Context<B>, who: PeerId, status: crate::message::Status<B>);
+	fn on_connect(
+		&mut self,
+		ctx: &mut dyn Context<B>,
+		who: PeerId,
+		status: crate::message::Status<B>,
+	);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
 	fn on_disconnect(&mut self, ctx: &mut dyn Context<B>, who: PeerId);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(
-		&mut self,
-		ctx: &mut dyn Context<B>,
-		who: PeerId,
-		message: Vec<u8>
-	);
+	fn on_message(&mut self, ctx: &mut dyn Context<B>, who: PeerId, message: Vec<u8>);
 
 	/// Called when a network-specific event arrives.
-	#[deprecated(note = "This method is never called; please use `with_dht_event_tx` when building the service")]
+	#[deprecated(
+		note = "This method is never called; please use `with_dht_event_tx` when building the \
+		        service"
+	)]
 	fn on_event(&mut self, _event: Event) {}
 
 	/// Called on abort.
 	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
-	fn on_abort(&mut self) { }
+	fn on_abort(&mut self) {}
 
 	/// Called periodically to maintain peers and handle timeouts.
-	fn maintain_peers(&mut self, _ctx: &mut dyn Context<B>) { }
+	fn maintain_peers(&mut self, _ctx: &mut dyn Context<B>) {}
 
 	/// Called when a block is _imported_ at the head of the chain (not during major sync).
 	/// Not guaranteed to be called for every block, but will be most of the after major sync.
-	fn on_block_imported(&mut self, _ctx: &mut dyn Context<B>, _hash: B::Hash, _header: &B::Header) { }
+	fn on_block_imported(
+		&mut self,
+		_ctx: &mut dyn Context<B>,
+		_hash: B::Hash,
+		_header: &B::Header,
+	) {
+	}
 }
 
 /// Construct a simple protocol that is composed of several sub protocols.

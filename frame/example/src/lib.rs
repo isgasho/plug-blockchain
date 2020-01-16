@@ -24,8 +24,8 @@
 //!
 //! ### Documentation Guidelines:
 //!
-//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
-//! <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
+//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs
+//! addressing issues with --> <!-- label 'S3-SRML' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
 //!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
 //!         accompany module functions and be restricted to the module interface,
@@ -35,13 +35,13 @@
 //!         Capitalise the first word of each documentation comment and end it with
 //!         a full stop. See
 //!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
-//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
-//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
-//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
-//!         <code>u64</code>)</li>
-//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
-//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!         target="_blank"> Generic example of annotating source code with documentation
+//! comments</a></li>     <li>Self-documenting code - Try to refactor code to be
+//! self-documenting.</li>     <li>Code comments - Supplement complex code with a brief explanation,
+//! not every line of code.</li>     <li>Identifiers - surround by backticks (i.e.
+//! <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,         <code>u64</code>)</li>
+//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
+//! valid.</li>     <li>Extended tutorials - should be moved to external files and refer to.</li>
 //!     <!-- Original author of paragraph: @AmarRSingh -->
 //!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
 //!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
@@ -82,12 +82,13 @@
 //!
 //! \## Terminology
 //!
-//! // Add terminology used in the custom module. Include concepts, storage items, or actions that you think
-//! // deserve to be noted to give context to the rest of the documentation or module usage. The author needs to
-//! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
-//! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
-//! // "free balance" and "reserved balance" should be noted to give context to the module.
-//! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
+//! // Add terminology used in the custom module. Include concepts, storage items, or actions that
+//! you think // deserve to be noted to give context to the rest of the documentation or module
+//! usage. The author needs to // use some judgment about what is included. We don't want a list of
+//! every storage item nor types - the user // can go to the code for that. For example, "transfer
+//! fee" is obvious and should not be included, but // "free balance" and "reserved balance" should
+//! be noted to give context to the module. // Please do not link to outside resources. The
+//! reference docs should be the ultimate source of truth.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
@@ -104,7 +105,8 @@
 //! \#### <INSERT_SCENARIO_NAME>
 //!
 //! // Describe requirements prior to interacting with the custom module.
-//! // Describe the process of interacting with the custom module for this scenario and public API functions used.
+//! // Describe the process of interacting with the custom module for this scenario and public API
+//! functions used.
 //!
 //! \## Interface
 //!
@@ -128,14 +130,15 @@
 //!
 //! <!-- Original author of paragraph: ??? -->
 //!
-//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
-//! // included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
+//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should
+//! only be // included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
 //!
 //! \### Dispatchable Functions
 //!
 //! <!-- Original author of paragraph: @AmarRSingh & @joepetrowski -->
 //!
-//! // A brief description of dispatchable functions and a link to the rustdoc with their actual documentation.
+//! // A brief description of dispatchable functions and a link to the rustdoc with their actual
+//! documentation.
 //!
 //! // <b>MUST</b> have link to Call enum
 //! // <b>MUST</b> have origin information included in function doc
@@ -152,7 +155,8 @@
 //!
 //! <!-- Original author of paragraph: @AmarRSingh -->
 //!
-//! // It is up to the writer of the respective module (with respect to how much information to provide).
+//! // It is up to the writer of the respective module (with respect to how much information to
+//! provide).
 //!
 //! \#### Public Inspection functions - Immutable (getters)
 //!
@@ -215,7 +219,8 @@
 //!
 //! \### Simple Code Snippet
 //!
-//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_MODULE_NAME>)
+//! // Show a simple example (e.g. how to query a public getter function of
+//! <INSERT_CUSTOM_MODULE_NAME>)
 //!
 //! \### Example from SRML
 //!
@@ -253,19 +258,23 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
 use rstd::marker::PhantomData;
-use support::{
-	dispatch::Result, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
-};
-use system::{ensure_signed, ensure_root};
-use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
+	traits::{Bounded, SaturatedConversion, SignedExtension},
 	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
+use support::{
+	decl_event, decl_module, decl_storage,
+	dispatch::Result,
+	weights::{
+		ClassifyDispatch, DispatchClass, DispatchInfo, PaysFee, SimpleDispatchInfo, WeighData,
+		Weight,
+	},
+};
+use system::{ensure_root, ensure_signed};
 
 // A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
 // the arguments and makes a decision based upon them.
@@ -283,8 +292,7 @@ use sp_runtime::{
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
 struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
 
-impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
-{
+impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
 		(*target.0 * multiplier).saturated_into::<Weight>()
@@ -302,9 +310,7 @@ impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDumm
 }
 
 impl<T: balances::Trait> PaysFee for WeightForSetDummy<T> {
-	fn pays_fee(&self) -> bool {
-		true
-	}
+	fn pays_fee(&self) -> bool { true }
 }
 
 /// A type alias for the balance type from this module's point of view.
@@ -362,7 +368,10 @@ decl_event!(
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
-	pub enum Event<T> where B = <T as balances::Trait>::Balance {
+	pub enum Event<T>
+	where
+		B = <T as balances::Trait>::Balance,
+	{
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -381,10 +390,10 @@ decl_event!(
 // - Public calls that are signed by an external account.
 // - Root calls that are allowed to be made only by the governance system.
 // - Unsigned calls that can be of two kinds:
-//   * "Inherent extrinsics" that are opinions generally held by the block
-//     authors that build child blocks.
-//   * Unsigned Transactions that are of intrinsic recognisable utility to the
-//     network, and are validated by the runtime.
+//   * "Inherent extrinsics" that are opinions generally held by the block authors that build child
+//     blocks.
+//   * Unsigned Transactions that are of intrinsic recognisable utility to the network, and are
+//     validated by the runtime.
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
@@ -547,7 +556,8 @@ impl<T: Trait> Module<T> {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();
-		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
+		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an
+		// Option<> type.
 		let result = <Foo<T>>::mutate(|foo| {
 			*foo = *foo + increase_by;
 			*foo
@@ -597,19 +607,17 @@ impl<T: Trait> Module<T> {
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "WatchDummy")
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { write!(f, "WatchDummy") }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type AccountId = T::AccountId;
+	type AdditionalSigned = ();
 	// Note that this could also be assigned to the top-level call enum. It is passed into the
 	// balances module directly and since `Trait: balances::Trait`, you could also use `T::Call`.
 	// In that case, you would have had access to all call variants and could match on variants from
 	// other modules.
 	type Call = Call<T>;
-	type AdditionalSigned = ();
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -635,7 +643,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
-			}
+			},
 			_ => Ok(Default::default()),
 		}
 	}
@@ -645,13 +653,14 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
 	use primitives::H256;
+	use support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header,
-		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, OnFinalize, OnInitialize},
+		Perbill,
 	};
 
 	impl_outer_origin! {
@@ -670,23 +679,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = ();
-		type Hashing = BlakeTwo256;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
-		type Version = ();
-		type Doughnut = ();
+		type BlockHashCount = BlockHashCount;
+		type BlockNumber = u64;
+		type Call = ();
 		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -695,14 +704,14 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -712,15 +721,21 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
-		GenesisConfig::<Test>{
+		balances::GenesisConfig::<Test>::default()
+			.assimilate_storage(&mut t)
+			.unwrap();
+		GenesisConfig::<Test> {
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -761,7 +776,8 @@ mod tests {
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+				WatchDummy::<Test>(PhantomData)
+					.validate(&1, &call, info, 150)
 					.unwrap()
 					.priority,
 				Bounded::max_value(),

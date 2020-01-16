@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::prelude::*;
-use futures::sync::mpsc;
-use futures::stream::futures_unordered::FuturesUnordered;
+use futures::{prelude::*, stream::futures_unordered::FuturesUnordered, sync::mpsc};
 use std::time::{Duration, Instant};
 use tokio_timer::Delay;
 
@@ -79,24 +77,24 @@ impl<T> StatusSinks<T> {
 							sender: Some(sender),
 						});
 					}
-				}
-				Err(()) |
-				Ok(Async::Ready(None)) |
-				Ok(Async::NotReady) => break,
+				},
+				Err(()) | Ok(Async::Ready(None)) | Ok(Async::NotReady) => break,
 			}
 		}
 	}
 }
 
 impl<T> Future for YieldAfter<T> {
-	type Item = (mpsc::UnboundedSender<T>, Duration);
 	type Error = ();
+	type Item = (mpsc::UnboundedSender<T>, Duration);
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		match self.delay.poll() {
 			Ok(Async::NotReady) => Ok(Async::NotReady),
 			Ok(Async::Ready(())) => {
-				let sender = self.sender.take()
+				let sender = self
+					.sender
+					.take()
 					.expect("sender is always Some unless the future is finished; qed");
 				Ok(Async::Ready((sender, self.interval)))
 			},
@@ -108,8 +106,7 @@ impl<T> Future for YieldAfter<T> {
 #[cfg(test)]
 mod tests {
 	use super::StatusSinks;
-	use futures::prelude::*;
-	use futures::sync::mpsc;
+	use futures::{prelude::*, sync::mpsc};
 	use std::time::Duration;
 
 	#[test]
@@ -126,7 +123,10 @@ mod tests {
 
 		let mut val_order = 5;
 		runtime.spawn(futures::future::poll_fn(move || {
-			status_sinks.poll(|| { val_order += 1; val_order });
+			status_sinks.poll(|| {
+				val_order += 1;
+				val_order
+			});
 			Ok(Async::NotReady)
 		}));
 

@@ -53,24 +53,24 @@
 //! ## Usage
 //!
 //! ```
+//! use pallet_scored_pool::{self as scored_pool};
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use pallet_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn candidate(origin) -> Result {
-//! 			let who = ensure_signed(origin)?;
+//! pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub fn candidate(origin) -> Result {
+//! 		let who = ensure_signed(origin)?;
 //!
-//! 			let _ = <scored_pool::Module<T>>::submit_candidacy(
-//! 				T::Origin::from((Some(who.clone()), None).into())
-//! 			);
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
+//! 		let _ = <scored_pool::Module<T>>::submit_candidacy(
+//! 			T::Origin::from((Some(who.clone()), None).into())
+//! 		);
+//! 		Ok(())
+//! 			}
+//! 			}
+//! 			}
 //!
 //! # fn main() { }
 //! ```
@@ -89,21 +89,22 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use rstd::{
-	fmt::Debug,
-	prelude::*,
+use rstd::{fmt::Debug, prelude::*};
+use sp_runtime::traits::{
+	EnsureOrigin, MaybeSerializeDeserialize, SimpleArithmetic, StaticLookup, Zero,
 };
 use support::{
-	decl_module, decl_storage, decl_event, ensure,
-	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	decl_event, decl_module, decl_storage, ensure,
+	traits::{ChangeMembers, Currency, Get, InitializeMembers, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
-use sp_runtime::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
-};
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type PoolT<T, I> = Vec<(<T as system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
+type BalanceOf<T, I> =
+	<<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PoolT<T, I> = Vec<(
+	<T as system::Trait>::AccountId,
+	Option<<T as Trait<I>>::Score>,
+)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -115,13 +116,18 @@ enum ChangeReceiver {
 	MembershipChanged,
 }
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I = DefaultInstance>: system::Trait {
 	/// The currency used for deposits.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// The score attributed to a member or candidate.
-	type Score:
-		SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+	type Score: SimpleArithmetic
+		+ Clone
+		+ Copy
+		+ Default
+		+ FullCodec
+		+ MaybeSerializeDeserialize
+		+ Debug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -372,16 +378,12 @@ decl_module! {
 }
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
-
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.
 	///
 	/// The `notify` parameter is used to deduct which associated
 	/// type function to invoke at the end of the method.
-	fn refresh_members(
-		pool: PoolT<T, I>,
-		notify: ChangeReceiver
-	) {
+	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) {
 		let count = <MemberCount<I>>::get();
 
 		let mut new_members: Vec<T::AccountId> = pool
@@ -396,13 +398,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		<Members<T, I>>::put(&new_members);
 
 		match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(
-					&new_members[..],
-					&old_members[..],
-				),
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members)
+			},
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..])
+			},
 		}
 	}
 
@@ -413,7 +414,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn remove_member(
 		mut pool: PoolT<T, I>,
 		remove: T::AccountId,
-		index: u32
+		index: u32,
 	) -> Result<(), &'static str> {
 		// all callers of this function in this module also check
 		// the index for validity before calling this function.
@@ -443,7 +444,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn ensure_index(
 		pool: &PoolT<T, I>,
 		who: &T::AccountId,
-		index: u32
+		index: u32,
 	) -> Result<(), &'static str> {
 		ensure!(index < pool.len() as u32, "index out of bounds");
 
@@ -453,4 +454,3 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 }
-

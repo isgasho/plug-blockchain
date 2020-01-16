@@ -24,5 +24,5 @@ pub use self::behaviour::{LegacyProto, LegacyProtoOut};
 
 mod behaviour;
 mod handler;
-mod upgrade;
 mod tests;
+mod upgrade;

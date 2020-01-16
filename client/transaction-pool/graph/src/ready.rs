@@ -15,23 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{HashMap, HashSet, BTreeSet},
 	cmp,
+	collections::{BTreeSet, HashMap, HashSet},
 	hash,
 	sync::Arc,
 };
 
-use serde::Serialize;
 use log::trace;
 use parking_lot::RwLock;
-use sp_runtime::traits::Member;
-use sp_runtime::transaction_validity::{
-	TransactionTag as Tag,
-};
+use serde::Serialize;
+use sp_runtime::{traits::Member, transaction_validity::TransactionTag as Tag};
 use txpool_api::error;
 
-use crate::future::WaitingTransaction;
-use crate::base_pool::Transaction;
+use crate::{base_pool::Transaction, future::WaitingTransaction};
 
 /// An in-pool transaction reference.
 ///
@@ -55,22 +51,25 @@ impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
 
 impl<Hash, Ex> Ord for TransactionRef<Hash, Ex> {
 	fn cmp(&self, other: &Self) -> cmp::Ordering {
-		self.transaction.priority.cmp(&other.transaction.priority)
-			.then(other.transaction.valid_till.cmp(&self.transaction.valid_till))
+		self.transaction
+			.priority
+			.cmp(&other.transaction.priority)
+			.then(
+				other
+					.transaction
+					.valid_till
+					.cmp(&self.transaction.valid_till),
+			)
 			.then(other.insertion_id.cmp(&self.insertion_id))
 	}
 }
 
 impl<Hash, Ex> PartialOrd for TransactionRef<Hash, Ex> {
-	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-		Some(self.cmp(other))
-	}
+	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 
 impl<Hash, Ex> PartialEq for TransactionRef<Hash, Ex> {
-	fn eq(&self, other: &Self) -> bool {
-		self.cmp(other) == cmp::Ordering::Equal
-	}
+	fn eq(&self, other: &Self) -> bool { self.cmp(other) == cmp::Ordering::Equal }
 }
 impl<Hash, Ex> Eq for TransactionRef<Hash, Ex> {}
 
@@ -112,7 +111,8 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
-	/// Best transactions that are ready to be included to the block without any other previous transaction.
+	/// Best transactions that are ready to be included to the block without any other previous
+	/// transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
@@ -129,22 +129,22 @@ impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
 
 impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// Borrows a map of tags that are provided by transactions in this queue.
-	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> {
-		&self.provided_tags
-	}
+	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> { &self.provided_tags }
 
 	/// Returns an iterator of ready transactions.
 	///
 	/// Transactions are returned in order:
 	/// 1. First by the dependencies:
-	///	- never return transaction that requires a tag, which was not provided by one of the previously returned transactions
+	/// 	- never return transaction that requires a tag, which was not provided by one of the
+	///    previously returned transactions
 	/// 2. Then by priority:
-	/// - If there are two transactions with all requirements satisfied the one with higher priority goes first.
+	/// - If there are two transactions with all requirements satisfied the one with higher priority
+	///   goes first.
 	/// 3. Then by the ttl that's left
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
 	/// - transactions that are longer in the queue go first
-	pub fn get(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
+	pub fn get(&self) -> impl Iterator<Item = Arc<Transaction<Hash, Ex>>> {
 		BestIterator {
 			all: self.ready.clone(),
 			best: self.best.clone(),
@@ -162,7 +162,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		tx: WaitingTransaction<Hash, Ex>,
 	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		assert!(tx.is_ready(), "Only ready transactions can be imported.");
-		assert!(!self.ready.read().contains_key(&tx.transaction.hash), "Transaction is already imported.");
+		assert!(
+			!self.ready.read().contains_key(&tx.transaction.hash),
+			"Transaction is already imported."
+		);
 
 		self.insertion_id += 1;
 		let insertion_id = self.insertion_id;
@@ -182,7 +185,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				// this transaction depends on some other, so it doesn't go to best directly.
 				goes_to_best = false;
 			}
-	 	}
+		}
 
 		// update provided_tags
 		for tag in &transaction.provides {
@@ -191,7 +194,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 		let transaction = TransactionRef {
 			insertion_id,
-			transaction
+			transaction,
 		};
 
 		// insert to best if it doesn't require any other transaction to be included before it
@@ -210,30 +213,29 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	}
 
 	/// Fold a list of ready transactions to compute a single value.
-	pub fn fold<R, F: FnMut(Option<R>, &ReadyTx<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
-		self.ready
-			.read()
-			.values()
-			.fold(None, f)
+	pub fn fold<R, F: FnMut(Option<R>, &ReadyTx<Hash, Ex>) -> Option<R>>(
+		&mut self,
+		f: F,
+	) -> Option<R> {
+		self.ready.read().values().fold(None, f)
 	}
 
 	/// Returns true if given hash is part of the queue.
-	pub fn contains(&self, hash: &Hash) -> bool {
-		self.ready.read().contains_key(hash)
-	}
+	pub fn contains(&self, hash: &Hash) -> bool { self.ready.read().contains_key(hash) }
 
 	/// Retrieve transaction by hash
 	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
 		let ready = self.ready.read();
-		hashes.iter().map(|hash| {
-			ready.get(hash).map(|x| x.transaction.transaction.clone())
-		}).collect()
+		hashes
+			.iter()
+			.map(|hash| ready.get(hash).map(|x| x.transaction.transaction.clone()))
+			.collect()
 	}
 
 	/// Removes a subtree of transactions from the ready pool.
 	///
-	/// NOTE removing a transaction will also cause a removal of all transactions that depend on that one
-	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
+	/// NOTE removing a transaction will also cause a removal of all transactions that depend on
+	/// that one (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
 	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
@@ -288,8 +290,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				None => return removed,
 			};
 
-			let res = self.provided_tags.remove(&tag)
-					.and_then(|hash| self.ready.write().remove(&hash));
+			let res = self
+				.provided_tags
+				.remove(&tag)
+				.and_then(|hash| self.ready.write().remove(&hash));
 
 			if let Some(tx) = res {
 				let unlocks = tx.unlocks;
@@ -346,8 +350,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 					let removed = self.provided_tags.remove(tag);
 					assert_eq!(
 						removed.as_ref(),
-						if current_tag == tag { None } else { Some(&tx.hash) },
-						"The pool contains exactly one transaction providing given tag; the removed transaction
+						if current_tag == tag {
+							None
+						} else {
+							Some(&tx.hash)
+						},
+						"The pool contains exactly one transaction providing given tag; the \
+						 removed transaction
 						claims to provide that tag, so it has to be mapped to it's hash; qed"
 					);
 				}
@@ -364,17 +373,21 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// We remove/replace old transactions in case they have lower priority.
 	///
 	/// In case replacement is successful returns a list of removed transactions.
-	fn replace_previous(&mut self, tx: &Transaction<Hash, Ex>) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
+	fn replace_previous(
+		&mut self,
+		tx: &Transaction<Hash, Ex>,
+	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		let mut to_remove = {
 			// check if we are replacing a transaction
-			let replace_hashes = tx.provides
+			let replace_hashes = tx
+				.provides
 				.iter()
 				.filter_map(|tag| self.provided_tags.get(tag))
 				.collect::<HashSet<_>>();
 
 			// early exit if we are not replacing anything.
 			if replace_hashes.is_empty() {
-				return Ok(vec![]);
+				return Ok(vec![])
 			}
 
 			// now check if collective priority is lower than the replacement transaction.
@@ -383,12 +396,17 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				replace_hashes
 					.iter()
 					.filter_map(|hash| ready.get(hash))
-					.fold(0u64, |total, tx| total.saturating_add(tx.transaction.transaction.priority))
+					.fold(0u64, |total, tx| {
+						total.saturating_add(tx.transaction.transaction.priority)
+					})
 			};
 
 			// bail - the transaction has too low priority to replace the old ones
 			if old_priority >= tx.priority {
-				return Err(error::Error::TooLowPriority { old: old_priority, new: tx.priority })
+				return Err(error::Error::TooLowPriority {
+					old: old_priority,
+					new: tx.priority,
+				})
 			}
 
 			replace_hashes.into_iter().cloned().collect::<Vec<_>>()
@@ -406,7 +424,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			// check if this transaction provides stuff that is not provided by the new one.
 			let (mut unlocks, tx) = (tx.unlocks, tx.transaction.transaction);
 			{
-				let invalidated = tx.provides
+				let invalidated = tx
+					.provides
 					.iter()
 					.filter(|tag| !new_provides.contains(&**tag));
 
@@ -423,13 +442,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	}
 
 	/// Returns number of transactions in this queue.
-	pub fn len(&self) -> usize {
-		self.ready.read().len()
-	}
+	pub fn len(&self) -> usize { self.ready.read().len() }
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+		self.ready
+			.read()
+			.values()
+			.fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
 	}
 }
 
@@ -447,10 +467,10 @@ impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 		if satisfied == tx_ref.transaction.requires.len() {
 			// If we have satisfied all deps insert to best
 			self.best.insert(tx_ref);
-
 		} else {
 			// otherwise we're still awaiting for some deps
-			self.awaiting.insert(tx_ref.transaction.hash.clone(), (satisfied, tx_ref));
+			self.awaiting
+				.insert(tx_ref.transaction.hash.clone(), (satisfied, tx_ref));
 		}
 	}
 }
@@ -549,7 +569,6 @@ mod tests {
 		assert_eq!(ready.get().count(), 1);
 	}
 
-
 	#[test]
 	fn should_return_best_transactions_in_correct_order() {
 		// given
@@ -570,7 +589,7 @@ mod tests {
 			bytes: 1,
 			hash: 5,
 			priority: 1,
-			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::max_value(), // use the max_value() here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
 			propagate: true,
@@ -612,28 +631,34 @@ mod tests {
 			tx
 		};
 		// higher priority = better
-		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3, 3)),
-			insertion_id: 1,
-		} > TransactionRef {
-			transaction: Arc::new(with_priority(2, 3)),
-			insertion_id: 2,
-		});
+		assert!(
+			TransactionRef {
+				transaction: Arc::new(with_priority(3, 3)),
+				insertion_id: 1,
+			} > TransactionRef {
+				transaction: Arc::new(with_priority(2, 3)),
+				insertion_id: 2,
+			}
+		);
 		// lower validity = better
-		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3, 2)),
-			insertion_id: 1,
-		} > TransactionRef {
-			transaction: Arc::new(with_priority(3, 3)),
-			insertion_id: 2,
-		});
+		assert!(
+			TransactionRef {
+				transaction: Arc::new(with_priority(3, 2)),
+				insertion_id: 1,
+			} > TransactionRef {
+				transaction: Arc::new(with_priority(3, 3)),
+				insertion_id: 2,
+			}
+		);
 		// lower insertion_id = better
-		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3, 3)),
-			insertion_id: 1,
-		} > TransactionRef {
-			transaction: Arc::new(with_priority(3, 3)),
-			insertion_id: 2,
-		});
+		assert!(
+			TransactionRef {
+				transaction: Arc::new(with_priority(3, 3)),
+				insertion_id: 1,
+			} > TransactionRef {
+				transaction: Arc::new(with_priority(3, 3)),
+				insertion_id: 2,
+			}
+		);
 	}
 }

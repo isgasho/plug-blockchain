@@ -38,33 +38,43 @@
 //!
 //! - **Staking Asset:** The asset for staking, to participate as Validators in the network.
 //! - **Spending Asset:** The asset for payment, such as paying transfer fees, gas fees, etc.
-//! - **Permissions:** A set of rules for a kind of asset, defining the allowed operations to the asset, and which
+//! - **Permissions:** A set of rules for a kind of asset, defining the allowed operations to the
+//!   asset, and which
 //! accounts are allowed to possess it.
 //! - **Total Issuance:** The total number of units in existence in a system.
-//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
-//! for most operations. When this balance falls below the existential deposit, most functionality of the account is
-//! removed. When both it and the reserved balance are deleted, then the account is said to be dead.
-//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
-//! can still be slashed, but only after all the free balance has been slashed. If the reserved balance falls below the
-//! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
-//! deleted, then the account is said to be dead.
-//! - **Imbalance:** A condition when some assets were credited or debited without equal and opposite accounting
-//! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
-//! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
-//! simply dropped, it should automatically maintain any book-keeping such as total issuance.)
-//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block number. Multiple
+//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
+//!   balance that matters
+//! for most operations. When this balance falls below the existential deposit, most functionality
+//! of the account is removed. When both it and the reserved balance are deleted, then the account
+//! is said to be dead.
+//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended.
+//!   Reserved balance
+//! can still be slashed, but only after all the free balance has been slashed. If the reserved
+//! balance falls below the existential deposit then it and any related functionality will be
+//! deleted. When both it and the free balance are deleted, then the account is said to be dead.
+//! - **Imbalance:** A condition when some assets were credited or debited without equal and
+//!   opposite accounting
+//! (i.e. a difference between total issuance and account balances). Functions that result in an
+//! imbalance will return an object of the `Imbalance` trait that can be managed within your runtime
+//! logic. (If an imbalance is simply dropped, it should automatically maintain any book-keeping
+//! such as total issuance.)
+//! - **Lock:** A freeze on a specified amount of an account's free balance until a specified block
+//!   number. Multiple
 //! locks always operate over the same funds, so they "overlay" rather than "stack".
 //!
 //! ### Implementations
 //!
-//! The Generic Asset module provides `AssetCurrency`, which implements the following traits. If these traits provide
-//! the functionality that you need, you can avoid coupling with the Generic Asset module.
+//! The Generic Asset module provides `AssetCurrency`, which implements the following traits. If
+//! these traits provide the functionality that you need, you can avoid coupling with the Generic
+//! Asset module.
 //!
 //! - `Currency`: Functions for dealing with a fungible assets system.
 //! - `ReservableCurrency`: Functions for dealing with assets that can be reserved from an account.
 //! - `LockableCurrency`: Functions for dealing with accounts that allow liquidity restrictions.
-//! - `Imbalance`: Functions for handling imbalances between total issuance in the system and account balances.
-//! Must be used when a function creates new assets (e.g. a reward) or destroys some assets (e.g. a system fee).
+//! - `Imbalance`: Functions for handling imbalances between total issuance in the system and
+//!   account balances.
+//! Must be used when a function creates new assets (e.g. a reward) or destroys some assets (e.g. a
+//! system fee).
 //!
 //! The Generic Asset module provides two types of `AssetCurrency` as follows.
 //!
@@ -77,10 +87,13 @@
 //!
 //! - `create`: Create a new kind of asset.
 //! - `transfer`: Transfer some liquid free balance to another account.
-//! - `update_permission`: Updates permission for a given `asset_id` and an account. The origin of this call
+//! - `update_permission`: Updates permission for a given `asset_id` and an account. The origin of
+//!   this call
 //! must have update permissions.
-//! - `mint`: Mint an asset, increases its total issuance. The origin of this call must have mint permissions.
-//! - `burn`: Burn an asset, decreases its total issuance. The origin of this call must have burn permissions.
+//! - `mint`: Mint an asset, increases its total issuance. The origin of this call must have mint
+//!   permissions.
+//! - `burn`: Burn an asset, decreases its total issuance. The origin of this call must have burn
+//!   permissions.
 //! - `create_reserved`: Create a new kind of reserved asset. The origin of this call must be root.
 //!
 //! ### Public Functions
@@ -94,16 +107,20 @@
 //! - `make_transfer_with_event`: Transfer some liquid free balance from one account to another.
 //! This will emit the `Transferred` event.
 //! - `reserve`: Moves an amount from free balance to reserved balance.
-//! - `unreserve`: Move up to an amount from reserved balance to free balance. This function cannot fail.
-//! - `slash`: Deduct up to an amount from the combined balance of `who`, preferring to deduct from the
-//!	free balance. This function cannot fail.
+//! - `unreserve`: Move up to an amount from reserved balance to free balance. This function cannot
+//!   fail.
+//! - `slash`: Deduct up to an amount from the combined balance of `who`, preferring to deduct from
+//!   the
+//! 	free balance. This function cannot fail.
 //! - `reward`: Add up to an amount to the free balance of an account.
-//! - `slash_reserved`: Deduct up to an amount from reserved balance of an account. This function cannot fail.
-//! - `repatriate_reserved`: Move up to an amount from reserved balance of an account to free balance of another
+//! - `slash_reserved`: Deduct up to an amount from reserved balance of an account. This function
+//!   cannot fail.
+//! - `repatriate_reserved`: Move up to an amount from reserved balance of an account to free
+//!   balance of another
 //! account.
 //! - `check_permission`: Check permission to perform burn, mint or update.
 //! - `ensure_can_withdraw`: Check if the account is able to make a withdrawal of the given amount
-//!	for the given reason.
+//! 	for the given reason.
 //!
 //! ### Usage
 //!
@@ -111,17 +128,19 @@
 //!
 //! ### Examples from the PRML
 //!
-//! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
+//! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit
+//! from `Currency`:
 //!
 //! ```
 //! use support::{
-//! 	traits::{Currency, ExistenceRequirement, WithdrawReason},
 //! 	dispatch::Result,
-//! };
+//! 	traits::{Currency, ExistenceRequirement, WithdrawReason},
+//! 	};
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
-//! type AssetOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+//! type AssetOf<T> =
+//! 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 //!
 //! fn charge_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
 //! 	// ...
@@ -133,14 +152,14 @@
 //! 	)?;
 //! 	// ...
 //! 	Ok(())
-//! }
+//! 	}
 //!
 //! fn refund_fee<T: Trait>(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
 //! 	// ...
 //! 	T::Currency::deposit_into_existing(transactor, amount)?;
 //! 	// ...
 //! 	Ok(())
-//! }
+//! 	}
 //!
 //! # fn main() {}
 //! ```
@@ -151,27 +170,30 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, HasCompact, Input, Output, Error};
+use codec::{Decode, Encode, Error, HasCompact, Input, Output};
 
-use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
-	Zero, Bounded,
+use sp_runtime::{
+	traits::{
+		Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating,
+		SimpleArithmetic, Zero,
+	},
+	RuntimeDebug,
 };
 
-use rstd::prelude::*;
-use rstd::{cmp, result, fmt::Debug};
-use support::dispatch::Result;
+use rstd::{cmp, fmt::Debug, prelude::*, result};
 use support::{
-	decl_event, decl_module, decl_storage, ensure,
-	traits::{
-		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
-	},
 	additional_traits::DummyDispatchVerifier,
+	decl_event, decl_module, decl_storage,
+	dispatch::Result,
+	ensure,
+	traits::{
+		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency,
+		ReservableCurrency, SignedImbalance, TryDrop, UpdateBalanceOutcome, WithdrawReason,
+		WithdrawReasons,
+	},
 	Parameter, StorageMap,
 };
-use system::{ensure_signed, ensure_root};
+use system::{ensure_root, ensure_signed};
 
 mod mock;
 mod tests;
@@ -202,8 +224,8 @@ pub trait Subtrait: system::Trait {
 }
 
 impl<T: Trait> Subtrait for T {
-	type Balance = T::Balance;
 	type AssetId = T::AssetId;
+	type Balance = T::Balance;
 }
 
 /// Asset creation options.
@@ -226,9 +248,7 @@ pub enum Owner<AccountId> {
 }
 
 impl<AccountId> Default for Owner<AccountId> {
-	fn default() -> Self {
-		Owner::None
-	}
+	fn default() -> Self { Owner::None }
 }
 
 /// Asset permissions
@@ -268,9 +288,7 @@ pub enum PermissionType {
 pub type PermissionLatest<AccountId> = PermissionsV1<AccountId>;
 
 impl<AccountId> Default for PermissionVersions<AccountId> {
-	fn default() -> Self {
-		PermissionVersions::V1(Default::default())
-	}
+	fn default() -> Self { PermissionVersions::V1(Default::default()) }
 }
 
 impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
@@ -289,11 +307,9 @@ impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let version = PermissionVersionNumber::decode(input)?;
-		Ok(
-			match version {
-				PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?)
-			}
-		)
+		Ok(match version {
+			PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?),
+		})
 	}
 }
 
@@ -317,9 +333,7 @@ impl<AccountId> Into<PermissionLatest<AccountId>> for PermissionVersions<Account
 
 /// Converts the latest permission to other version.
 impl<AccountId> Into<PermissionVersions<AccountId>> for PermissionLatest<AccountId> {
-	fn into(self) -> PermissionVersions<AccountId> {
-		PermissionVersions::V1(self)
-	}
+	fn into(self) -> PermissionVersions<AccountId> { PermissionVersions::V1(self) }
 }
 
 decl_module! {
@@ -532,14 +546,16 @@ impl<T: Trait> Module<T> {
 	/// If not provided, a user-generated asset will be created with the next available ID.
 	/// * `from_account`: The initiator account of this call
 	/// * `asset_options`: Asset creation options.
-	///
 	pub fn create_asset(
 		asset_id: Option<T::AssetId>,
 		from_account: Option<T::AccountId>,
 		options: AssetOptions<T::Balance, T::AccountId>,
 	) -> Result {
 		let asset_id = if let Some(asset_id) = asset_id {
-			ensure!(!<TotalIssuance<T>>::exists(&asset_id), "Asset id already taken.");
+			ensure!(
+				!<TotalIssuance<T>>::exists(&asset_id),
+				"Asset id already taken."
+			);
 			ensure!(asset_id < Self::next_asset_id(), "Asset id not available.");
 			asset_id
 		} else {
@@ -569,12 +585,18 @@ impl<T: Trait> Module<T> {
 		asset_id: &T::AssetId,
 		from: &T::AccountId,
 		to: &T::AccountId,
-		amount: T::Balance
+		amount: T::Balance,
 	) -> Result {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
 			.ok_or_else(|| "balance too low to send amount")?;
-		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer.into(), new_balance)?;
+		Self::ensure_can_withdraw(
+			asset_id,
+			from,
+			amount,
+			WithdrawReason::Transfer.into(),
+			new_balance,
+		)?;
 
 		if from != to {
 			<FreeBalance<T>>::mutate(asset_id, from, |balance| *balance -= amount);
@@ -595,7 +617,12 @@ impl<T: Trait> Module<T> {
 		Self::make_transfer(asset_id, from, to, amount)?;
 
 		if from != to {
-			Self::deposit_event(RawEvent::Transferred(*asset_id, from.clone(), to.clone(), amount));
+			Self::deposit_event(RawEvent::Transferred(
+				*asset_id,
+				from.clone(),
+				to.clone(),
+				amount,
+			));
 		}
 
 		Ok(())
@@ -610,7 +637,7 @@ impl<T: Trait> Module<T> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let original_free_balance = Self::free_balance(asset_id, who);
 		if original_free_balance < amount {
-			return Err("not enough free funds");
+			return Err("not enough free funds")
 		}
 		let new_reserve_balance = original_reserve_balance + amount;
 		Self::set_reserved_balance(asset_id, who, new_reserve_balance);
@@ -659,7 +686,11 @@ impl<T: Trait> Module<T> {
 	/// is less than `amount`, then a non-zero second item will be returned.
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	fn slash_reserved(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
@@ -699,11 +730,16 @@ impl<T: Trait> Module<T> {
 	/// Check permission to perform burn, mint or update.
 	///
 	/// # Arguments
-	/// * `asset_id`:  A `T::AssetId` type that contains the `asset_id`, which has the permission embedded.
-	/// * `who`: A `T::AccountId` type that contains the `account_id` for which to check permissions.
+	/// * `asset_id`:  A `T::AssetId` type that contains the `asset_id`, which has the permission
+	///   embedded.
+	/// * `who`: A `T::AccountId` type that contains the `account_id` for which to check
+	///   permissions.
 	/// * `what`: The permission to check.
-	///
-	pub fn check_permission(asset_id: &T::AssetId, who: &T::AccountId, what: &PermissionType) -> bool {
+	pub fn check_permission(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		what: &PermissionType,
+	) -> bool {
 		let permission_versions: PermissionVersions<T::AccountId> = Self::get_permission(asset_id);
 		let permission = permission_versions.into();
 
@@ -745,12 +781,12 @@ impl<T: Trait> Module<T> {
 		new_balance: T::Balance,
 	) -> Result {
 		if asset_id != &Self::staking_asset_id() {
-			return Ok(());
+			return Ok(())
 		}
 
 		let locks = Self::locks(who);
 		if locks.is_empty() {
-			return Ok(());
+			return Ok(())
 		}
 		let now = <system::Module<T>>::block_number();
 		if Self::locks(who)
@@ -850,7 +886,13 @@ impl<T: Trait> Module<T> {
 		let now = <system::Module<T>>::block_number();
 		let locks = <Module<T>>::locks(who)
 			.into_iter()
-			.filter_map(|l| if l.until > now && l.id != id { Some(l) } else { None })
+			.filter_map(|l| {
+				if l.until > now && l.id != id {
+					Some(l)
+				} else {
+					None
+				}
+			})
 			.collect::<Vec<_>>();
 		<Locks<T>>::insert(who, locks);
 	}
@@ -865,7 +907,7 @@ pub trait AssetIdProvider {
 // of the inner member.
 mod imbalances {
 	use super::{
-		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero, TryDrop
+		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, TryDrop, Zero,
 	};
 	use rstd::mem;
 
@@ -881,9 +923,7 @@ mod imbalances {
 		T: Subtrait,
 		U: AssetIdProvider<AssetId = T::AssetId>,
 	{
-		pub fn new(amount: T::Balance) -> Self {
-			PositiveImbalance(amount, Default::default())
-		}
+		pub fn new(amount: T::Balance) -> Self { PositiveImbalance(amount, Default::default()) }
 	}
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
@@ -898,9 +938,7 @@ mod imbalances {
 		T: Subtrait,
 		U: AssetIdProvider<AssetId = T::AssetId>,
 	{
-		pub fn new(amount: T::Balance) -> Self {
-			NegativeImbalance(amount, Default::default())
-		}
+		pub fn new(amount: T::Balance) -> Self { NegativeImbalance(amount, Default::default()) }
 	}
 
 	impl<T, U> TryDrop for PositiveImbalance<T, U>
@@ -908,9 +946,7 @@ mod imbalances {
 		T: Subtrait,
 		U: AssetIdProvider<AssetId = T::AssetId>,
 	{
-		fn try_drop(self) -> result::Result<(), Self> {
-			self.drop_zero()
-		}
+		fn try_drop(self) -> result::Result<(), Self> { self.drop_zero() }
 	}
 
 	impl<T, U> Imbalance<T::Balance> for PositiveImbalance<T, U>
@@ -920,9 +956,8 @@ mod imbalances {
 	{
 		type Opposite = NegativeImbalance<T, U>;
 
-		fn zero() -> Self {
-			Self::new(Zero::zero())
-		}
+		fn zero() -> Self { Self::new(Zero::zero()) }
+
 		fn drop_zero(self) -> result::Result<(), Self> {
 			if self.0.is_zero() {
 				Ok(())
@@ -930,6 +965,7 @@ mod imbalances {
 				Err(self)
 			}
 		}
+
 		fn split(self, amount: T::Balance) -> (Self, Self) {
 			let first = self.0.min(amount);
 			let second = self.0 - first;
@@ -937,16 +973,19 @@ mod imbalances {
 			mem::forget(self);
 			(Self::new(first), Self::new(second))
 		}
+
 		fn merge(mut self, other: Self) -> Self {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 
 			self
 		}
+
 		fn subsume(&mut self, other: Self) {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
+
 		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
@@ -957,9 +996,8 @@ mod imbalances {
 				Err(NegativeImbalance::new(b - a))
 			}
 		}
-		fn peek(&self) -> T::Balance {
-			self.0.clone()
-		}
+
+		fn peek(&self) -> T::Balance { self.0.clone() }
 	}
 
 	impl<T, U> TryDrop for NegativeImbalance<T, U>
@@ -967,9 +1005,7 @@ mod imbalances {
 		T: Subtrait,
 		U: AssetIdProvider<AssetId = T::AssetId>,
 	{
-		fn try_drop(self) -> result::Result<(), Self> {
-			self.drop_zero()
-		}
+		fn try_drop(self) -> result::Result<(), Self> { self.drop_zero() }
 	}
 
 	impl<T, U> Imbalance<T::Balance> for NegativeImbalance<T, U>
@@ -979,9 +1015,8 @@ mod imbalances {
 	{
 		type Opposite = PositiveImbalance<T, U>;
 
-		fn zero() -> Self {
-			Self::new(Zero::zero())
-		}
+		fn zero() -> Self { Self::new(Zero::zero()) }
+
 		fn drop_zero(self) -> result::Result<(), Self> {
 			if self.0.is_zero() {
 				Ok(())
@@ -989,6 +1024,7 @@ mod imbalances {
 				Err(self)
 			}
 		}
+
 		fn split(self, amount: T::Balance) -> (Self, Self) {
 			let first = self.0.min(amount);
 			let second = self.0 - first;
@@ -996,16 +1032,19 @@ mod imbalances {
 			mem::forget(self);
 			(Self::new(first), Self::new(second))
 		}
+
 		fn merge(mut self, other: Self) -> Self {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 
 			self
 		}
+
 		fn subsume(&mut self, other: Self) {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
+
 		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
@@ -1016,9 +1055,8 @@ mod imbalances {
 				Err(PositiveImbalance::new(b - a))
 			}
 		}
-		fn peek(&self) -> T::Balance {
-			self.0.clone()
-		}
+
+		fn peek(&self) -> T::Balance { self.0.clone() }
 	}
 
 	impl<T, U> Drop for PositiveImbalance<T, U>
@@ -1028,7 +1066,9 @@ mod imbalances {
 	{
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T>>>::mutate(&U::asset_id(), |v| *v = v.saturating_add(self.0));
+			<super::TotalIssuance<super::ElevatedTrait<T>>>::mutate(&U::asset_id(), |v| {
+				*v = v.saturating_add(self.0)
+			});
 		}
 	}
 
@@ -1039,7 +1079,9 @@ mod imbalances {
 	{
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T>>>::mutate(&U::asset_id(), |v| *v = v.saturating_sub(self.0));
+			<super::TotalIssuance<super::ElevatedTrait<T>>>::mutate(&U::asset_id(), |v| {
+				*v = v.saturating_sub(self.0)
+			});
 		}
 	}
 }
@@ -1058,38 +1100,34 @@ mod imbalances {
 // are placed in their own SRML module.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {
-	fn clone(&self) -> Self {
-		unimplemented!()
-	}
+	fn clone(&self) -> Self { unimplemented!() }
 }
 impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
-	fn eq(&self, _: &Self) -> bool {
-		unimplemented!()
-	}
+	fn eq(&self, _: &Self) -> bool { unimplemented!() }
 }
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
-	type Origin = T::Origin;
-	type Call = T::Call;
-	type Index = T::Index;
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	type Hashing = T::Hashing;
 	type AccountId = T::AccountId;
-	type Lookup = T::Lookup;
-	type Header = T::Header;
-	type Event = ();
-	type MaximumBlockWeight = T::MaximumBlockWeight;
-	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type BlockHashCount = T::BlockHashCount;
-	type Doughnut = T::Doughnut;
+	type BlockNumber = T::BlockNumber;
+	type Call = T::Call;
 	type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
+	type Doughnut = T::Doughnut;
+	type Event = ();
+	type Hash = T::Hash;
+	type Hashing = T::Hashing;
+	type Header = T::Header;
+	type Index = T::Index;
+	type Lookup = T::Lookup;
+	type MaximumBlockLength = T::MaximumBlockLength;
+	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type Origin = T::Origin;
 	type Version = T::Version;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
-	type Balance = T::Balance;
 	type AssetId = T::AssetId;
+	type Balance = T::Balance;
 	type Event = ();
 }
 
@@ -1102,8 +1140,8 @@ where
 	U: AssetIdProvider<AssetId = T::AssetId>,
 {
 	type Balance = T::Balance;
-	type PositiveImbalance = PositiveImbalance<T, U>;
 	type NegativeImbalance = NegativeImbalance<T, U>;
+	type PositiveImbalance = PositiveImbalance<T, U>;
 
 	fn total_balance(who: &T::AccountId) -> Self::Balance {
 		Self::free_balance(&who) + Self::reserved_balance(&who)
@@ -1114,13 +1152,9 @@ where
 	}
 
 	/// Returns the total staking asset issuance
-	fn total_issuance() -> Self::Balance {
-		<Module<T>>::total_issuance(U::asset_id())
-	}
+	fn total_issuance() -> Self::Balance { <Module<T>>::total_issuance(U::asset_id()) }
 
-	fn minimum_balance() -> Self::Balance {
-		Zero::zero()
-	}
+	fn minimum_balance() -> Self::Balance { Zero::zero() }
 
 	fn transfer(
 		transactor: &T::AccountId,
@@ -1158,7 +1192,8 @@ where
 		who: &T::AccountId,
 		value: Self::Balance,
 	) -> result::Result<Self::PositiveImbalance, &'static str> {
-		// No existential deposit rule and creation fee in GA. `deposit_into_existing` is same with `deposit_creating`.
+		// No existential deposit rule and creation fee in GA. `deposit_into_existing` is same with
+		// `deposit_creating`.
 		Ok(Self::deposit_creating(who, value))
 	}
 
@@ -1203,22 +1238,22 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
-		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued|
+		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued| {
 			issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
 				Zero::zero()
 			})
-		);
+		});
 		PositiveImbalance::new(amount)
 	}
 
 	fn issue(mut amount: Self::Balance) -> Self::NegativeImbalance {
-		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued|
+		<TotalIssuance<T>>::mutate(&U::asset_id(), |issued| {
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
 				amount = Self::Balance::max_value() - *issued;
 				Self::Balance::max_value()
 			})
-		);
+		});
 		NegativeImbalance::new(amount)
 	}
 }
@@ -1231,11 +1266,16 @@ where
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
 		Self::free_balance(who)
 			.checked_sub(&value)
-			.map_or(false, |new_balance|
+			.map_or(false, |new_balance| {
 				<Module<T>>::ensure_can_withdraw(
-					&U::asset_id(), who, value, WithdrawReason::Reserve.into(), new_balance
-				).is_ok()
-			)
+					&U::asset_id(),
+					who,
+					value,
+					WithdrawReason::Reserve.into(),
+					new_balance,
+				)
+				.is_ok()
+			})
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
@@ -1250,7 +1290,10 @@ where
 		<Module<T>>::unreserve(&U::asset_id(), who, value)
 	}
 
-	fn slash_reserved(who: &T::AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+	fn slash_reserved(
+		who: &T::AccountId,
+		value: Self::Balance,
+	) -> (Self::NegativeImbalance, Self::Balance) {
 		let b = Self::reserved_balance(&who.clone());
 		let slash = cmp::min(b, value);
 
@@ -1263,7 +1306,12 @@ where
 		beneficiary: &T::AccountId,
 		value: Self::Balance,
 	) -> result::Result<Self::Balance, &'static str> {
-		Ok(<Module<T>>::repatriate_reserved(&U::asset_id(), slashed, beneficiary, value))
+		Ok(<Module<T>>::repatriate_reserved(
+			&U::asset_id(),
+			slashed,
+			beneficiary,
+			value,
+		))
 	}
 }
 
@@ -1271,18 +1319,16 @@ pub struct StakingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for StakingAssetIdProvider<T> {
 	type AssetId = T::AssetId;
-	fn asset_id() -> Self::AssetId {
-		<Module<T>>::staking_asset_id()
-	}
+
+	fn asset_id() -> Self::AssetId { <Module<T>>::staking_asset_id() }
 }
 
 pub struct SpendingAssetIdProvider<T>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 	type AssetId = T::AssetId;
-	fn asset_id() -> Self::AssetId {
-		<Module<T>>::spending_asset_id()
-	}
+
+	fn asset_id() -> Self::AssetId { <Module<T>>::spending_asset_id() }
 }
 
 impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
@@ -1312,9 +1358,7 @@ where
 		<Module<T>>::extend_lock(id, who, amount, until, reasons)
 	}
 
-	fn remove_lock(id: LockIdentifier, who: &T::AccountId) {
-		<Module<T>>::remove_lock(id, who)
-	}
+	fn remove_lock(id: LockIdentifier, who: &T::AccountId) { <Module<T>>::remove_lock(id, who) }
 }
 
 pub type StakingAssetCurrency<T> = AssetCurrency<T, StakingAssetIdProvider<T>>;

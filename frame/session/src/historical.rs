@@ -25,15 +25,18 @@
 //! These roots and proofs of inclusion can be generated at any time during the current session.
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
+use super::{Module as SessionModule, SessionIndex};
+use codec::{Decode, Encode};
 use rstd::prelude::*;
-use codec::{Encode, Decode};
-use sp_runtime::KeyTypeId;
-use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
-use support::{decl_module, decl_storage};
-use support::{Parameter, print};
-use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
-use sp_trie::trie_types::{TrieDBMut, TrieDB};
-use super::{SessionIndex, Module as SessionModule};
+use sp_runtime::{
+	traits::{Convert, Hash as HashT, OpaqueKeys},
+	KeyTypeId,
+};
+use sp_trie::{
+	trie_types::{TrieDB, TrieDBMut},
+	MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
+};
+use support::{decl_module, decl_storage, print, Parameter};
 
 type ValidatorCount = u32;
 
@@ -99,11 +102,15 @@ impl<T: Trait> Module<T> {
 
 /// Specialization of the crate-level `OnSessionEnding` which returns the old
 /// set of full identification when changing the validator set.
-pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEnding<ValidatorId> {
+pub trait OnSessionEnding<ValidatorId, FullIdentification>:
+	crate::OnSessionEnding<ValidatorId>
+{
 	/// If there was a validator set change, its returns the set of new validators along with the
 	/// old validators and their full identifications.
-	fn on_session_ending(ending: SessionIndex, will_apply_at: SessionIndex)
-		-> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
+	fn on_session_ending(
+		ending: SessionIndex,
+		will_apply_at: SessionIndex,
+	) -> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
 }
 
 /// An `OnSessionEnding` implementation that wraps an inner `I` and also
@@ -111,9 +118,13 @@ pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEndi
 pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
 
 impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
-	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
+where
+	I: OnSessionEnding<T::ValidatorId, T::FullIdentification>,
 {
-	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn on_session_ending(
+		ending: SessionIndex,
+		applied_at: SessionIndex,
+	) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
 		});
@@ -127,18 +138,19 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 			Err(reason) => {
 				print("Failed to generate historical ancestry-inclusion proof.");
 				print(reason);
-			}
+			},
 		};
 
 		// trie has been generated for this session, so it's no longer queued.
 		<CachedObsolete<T>>::remove(&ending);
 
-		let (new_validators, old_exposures) = <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)?;
+		let (new_validators, old_exposures) =
+			<I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)?;
 
 		// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
 		// now that a new validator election has occurred.
 		// we cache these in the trie until those sessions themselves end.
-		for obsolete in (ending + 1) .. applied_at {
+		for obsolete in (ending + 1)..applied_at {
 			<CachedObsolete<T>>::insert(obsolete, &old_exposures);
 		}
 
@@ -149,7 +161,10 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 type HasherOf<T> = <<T as system::Trait>::Hashing as HashT>::Hasher;
 
 /// A tuple of the validator's ID and their full identification.
-pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
+pub type IdentificationTuple<T> = (
+	<T as crate::Trait>::ValidatorId,
+	<T as Trait>::FullIdentification,
+);
 
 /// a trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
@@ -162,9 +177,13 @@ impl<T: Trait> ProvingTrie<T> {
 		let mut db = MemoryDB::default();
 		let mut root = Default::default();
 
-		fn build<T: Trait, I>(root: &mut T::Hash, db: &mut MemoryDB<HasherOf<T>>, validators: I)
-			-> Result<(), &'static str>
-			where I: IntoIterator<Item=(T::ValidatorId, Option<T::FullIdentification>)>
+		fn build<T: Trait, I>(
+			root: &mut T::Hash,
+			db: &mut MemoryDB<HasherOf<T>>,
+			validators: I,
+		) -> Result<(), &'static str>
+		where
+			I: IntoIterator<Item = (T::ValidatorId, Option<T::FullIdentification>)>,
 		{
 			let mut trie = TrieDBMut::new(db, root);
 			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
@@ -174,7 +193,8 @@ impl<T: Trait> ProvingTrie<T> {
 					Some(k) => k,
 				};
 
-				let full_id = full_id.or_else(|| T::FullIdentificationOf::convert(validator.clone()));
+				let full_id =
+					full_id.or_else(|| T::FullIdentificationOf::convert(validator.clone()));
 				let full_id = match full_id {
 					None => return Err("no full identification for a current validator"),
 					Some(full) => (validator, full),
@@ -183,15 +203,15 @@ impl<T: Trait> ProvingTrie<T> {
 				// map each key to the owner index.
 				for key_id in T::Keys::key_ids() {
 					let key = keys.get_raw(*key_id);
-					let res = (key_id, key).using_encoded(|k|
-						i.using_encoded(|v| trie.insert(k, v))
-					);
+					let res =
+						(key_id, key).using_encoded(|k| i.using_encoded(|v| trie.insert(k, v)));
 
 					let _ = res.map_err(|_| "failed to insert into trie")?;
 				}
 
 				// map each owner index to the full identification.
-				let _ = i.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
+				let _ = i
+					.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
 					.map_err(|_| "failed to insert into trie")?;
 			}
 
@@ -201,16 +221,21 @@ impl<T: Trait> ProvingTrie<T> {
 		// if the current session's full identifications are obsolete but cached,
 		// use those.
 		if let Some(obsolete) = <CachedObsolete<T>>::get(&now) {
-			build::<T, _>(&mut root, &mut db, obsolete.into_iter().map(|(v, f)| (v, Some(f))))?
+			build::<T, _>(
+				&mut root,
+				&mut db,
+				obsolete.into_iter().map(|(v, f)| (v, Some(f))),
+			)?
 		} else {
 			let validators = <SessionModule<T>>::validators();
-			build::<T, _>(&mut root, &mut db, validators.into_iter().map(|v| (v, None)))?
+			build::<T, _>(
+				&mut root,
+				&mut db,
+				validators.into_iter().map(|v| (v, None)),
+			)?
 		}
 
-		Ok(ProvingTrie {
-			db,
-			root,
-		})
+		Ok(ProvingTrie { db, root })
 	}
 
 	fn from_nodes(root: T::Hash, nodes: &[Vec<u8>]) -> Self {
@@ -247,23 +272,22 @@ impl<T: Trait> ProvingTrie<T> {
 	}
 
 	/// Access the underlying trie root.
-	pub fn root(&self) -> &T::Hash {
-		&self.root
-	}
+	pub fn root(&self) -> &T::Hash { &self.root }
 
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
 	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
-		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
+		let val_idx = (key_id, key_data)
+			.using_encoded(|s| trie.get(s))
 			.ok()?
 			.and_then(|raw| u32::decode(&mut &*raw).ok())?;
 
-		val_idx.using_encoded(|s| trie.get(s))
+		val_idx
+			.using_encoded(|s| trie.get(s))
 			.ok()?
 			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 	}
-
 }
 
 /// Proof of ownership of a specific key.
@@ -273,11 +297,9 @@ pub struct Proof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
-impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
-	for Module<T>
-{
-	type Proof = Proof;
+impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)> for Module<T> {
 	type IdentificationTuple = IdentificationTuple<T>;
+	type Proof = Proof;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
@@ -295,9 +317,9 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {
-			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner|
+			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner| {
 				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
-			)
+			})
 		} else {
 			let (root, _) = <HistoricalSessions<T>>::get(&proof.session)?;
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
@@ -310,23 +332,30 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::crypto::key_types::DUMMY;
-	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
-		NEXT_VALIDATORS, force_new_session,
-		set_next_validators, Test, System, Session,
+		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
 	};
+	use primitives::crypto::key_types::DUMMY;
+	use sp_runtime::{testing::UintAuthorityId, traits::OnInitialize};
 	use support::traits::KeyOwnerProofSystem;
 
 	type Historical = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
-			),
-		}.assimilate_storage(&mut t).unwrap();
+			keys: NEXT_VALIDATORS.with(|l| {
+				l.borrow()
+					.iter()
+					.cloned()
+					.map(|i| (i, UintAuthorityId(i).into()))
+					.collect()
+			}),
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 
@@ -380,7 +409,6 @@ mod tests {
 
 				System::set_block_number(i);
 				Session::on_initialize(i);
-
 			}
 
 			assert_eq!(StoredRange::get(), Some((0, 100)));
@@ -411,7 +439,6 @@ mod tests {
 
 				System::set_block_number(i);
 				Session::on_initialize(i);
-
 			}
 
 			assert_eq!(StoredRange::get(), Some((100, 200)));

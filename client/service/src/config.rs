@@ -21,12 +21,12 @@ pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr, sync::Arc};
-pub use txpool::txpool::Options as TransactionPoolOptions;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
+use chain_spec::{ChainSpec, Extension, NoExtension, RuntimeGenesis};
 use primitives::crypto::Protected;
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use target_info::Target;
 use tel::TelemetryEndpoints;
+pub use txpool::txpool::Options as TransactionPoolOptions;
 
 /// Service configuration.
 #[derive(Clone)]
@@ -96,7 +96,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub keystore_password: Option<Protected<String>>,
 	/// Development key seed.
 	///
-	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
+	/// When running in development mode, the seed will be used to generate authority keys by the
+	/// keystore.
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,
@@ -121,13 +122,17 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-impl<C, G, E> Configuration<C, G, E> where
+impl<C, G, E> Configuration<C, G, E>
+where
 	C: Default,
 	G: RuntimeGenesis,
 	E: Extension,
 {
 	/// Create a default config for given chain spec and path to configuration dir
-	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
+	pub fn default_with_spec_and_base_path(
+		chain_spec: ChainSpec<G, E>,
+		config_dir: Option<PathBuf>,
+	) -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
@@ -172,7 +177,6 @@ impl<C, G, E> Configuration<C, G, E> where
 
 		configuration
 	}
-
 }
 
 impl<C, G, E> Configuration<C, G, E> {
@@ -182,9 +186,7 @@ impl<C, G, E> Configuration<C, G, E> {
 	}
 
 	/// Implementation id and version.
-	pub fn client_id(&self) -> String {
-		format!("{}/v{}", self.impl_name, self.full_version())
-	}
+	pub fn client_id(&self) -> String { format!("{}/v{}", self.impl_name, self.full_version()) }
 
 	/// Generate a PathBuf to sub in the chain configuration directory
 	/// if given
@@ -208,5 +210,11 @@ pub fn platform() -> String {
 /// Returns full version string, using supplied version and commit.
 pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
-	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
+	format!(
+		"{}{}{}-{}",
+		impl_version,
+		commit_dash,
+		impl_commit,
+		platform()
+	)
 }

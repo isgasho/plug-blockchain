@@ -16,13 +16,14 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
+use crate::{
+	generic::CheckedExtrinsic,
+	traits::{self, Checkable, Extrinsic, IdentifyAccount, MaybeDisplay, Member, SignedExtension},
+	transaction_validity::{InvalidTransaction, TransactionValidityError},
+};
+use codec::{Decode, Encode, EncodeLike, Error, Input};
 use rstd::{fmt, prelude::*};
 use runtime_io::hashing::blake2_256;
-use codec::{Decode, Encode, EncodeLike, Input, Error};
-use crate::{
-	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
-	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
-};
 
 const TRANSACTION_VERSION: u8 = 4;
 
@@ -31,7 +32,7 @@ const TRANSACTION_VERSION: u8 = 4;
 #[derive(PartialEq, Eq, Clone)]
 pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: SignedExtension
+	Extra: SignedExtension,
 {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
@@ -45,12 +46,7 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(
-		function: Call,
-		signed: Address,
-		signature: Signature,
-		extra: Extra
-	) -> Self {
+	pub fn new_signed(function: Call, signed: Address, signature: Signature, extra: Extra) -> Self {
 		UncheckedExtrinsic {
 			signature: Some((signed, signature, extra)),
 			function,
@@ -70,38 +66,31 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	type Call = Call;
+	type SignaturePayload = (Address, Signature, Extra);
 
-	type SignaturePayload = (
-		Address,
-		Signature,
-		Extra,
-	);
-
-	fn is_signed(&self) -> Option<bool> {
-		Some(self.signature.is_some())
-	}
+	fn is_signed(&self) -> Option<bool> { Some(self.signature.is_some()) }
 
 	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(if let Some((address, signature, extra)) = signed_data {
-			UncheckedExtrinsic::new_signed(function, address, signature, extra)
-		} else {
-			UncheckedExtrinsic::new_unsigned(function)
-		})
+		Some(
+			if let Some((address, signature, extra)) = signed_data {
+				UncheckedExtrinsic::new_signed(function, address, signature, extra)
+			} else {
+				UncheckedExtrinsic::new_unsigned(function)
+			},
+		)
 	}
 }
 
-impl<Address, AccountId, Call, Signature, Extra, Lookup>
-	Checkable<Lookup>
-for
-	UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, AccountId, Call, Signature, Extra, Lookup> Checkable<Lookup>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify,
-	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId=AccountId>,
-	Extra: SignedExtension<AccountId=AccountId>,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId>,
 	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
+	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
@@ -110,9 +99,7 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra.clone())?;
-				if !raw_payload.using_encoded(|payload| {
-					signature.verify(&payload[..], &signed)
-				}) {
+				if !raw_payload.using_encoded(|payload| signature.verify(&payload[..], &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
@@ -121,7 +108,7 @@ where
 					signed: Some((signed, extra)),
 					function,
 				}
-			}
+			},
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
@@ -135,13 +122,10 @@ where
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
-pub struct SignedPayload<Call, Extra: SignedExtension>((
-	Call,
-	Extra,
-	Extra::AdditionalSigned,
-));
+pub struct SignedPayload<Call, Extra: SignedExtension>((Call, Extra, Extra::AdditionalSigned));
 
-impl<Call, Extra> SignedPayload<Call, Extra> where
+impl<Call, Extra> SignedPayload<Call, Extra>
+where
 	Call: Encode,
 	Extra: SignedExtension,
 {
@@ -160,12 +144,11 @@ impl<Call, Extra> SignedPayload<Call, Extra> where
 	}
 
 	/// Deconstruct the payload into it's components.
-	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) {
-		self.0
-	}
+	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) { self.0 }
 }
 
-impl<Call, Extra> Encode for SignedPayload<Call, Extra> where
+impl<Call, Extra> Encode for SignedPayload<Call, Extra>
+where
 	Call: Encode,
 	Extra: SignedExtension,
 {
@@ -187,10 +170,10 @@ impl<Call, Extra> EncodeLike for SignedPayload<Call, Extra>
 where
 	Call: Encode,
 	Extra: SignedExtension,
-{}
+{
+}
 
-impl<Address, Call, Signature, Extra> Decode
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Decode for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Decode,
 	Signature: Decode,
@@ -209,18 +192,21 @@ where
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
 		if version != TRANSACTION_VERSION {
-			return Err("Invalid transaction version".into());
+			return Err("Invalid transaction version".into())
 		}
 
 		Ok(UncheckedExtrinsic {
-			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
+			signature: if is_signed {
+				Some(Decode::decode(input)?)
+			} else {
+				None
+			},
 			function: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Address, Call, Signature, Extra> Encode
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Encode for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Encode,
 	Signature: Encode,
@@ -234,10 +220,10 @@ where
 				Some(s) => {
 					v.push(TRANSACTION_VERSION | 0b1000_0000);
 					s.encode_to(v);
-				}
+				},
 				None => {
 					v.push(TRANSACTION_VERSION & 0b0111_1111);
-				}
+				},
 			}
 			self.function.encode_to(v);
 		})
@@ -251,13 +237,17 @@ where
 	Signature: Encode,
 	Call: Encode,
 	Extra: SignedExtension,
-{}
+{
+}
 
 #[cfg(feature = "std")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
@@ -282,19 +272,26 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{
+		codec::{Decode, Encode},
+		traits::{IdentifyAccount, IdentityLookup, SignedExtension},
+	};
 	use runtime_io::hashing::blake2_256;
-	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
-	use serde::{Serialize, Deserialize};
+	use serde::{Deserialize, Serialize};
 
 	type TestContext = IdentityLookup<u64>;
 
 	#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Encode, Decode)]
 	pub struct TestSigner(pub u64);
-	impl From<u64> for TestSigner { fn from(x: u64) -> Self { Self(x) } }
-	impl From<TestSigner> for u64 { fn from(x: TestSigner) -> Self { x.0 } }
+	impl From<u64> for TestSigner {
+		fn from(x: u64) -> Self { Self(x) }
+	}
+	impl From<TestSigner> for u64 {
+		fn from(x: TestSigner) -> Self { x.0 }
+	}
 	impl IdentifyAccount for TestSigner {
 		type AccountId = u64;
+
 		fn into_account(self) -> u64 { self.into() }
 	}
 
@@ -302,6 +299,7 @@ mod tests {
 	struct TestSig(u64, Vec<u8>);
 	impl traits::Verify for TestSig {
 		type Signer = TestSigner;
+
 		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
 			signer == &self.0 && msg.get() == &self.1[..]
 		}
@@ -317,8 +315,8 @@ mod tests {
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
-		type Call = ();
 		type AdditionalSigned = ();
+		type Call = ();
 		type DispatchInfo = ();
 		type Pre = ();
 
@@ -341,7 +339,7 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
-			TestExtra
+			TestExtra,
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
@@ -352,9 +350,11 @@ mod tests {
 		let ux = Ex::new_signed(
 			vec![0u8; 0],
 			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (vec![0u8; 257], TestExtra)
-				.using_encoded(blake2_256)[..].to_owned()),
-			TestExtra
+			TestSig(
+				TEST_ACCOUNT,
+				(vec![0u8; 257], TestExtra).using_encoded(blake2_256)[..].to_owned(),
+			),
+			TestExtra,
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
@@ -393,7 +393,10 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
+			Ok(CEx {
+				signed: Some((TEST_ACCOUNT, TestExtra)),
+				function: vec![0u8; 0]
+			}),
 		);
 	}
 

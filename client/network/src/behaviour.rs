@@ -15,17 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
-	protocol::event::DhtEvent
+	debug_info,
+	discovery::{DiscoveryBehaviour, DiscoveryOut},
+	protocol::{event::DhtEvent, CustomMessageOutcome, Protocol},
+	specialization::NetworkSpecialization,
+	DiscoveryNetBehaviour, ExHashT,
 };
-use crate::{ExHashT, specialization::NetworkSpecialization};
-use crate::protocol::{CustomMessageOutcome, Protocol};
 use futures::prelude::*;
-use libp2p::NetworkBehaviour;
-use libp2p::core::{Multiaddr, PeerId, PublicKey};
-use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
-use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::{
+	core::{muxing::StreamMuxerBox, nodes::Substream, Multiaddr, PeerId, PublicKey},
+	kad::record,
+	swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess},
+	NetworkBehaviour,
+};
 use log::{debug, warn};
 use sp_runtime::traits::Block as BlockT;
 use std::iter;
@@ -71,16 +73,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 				local_public_key,
 				known_addresses,
 				enable_mdns,
-				allow_private_ipv4
+				allow_private_ipv4,
 			),
 			events: Vec::new(),
 		}
 	}
 
 	/// Returns the list of nodes that we know exist in the network.
-	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
-		self.discovery.known_peers()
-	}
+	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> { self.discovery.known_peers() }
 
 	/// Adds a hard-coded address for the given peer, that never expires.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
@@ -97,42 +97,39 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, S, H> {
-		&self.substrate
-	}
+	pub fn user_protocol(&self) -> &Protocol<B, S, H> { &self.substrate }
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, S, H> {
-		&mut self.substrate
-	}
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, S, H> { &mut self.substrate }
 
-	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a `ValueNotFound` event.
-	pub fn get_value(&mut self, key: &record::Key) {
-		self.discovery.get_value(key);
-	}
+	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
+	/// `ValueNotFound` event.
+	pub fn get_value(&mut self, key: &record::Key) { self.discovery.get_value(key); }
 
-	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
+	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a
+	/// `ValuePutFailed` event.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
-Behaviour<B, S, H> {
-	fn inject_event(&mut self, event: void::Void) {
-		void::unreachable(event)
-	}
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<void::Void>
+	for Behaviour<B, S, H>
+{
+	fn inject_event(&mut self, event: void::Void) { void::unreachable(event) }
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
-Behaviour<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT>
+	NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behaviour<B, S, H>
+{
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		self.events.push(BehaviourOut::SubstrateAction(event));
 	}
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
-	for Behaviour<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT>
+	NetworkBehaviourEventProcess<debug_info::DebugInfoEvent> for Behaviour<B, S, H>
+{
 	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
 		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
 		if !info.protocol_version.contains("substrate") {
@@ -146,14 +143,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 			info.listen_addrs.truncate(30);
 		}
 		for addr in &info.listen_addrs {
-			self.discovery.add_self_reported_address(&peer_id, addr.clone());
+			self.discovery
+				.add_self_reported_address(&peer_id, addr.clone());
 		}
-		self.substrate.add_discovered_nodes(iter::once(peer_id.clone()));
+		self.substrate
+			.add_discovered_nodes(iter::once(peer_id.clone()));
 	}
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
-	for Behaviour<B, S, H> {
+	for Behaviour<B, S, H>
+{
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
@@ -161,22 +161,25 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 				// to Kademlia is handled by the `Identify` protocol, part of the
 				// `DebugInfoBehaviour`. See the `NetworkBehaviourEventProcess`
 				// implementation for `DebugInfoEvent`.
-			}
+			},
 			DiscoveryOut::Discovered(peer_id) => {
 				self.substrate.add_discovered_nodes(iter::once(peer_id));
-			}
+			},
 			DiscoveryOut::ValueFound(results) => {
-				self.events.push(BehaviourOut::Dht(DhtEvent::ValueFound(results)));
-			}
+				self.events
+					.push(BehaviourOut::Dht(DhtEvent::ValueFound(results)));
+			},
 			DiscoveryOut::ValueNotFound(key) => {
-				self.events.push(BehaviourOut::Dht(DhtEvent::ValueNotFound(key)));
-			}
+				self.events
+					.push(BehaviourOut::Dht(DhtEvent::ValueNotFound(key)));
+			},
 			DiscoveryOut::ValuePut(key) => {
 				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePut(key)));
-			}
+			},
 			DiscoveryOut::ValuePutFailed(key) => {
-				self.events.push(BehaviourOut::Dht(DhtEvent::ValuePutFailed(key)));
-			}
+				self.events
+					.push(BehaviourOut::Dht(DhtEvent::ValuePutFailed(key)));
+			},
 		}
 	}
 }

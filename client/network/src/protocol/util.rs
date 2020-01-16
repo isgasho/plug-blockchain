@@ -23,13 +23,16 @@ use std::{hash::Hash, num::NonZeroUsize};
 #[derive(Debug, Clone)]
 pub(crate) struct LruHashSet<T: Hash + Eq> {
 	set: LinkedHashSet<T>,
-	limit: NonZeroUsize
+	limit: NonZeroUsize,
 }
 
 impl<T: Hash + Eq> LruHashSet<T> {
 	/// Create a new `LruHashSet` with the given (exclusive) limit.
 	pub(crate) fn new(limit: NonZeroUsize) -> Self {
-		Self { set: LinkedHashSet::new(), limit }
+		Self {
+			set: LinkedHashSet::new(),
+			limit,
+		}
 	}
 
 	/// Insert element into the set.

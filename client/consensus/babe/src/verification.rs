@@ -15,15 +15,22 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-use schnorrkel::vrf::{VRFOutput, VRFProof};
-use sp_runtime::{traits::Header, traits::DigestItemFor};
-use primitives::{Pair, Public};
-use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
-use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
-use slots::CheckedHeader;
+use super::{
+	authorship::{
+		calculate_primary_threshold, check_primary_threshold, make_transcript,
+		secondary_slot_author,
+	},
+	babe_err, find_pre_digest, BlockT, Error,
+};
+use babe_primitives::{
+	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, BabePreDigest,
+	CompatibleDigestItem, Epoch, SlotNumber,
+};
 use log::{debug, trace};
-use super::{find_pre_digest, babe_err, BlockT, Error};
-use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
+use primitives::{Pair, Public};
+use schnorrkel::vrf::{VRFOutput, VRFProof};
+use slots::CheckedHeader;
+use sp_runtime::traits::{DigestItemFor, Header};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -54,7 +61,8 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 /// with each having different validation logic.
 pub(super) fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>> where
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>>
+where
 	DigestItemFor<B>: CompatibleDigestItem,
 {
 	let VerificationParams {
@@ -66,7 +74,9 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	} = params;
 
 	let authorities = &epoch.authorities;
-	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
+	let pre_digest = pre_digest
+		.map(Ok)
+		.unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -74,9 +84,9 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		None => return Err(babe_err(Error::HeaderUnsealed(header.hash()))),
 	};
 
-	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err(Error::HeaderBadSeal(header.hash()))
-	})?;
+	let sig = seal
+		.as_babe_seal()
+		.ok_or_else(|| babe_err(Error::HeaderBadSeal(header.hash())))?;
 
 	// the pre-hash of the header doesn't include the seal
 	// and that's what we sign
@@ -84,7 +94,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	if pre_digest.slot_number() > slot_now {
 		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
+		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()))
 	}
 
 	let author = match authorities.get(pre_digest.authority_index() as usize) {
@@ -93,34 +103,29 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	};
 
 	match &pre_digest {
-		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
+		BabePreDigest::Primary {
+			vrf_output,
+			vrf_proof,
+			authority_index,
+			slot_number,
+		} => {
 			debug!(target: "babe", "Verifying Primary block");
 
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number);
 
-			check_primary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				&epoch,
-				config.c,
-			)?;
+			check_primary_header::<B>(pre_hash, digest, sig, &epoch, config.c)?;
 		},
-		BabePreDigest::Secondary { authority_index, slot_number } if config.secondary_slots => {
+		BabePreDigest::Secondary {
+			authority_index,
+			slot_number,
+		} if config.secondary_slots => {
 			debug!(target: "babe", "Verifying Secondary block");
 
 			let digest = (*authority_index, *slot_number);
 
-			check_secondary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				&epoch,
-			)?;
+			check_secondary_header::<B>(pre_hash, digest, sig, &epoch)?;
 		},
-		_ => {
-			return Err(babe_err(Error::SecondarySlotAssignmentsDisabled));
-		}
+		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
 
 	let info = VerifiedHeaderInfo {
@@ -154,27 +159,21 @@ fn check_primary_header<B: BlockT + Sized>(
 
 	if AuthorityPair::verify(&signature, pre_hash, &author) {
 		let (inout, _) = {
-			let transcript = make_transcript(
-				&epoch.randomness,
-				slot_number,
-				epoch.epoch_index,
-			);
+			let transcript = make_transcript(&epoch.randomness, slot_number, epoch.epoch_index);
 
-			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-				p.vrf_verify(transcript, vrf_output, vrf_proof)
-			}).map_err(|s| {
-				babe_err(Error::VRFVerificationFailed(s))
-			})?
+			schnorrkel::PublicKey::from_bytes(author.as_slice())
+				.and_then(|p| p.vrf_verify(transcript, vrf_output, vrf_proof))
+				.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?
 		};
 
-		let threshold = calculate_primary_threshold(
-			c,
-			&epoch.authorities,
-			authority_index as usize,
-		);
+		let threshold =
+			calculate_primary_threshold(c, &epoch.authorities, authority_index as usize);
 
 		if !check_primary_threshold(&inout, threshold) {
-			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)));
+			return Err(babe_err(Error::VRFVerificationOfBlockFailed(
+				author.clone(),
+				threshold,
+			)))
 		}
 
 		Ok(())
@@ -197,16 +196,16 @@ fn check_secondary_header<B: BlockT>(
 
 	// check the signature is valid under the expected authority and
 	// chain state.
-	let expected_author = secondary_slot_author(
-		slot_number,
-		&epoch.authorities,
-		epoch.randomness,
-	).ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+	let expected_author = secondary_slot_author(slot_number, &epoch.authorities, epoch.randomness)
+		.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
 
 	let author = &epoch.authorities[authority_index as usize].0;
 
 	if expected_author != author {
-		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()));
+		return Err(Error::InvalidAuthor(
+			expected_author.clone(),
+			author.clone(),
+		))
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {

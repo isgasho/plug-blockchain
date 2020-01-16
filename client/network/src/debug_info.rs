@@ -14,20 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::utils::interval;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use libp2p::Multiaddr;
-use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
-use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
-use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
-use log::{debug, trace, error};
-use std::collections::hash_map::Entry;
-use std::time::{Duration, Instant};
+use libp2p::{
+	core::{either::EitherOutput, ConnectedPoint, PeerId, PublicKey},
+	identify::{Identify, IdentifyEvent, IdentifyInfo},
+	ping::{Ping, PingConfig, PingEvent, PingSuccess},
+	swarm::{
+		IntoProtocolsHandler, IntoProtocolsHandlerSelect, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters, ProtocolsHandler,
+	},
+	Multiaddr,
+};
+use log::{debug, error, trace};
+use std::{
+	collections::hash_map::Entry,
+	time::{Duration, Instant},
+};
 use tokio_io::{AsyncRead, AsyncWrite};
-use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -63,10 +69,7 @@ struct NodeInfo {
 
 impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 	/// Builds a new `DebugInfoBehaviour`.
-	pub fn new(
-		user_agent: String,
-		local_public_key: PublicKey,
-	) -> Self {
+	pub fn new(user_agent: String, local_public_key: PublicKey) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
 			Identify::new(proto_version, user_agent, local_public_key.clone())
@@ -85,9 +88,7 @@ impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 	/// Returns `None` if we don't know anything about this node. Always returns `Some` for nodes
 	/// we're connected to, meaning that if `None` is returned then we're not connected to that
 	/// node.
-	pub fn node(&self, peer_id: &PeerId) -> Option<Node> {
-		self.nodes_info.get(peer_id).map(Node)
-	}
+	pub fn node(&self, peer_id: &PeerId) -> Option<Node> { self.nodes_info.get(peer_id).map(Node) }
 
 	/// Inserts a ping time in the cache. Has no effect if we don't have any entry for that node,
 	/// which shouldn't happen.
@@ -119,9 +120,7 @@ pub struct Node<'a>(&'a NodeInfo);
 
 impl<'a> Node<'a> {
 	/// Returns the endpoint we are connected to or were last connected to.
-	pub fn endpoint(&self) -> &'a ConnectedPoint {
-		&self.0.endpoint
-	}
+	pub fn endpoint(&self) -> &'a ConnectedPoint { &self.0.endpoint }
 
 	/// Returns the latest version information we know of.
 	pub fn client_version(&self) -> Option<&'a str> {
@@ -130,9 +129,7 @@ impl<'a> Node<'a> {
 
 	/// Returns the latest ping time we know of for this node. `None` if we never successfully
 	/// pinged this node.
-	pub fn latest_ping(&self) -> Option<Duration> {
-		self.0.latest_ping
-	}
+	pub fn latest_ping(&self) -> Option<Duration> { self.0.latest_ping }
 }
 
 /// Event that can be emitted by the behaviour.
@@ -149,12 +146,14 @@ pub enum DebugInfoEvent {
 }
 
 impl<TSubstream> NetworkBehaviour for DebugInfoBehaviour<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
+where
+	TSubstream: AsyncRead + AsyncWrite,
+{
+	type OutEvent = DebugInfoEvent;
 	type ProtocolsHandler = IntoProtocolsHandlerSelect<
 		<Ping<TSubstream> as NetworkBehaviour>::ProtocolsHandler,
-		<Identify<TSubstream> as NetworkBehaviour>::ProtocolsHandler
+		<Identify<TSubstream> as NetworkBehaviour>::ProtocolsHandler,
 	>;
-	type OutEvent = DebugInfoEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		IntoProtocolsHandler::select(self.ping.new_handler(), self.identify.new_handler())
@@ -167,8 +166,10 @@ where TSubstream: AsyncRead + AsyncWrite {
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.ping.inject_connected(peer_id.clone(), endpoint.clone());
-		self.identify.inject_connected(peer_id.clone(), endpoint.clone());
+		self.ping
+			.inject_connected(peer_id.clone(), endpoint.clone());
+		self.identify
+			.inject_connected(peer_id.clone(), endpoint.clone());
 
 		match self.nodes_info.entry(peer_id) {
 			Entry::Vacant(e) => {
@@ -178,16 +179,20 @@ where TSubstream: AsyncRead + AsyncWrite {
 					client_version: None,
 					latest_ping: None,
 				});
-			}
+			},
 			Entry::Occupied(e) => {
 				let e = e.into_mut();
-				if e.info_expire.as_ref().map(|exp| *exp < Instant::now()).unwrap_or(false) {
+				if e.info_expire
+					.as_ref()
+					.map(|exp| *exp < Instant::now())
+					.unwrap_or(false)
+				{
 					e.client_version = None;
 					e.latest_ping = None;
 				}
 				e.info_expire = None;
 				e.endpoint = endpoint;
-			}
+			},
 		}
 	}
 
@@ -206,7 +211,7 @@ where TSubstream: AsyncRead + AsyncWrite {
 	fn inject_node_event(
 		&mut self,
 		peer_id: PeerId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
+		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
 		match event {
 			EitherOutput::First(event) => self.ping.inject_node_event(peer_id, event),
@@ -214,9 +219,19 @@ where TSubstream: AsyncRead + AsyncWrite {
 		}
 	}
 
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.ping.inject_replaced(peer_id.clone(), closed_endpoint.clone(), new_endpoint.clone());
-		self.identify.inject_replaced(peer_id.clone(), closed_endpoint, new_endpoint.clone());
+	fn inject_replaced(
+		&mut self,
+		peer_id: PeerId,
+		closed_endpoint: ConnectedPoint,
+		new_endpoint: ConnectedPoint,
+	) {
+		self.ping.inject_replaced(
+			peer_id.clone(),
+			closed_endpoint.clone(),
+			new_endpoint.clone(),
+		);
+		self.identify
+			.inject_replaced(peer_id.clone(), closed_endpoint, new_endpoint.clone());
 
 		if let Some(entry) = self.nodes_info.get_mut(&peer_id) {
 			entry.endpoint = new_endpoint;
@@ -226,9 +241,15 @@ where TSubstream: AsyncRead + AsyncWrite {
 		}
 	}
 
-	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {
+	fn inject_addr_reach_failure(
+		&mut self,
+		peer_id: Option<&PeerId>,
+		addr: &Multiaddr,
+		error: &dyn std::error::Error,
+	) {
 		self.ping.inject_addr_reach_failure(peer_id, addr, error);
-		self.identify.inject_addr_reach_failure(peer_id, addr, error);
+		self.identify
+			.inject_addr_reach_failure(peer_id, addr, error);
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: &PeerId) {
@@ -259,61 +280,75 @@ where TSubstream: AsyncRead + AsyncWrite {
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent
 		>
-	> {
+>{
 		loop {
 			match self.ping.poll(params) {
 				Async::NotReady => break,
 				Async::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => {
-					if let PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } = ev {
+					if let PingEvent {
+						peer,
+						result: Ok(PingSuccess::Ping { rtt }),
+					} = ev
+					{
 						self.handle_ping_report(&peer, rtt)
 					}
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) => {
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address })
+				},
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) => {
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id })
+				},
+				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) => {
 					return Async::Ready(NetworkBehaviourAction::SendEvent {
 						peer_id,
-						event: EitherOutput::First(event)
-					}),
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+						event: EitherOutput::First(event),
+					})
+				},
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) => {
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address })
+				},
 			}
 		}
 
 		loop {
 			match self.identify.poll(params) {
 				Async::NotReady => break,
-				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
-					match event {
-						IdentifyEvent::Received { peer_id, info, .. } => {
-							self.handle_identify_report(&peer_id, &info);
-							let event = DebugInfoEvent::Identified { peer_id, info };
-							return Async::Ready(NetworkBehaviourAction::GenerateEvent(event));
-						}
-						IdentifyEvent::Error { peer_id, error } =>
-							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
-						IdentifyEvent::Sent { .. } => {}
-					}
+				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => match event {
+					IdentifyEvent::Received { peer_id, info, .. } => {
+						self.handle_identify_report(&peer_id, &info);
+						let event = DebugInfoEvent::Identified { peer_id, info };
+						return Async::Ready(NetworkBehaviourAction::GenerateEvent(event))
+					},
+					IdentifyEvent::Error { peer_id, error } => {
+						debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
+					},
+					IdentifyEvent::Sent { .. } => {},
 				},
-				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
-					return Async::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
+				Async::Ready(NetworkBehaviourAction::DialAddress { address }) => {
+					return Async::Ready(NetworkBehaviourAction::DialAddress { address })
+				},
+				Async::Ready(NetworkBehaviourAction::DialPeer { peer_id }) => {
+					return Async::Ready(NetworkBehaviourAction::DialPeer { peer_id })
+				},
+				Async::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) => {
 					return Async::Ready(NetworkBehaviourAction::SendEvent {
 						peer_id,
-						event: EitherOutput::Second(event)
-					}),
-				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+						event: EitherOutput::Second(event),
+					})
+				},
+				Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) => {
+					return Async::Ready(NetworkBehaviourAction::ReportObservedAddr { address })
+				},
 			}
 		}
 
 		while let Ok(Async::Ready(Some(_))) = self.garbage_collect.poll() {
 			self.nodes_info.retain(|_, node| {
-				node.info_expire.as_ref().map(|exp| *exp >= Instant::now()).unwrap_or(true)
+				node.info_expire
+					.as_ref()
+					.map(|exp| *exp >= Instant::now())
+					.unwrap_or(true)
 			});
 		}
 

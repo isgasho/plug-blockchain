@@ -21,23 +21,25 @@
 //!
 //! They are used by `decl_storage`.
 
+mod double_map;
 mod linked_map;
 mod map;
-mod double_map;
 mod value;
 
-pub use linked_map::{StorageLinkedMap, Enumerator, Linkage, KeyFormat as LinkedMapKeyFormat};
-pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
+pub use linked_map::{Enumerator, KeyFormat as LinkedMapKeyFormat, Linkage, StorageLinkedMap};
+pub use map::StorageMap;
 pub use value::StorageValue;
-
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
+	use crate::storage::{
+		generator::{StorageLinkedMap, StorageValue},
+		unhashed,
+	};
+	use codec::{Decode, Encode};
 	use runtime_io::TestExternalities;
-	use codec::{Encode, Decode};
-	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -46,8 +48,8 @@ mod tests {
 	}
 
 	impl Trait for Runtime {
-		type Origin = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	decl_module! {
@@ -77,7 +79,7 @@ mod tests {
 
 			// translate
 			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
-				old.map(|o| (o.into(), (o*2).into()))
+				old.map(|o| (o.into(), (o * 2).into()))
 			};
 			let _ = Value::translate(translate_fn);
 
@@ -113,15 +115,16 @@ mod tests {
 			NumberMap::translate(
 				|k: u32| NumberNumber { a: k, b: k },
 				|v: u32| (v as u64) << 32 | v as u64,
-			).unwrap();
+			)
+			.unwrap();
 
 			assert!(linked_map::read_head::<NumberNumber, Format>().is_some());
 			assert_eq!(
 				NumberMap::enumerate().collect::<Vec<_>>(),
-				(0..100u32).rev().map(|x| (
-					NumberNumber { a: x, b: x },
-					(x as u64) << 32 | x as u64,
-				)).collect::<Vec<_>>(),
+				(0..100u32)
+					.rev()
+					.map(|x| (NumberNumber { a: x, b: x }, (x as u64) << 32 | x as u64,))
+					.collect::<Vec<_>>(),
 			);
 		})
 	}

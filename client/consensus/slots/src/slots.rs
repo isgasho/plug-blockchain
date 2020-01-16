@@ -20,23 +20,30 @@
 
 use super::SlotCompatible;
 use consensus_common::Error;
-use futures::{prelude::*, task::Context, task::Poll};
+use futures::{
+	prelude::*,
+	task::{Context, Poll},
+};
 use inherents::{InherentData, InherentDataProviders};
 
-use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
+use std::{
+	pin::Pin,
+	time::{Duration, Instant},
+};
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
-		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-		now,
-		e,
-	))
+	now.duration_since(SystemTime::UNIX_EPOCH)
+		.unwrap_or_else(|e| {
+			panic!(
+				"Current time {:?} is before unix epoch. Something is wrong: {:?}",
+				now, e,
+			)
+		})
 }
-
 
 /// A `Duration` with a sign (before or after).  Immutable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -48,7 +55,10 @@ pub struct SignedDuration {
 impl SignedDuration {
 	/// Construct a `SignedDuration`
 	pub fn new(offset: Duration, is_positive: bool) -> Self {
-		Self { offset, is_positive }
+		Self {
+			offset,
+			is_positive,
+		}
 	}
 
 	/// Get the slot for now.  Panics if `slot_duration` is 0.
@@ -57,7 +67,9 @@ impl SignedDuration {
 			duration_now() + self.offset
 		} else {
 			duration_now() - self.offset
-		}.as_millis() as u64) / slot_duration
+		}
+		.as_millis() as u64)
+			/ slot_duration
 	}
 }
 
@@ -120,14 +132,14 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 					// schedule wait.
 					let wait_dur = time_until_next(duration_now(), slot_duration);
 					Some(Delay::new(wait_dur))
-				}
+				},
 				Some(d) => Some(d),
 			};
 
 			if let Some(ref mut inner_delay) = self.inner_delay {
 				match Future::poll(Pin::new(inner_delay), cx) {
 					Poll::Pending => return Poll::Pending,
-					Poll::Ready(()) => {}
+					Poll::Ready(()) => {},
 				}
 			}
 
@@ -135,16 +147,19 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err)))),
+				Err(err) => {
+					return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err))))
+				},
 			};
-			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
+			let result = self
+				.timestamp_extractor
+				.extract_timestamp_and_slot(&inherent_data);
 			let (timestamp, slot_num, offset) = match result {
 				Ok(v) => v,
 				Err(err) => return Poll::Ready(Some(Err(err))),
 			};
 			// reschedule delay for next slot.
-			let ends_in = offset +
-				time_until_next(Duration::from_millis(timestamp), slot_duration);
+			let ends_in = offset + time_until_next(Duration::from_millis(timestamp), slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 

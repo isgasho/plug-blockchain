@@ -18,18 +18,18 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-
 // to allow benchmarking
 #![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")] extern crate test;
+#[cfg(feature = "bench")]
+extern crate test;
 
 #[doc(hidden)]
 pub use codec;
+#[doc(hidden)]
+pub use rstd;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
-#[doc(hidden)]
-pub use rstd;
 
 #[doc(hidden)]
 pub use paste;
@@ -38,38 +38,44 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::storage::{ChildrenStorageOverlay, StorageOverlay};
 
-use rstd::prelude::*;
-use rstd::convert::TryFrom;
-use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use primitives::{
+	crypto, ecdsa, ed25519,
+	hash::{H256, H512},
+	sr25519,
+};
+use rstd::{convert::TryFrom, prelude::*};
 
 pub mod curve;
 pub mod generic;
 pub mod offchain;
+pub mod random_number_generator;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
 
 /// Re-export these since they're only "kind of" generic.
-pub use generic::{DigestItem, Digest};
+pub use generic::{Digest, DigestItem};
 
+pub use app_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
-pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use primitives::{
+	crypto::{key_types, AccountId32, CryptoType, KeyTypeId},
+	TypeId,
+};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use primitives::RuntimeDebug;
 
-/// Re-export top-level arithmetic stuff.
-pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
-/// Re-export 128 bit helpers.
-pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use arithmetic::biguint;
+/// Re-export 128 bit helpers.
+pub use arithmetic::helpers_128bit;
+/// Re-export top-level arithmetic stuff.
+pub use arithmetic::{Fixed64, Perbill, Percent, Permill, Perquintill, Rational128};
 
 /// Re-export official v0 Doughnut type
 pub use doughnut::v0::parity::DoughnutV0;
@@ -86,7 +92,7 @@ pub use random_number_generator::RandomNumberGenerator;
 /// bypasses this problem.
 pub type Justification = Vec<u8>;
 
-use traits::{Verify, Lazy};
+use traits::{Lazy, Verify};
 
 /// A module identifier. These are per module and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
@@ -107,19 +113,23 @@ pub type RuntimeString = &'static str;
 #[cfg(feature = "std")]
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ std::borrow::Cow::Borrowed($y) }}
+	($y:expr) => {{
+		std::borrow::Cow::Borrowed($y)
+		}};
 }
 
 /// Create a const [`RuntimeString`].
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ $y }}
+	($y:expr) => {{
+			$y
+		}};
 }
 
-#[cfg(feature = "std")]
-pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
+#[cfg(feature = "std")]
+pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -152,8 +162,10 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	fn assimilate_storage(
 		&self,
 		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
-	)-> Result<(), String> {
-		storage.0.extend(self.0.iter().map(|(k, v)| (k.clone(), v.clone())));
+	) -> Result<(), String> {
+		storage
+			.0
+			.extend(self.0.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.1.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.1.get_mut(&k) {
@@ -182,27 +194,19 @@ pub enum MultiSignature {
 }
 
 impl From<ed25519::Signature> for MultiSignature {
-	fn from(x: ed25519::Signature) -> Self {
-		MultiSignature::Ed25519(x)
-	}
+	fn from(x: ed25519::Signature) -> Self { MultiSignature::Ed25519(x) }
 }
 
 impl From<sr25519::Signature> for MultiSignature {
-	fn from(x: sr25519::Signature) -> Self {
-		MultiSignature::Sr25519(x)
-	}
+	fn from(x: sr25519::Signature) -> Self { MultiSignature::Sr25519(x) }
 }
 
 impl From<ecdsa::Signature> for MultiSignature {
-	fn from(x: ecdsa::Signature) -> Self {
-		MultiSignature::Ecdsa(x)
-	}
+	fn from(x: ecdsa::Signature) -> Self { MultiSignature::Ecdsa(x) }
 }
 
 impl Default for MultiSignature {
-	fn default() -> Self {
-		MultiSignature::Ed25519(Default::default())
-	}
+	fn default() -> Self { MultiSignature::Ed25519(Default::default()) }
 }
 
 /// Public key for any known crypto algorithm.
@@ -218,17 +222,13 @@ pub enum MultiSigner {
 }
 
 impl Default for MultiSigner {
-	fn default() -> Self {
-		MultiSigner::Ed25519(Default::default())
-	}
+	fn default() -> Self { MultiSigner::Ed25519(Default::default()) }
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminator`,
 /// we convert the hash into some AccountId, it's fine to use any scheme.
 impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
-	fn unchecked_from(x: T) -> Self {
-		ed25519::Public::unchecked_from(x.into()).into()
-	}
+	fn unchecked_from(x: T) -> Self { ed25519::Public::unchecked_from(x.into()).into() }
 }
 
 impl AsRef<[u8]> for MultiSigner {
@@ -243,6 +243,7 @@ impl AsRef<[u8]> for MultiSigner {
 
 impl traits::IdentifyAccount for MultiSigner {
 	type AccountId = AccountId32;
+
 	fn into_account(self) -> AccountId32 {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
@@ -253,41 +254,50 @@ impl traits::IdentifyAccount for MultiSigner {
 }
 
 impl From<ed25519::Public> for MultiSigner {
-	fn from(x: ed25519::Public) -> Self {
-		MultiSigner::Ed25519(x)
-	}
+	fn from(x: ed25519::Public) -> Self { MultiSigner::Ed25519(x) }
 }
 
 impl TryFrom<MultiSigner> for ed25519::Public {
 	type Error = ();
+
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<sr25519::Public> for MultiSigner {
-	fn from(x: sr25519::Public) -> Self {
-		MultiSigner::Sr25519(x)
-	}
+	fn from(x: sr25519::Public) -> Self { MultiSigner::Sr25519(x) }
 }
 
 impl TryFrom<MultiSigner> for sr25519::Public {
 	type Error = ();
+
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<ecdsa::Public> for MultiSigner {
-	fn from(x: ecdsa::Public) -> Self {
-		MultiSigner::Ecdsa(x)
-	}
+	fn from(x: ecdsa::Public) -> Self { MultiSigner::Ecdsa(x) }
 }
 
 impl TryFrom<MultiSigner> for ecdsa::Public {
 	type Error = ();
+
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ecdsa(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -304,20 +314,26 @@ impl std::fmt::Display for MultiSigner {
 
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		use primitives::crypto::Public;
 		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Ed25519(ref sig), who) => {
+				sig.verify(msg, &ed25519::Public::from_slice(who.as_ref()))
+			},
+			(MultiSignature::Sr25519(ref sig), who) => {
+				sig.verify(msg, &sr25519::Public::from_slice(who.as_ref()))
+			},
 			(MultiSignature::Ecdsa(ref sig), who) => {
 				let m = runtime_io::hashing::blake2_256(msg.get());
 				match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) =>
+					Ok(pubkey) => {
 						&runtime_io::hashing::blake2_256(pubkey.as_ref())
-							== <dyn AsRef<[u8; 32]>>::as_ref(who),
+							== <dyn AsRef<[u8; 32]>>::as_ref(who)
+					},
 					_ => false,
 				}
-			}
+			},
 		}
 	}
 }
@@ -329,34 +345,29 @@ pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
 		use primitives::crypto::Public;
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
 			.unwrap_or(false)
-		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-			.unwrap_or(false)
+			|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+				.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
+				.unwrap_or(false)
 	}
 }
 
 impl From<sr25519::Signature> for AnySignature {
-	fn from(s: sr25519::Signature) -> Self {
-		AnySignature(s.into())
-	}
+	fn from(s: sr25519::Signature) -> Self { AnySignature(s.into()) }
 }
 
 impl From<ed25519::Signature> for AnySignature {
-	fn from(s: ed25519::Signature) -> Self {
-		AnySignature(s.into())
-	}
+	fn from(s: ed25519::Signature) -> Self { AnySignature(s.into()) }
 }
 
 impl From<DispatchError> for DispatchOutcome {
-	fn from(err: DispatchError) -> Self {
-		Err(err)
-	}
+	fn from(err: DispatchError) -> Self { Err(err) }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -397,19 +408,13 @@ impl traits::Printable for DispatchError {
 }
 
 impl traits::ModuleDispatchError for &'static str {
-	fn as_u8(&self) -> u8 {
-		0
-	}
+	fn as_u8(&self) -> u8 { 0 }
 
-	fn as_str(&self) -> &'static str {
-		self
-	}
+	fn as_str(&self) -> &'static str { self }
 }
 
 impl From<&'static str> for DispatchError {
-	fn from(err: &'static str) -> DispatchError {
-		DispatchError::new(None, 0, Some(err))
-	}
+	fn from(err: &'static str) -> DispatchError { DispatchError::new(None, 0, Some(err)) }
 }
 
 /// This type specifies the outcome of dispatching a call to a module.
@@ -436,19 +441,20 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
-///   included in the next block if it has enough spare weight available.
-/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
-///   a transaction in the block doesn't make sense.
+///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be included
+///   in the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such a
+///   transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+pub type ApplyExtrinsicResult =
+	Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	sig: &V,
 	item: &T,
-	signer: &<V::Signer as IdentifyAccount>::AccountId
+	signer: &<V::Signer as IdentifyAccount>::AccountId,
 ) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
@@ -460,13 +466,14 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	}
 
 	impl<F: Fn() -> Vec<u8>> traits::Lazy<[u8]> for LazyEncode<F> {
-		fn get(&mut self) -> &[u8] {
-			self.encoded.get_or_insert_with(&self.inner).as_slice()
-		}
+		fn get(&mut self) -> &[u8] { self.encoded.get_or_insert_with(&self.inner).as_slice() }
 	}
 
 	sig.verify(
-		LazyEncode { inner: || item.encode(), encoded: None },
+		LazyEncode {
+			inner: || item.encode(),
+			encoded: None,
+		},
 		signer,
 	)
 }
@@ -624,22 +631,25 @@ impl rstd::fmt::Debug for OpaqueExtrinsic {
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
-
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		codec::Encode::using_encoded(&self.0, |bytes| ::primitives::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: ::serde::Deserializer<'a>,
+	{
 		let r = ::primitives::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
@@ -652,19 +662,20 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 }
 
 /// Print something that implements `Printable` from the runtime.
-pub fn print(print: impl traits::Printable) {
-	print.print();
-}
+pub fn print(print: impl traits::Printable) { print.print(); }
 
 #[cfg(test)]
 mod tests {
 	use crate::DispatchError;
-	use codec::{Encode, Decode};
+	use codec::{Decode, Encode};
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
 		let ex = super::OpaqueExtrinsic(vec![1, 2, 3, 4]);
-		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x1001020304\"".to_owned());
+		assert_eq!(
+			serde_json::to_string(&ex).unwrap(),
+			"\"0x1001020304\"".to_owned()
+		);
 	}
 
 	#[test]
@@ -677,13 +688,10 @@ mod tests {
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![1, 1, 2]);
-		assert_eq!(
-			decoded,
-			DispatchError {
-				module: Some(1),
-				error: 2,
-				message: None,
-			},
-		);
+		assert_eq!(decoded, DispatchError {
+			module: Some(1),
+			error: 2,
+			message: None,
+		},);
 	}
 }

@@ -21,15 +21,18 @@
 use std::cell::RefCell;
 
 use crate::{Module, Trait};
-use sp_runtime::Perbill;
-use sp_staking::{SessionIndex, offence::ReportOffence};
-use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::H256;
-use support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-use {runtime_io, system};
+use runtime_io;
+use sp_runtime::{
+	testing::{Header, TestXt, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill,
+};
+use sp_staking::{offence::ReportOffence, SessionIndex};
+use support::{impl_outer_dispatch, impl_outer_origin, parameter_types, weights::Weight};
+use system;
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime {}
 }
 
@@ -45,25 +48,25 @@ thread_local! {
 
 pub struct TestOnSessionEnding;
 impl session::OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<Vec<u64>>
-	{
+	fn on_session_ending(
+		_ending_index: SessionIndex,
+		_will_apply_at: SessionIndex,
+	) -> Option<Vec<u64>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 }
 
 impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
-	{
-		VALIDATORS.with(|l| l
-			.borrow_mut()
-			.take()
-			.map(|validators| {
+	fn on_session_ending(
+		_ending_index: SessionIndex,
+		_will_apply_at: SessionIndex,
+	) -> Option<(Vec<u64>, Vec<(u64, u64)>)> {
+		VALIDATORS.with(|l| {
+			l.borrow_mut().take().map(|validators| {
 				let full_identification = validators.iter().map(|v| (*v, *v)).collect();
 				(validators, full_identification)
 			})
-		)
+		})
 	}
 }
 
@@ -86,10 +89,11 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	t.into()
 }
-
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
@@ -102,23 +106,23 @@ parameter_types! {
 }
 
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = Call;
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 
 parameter_types! {
@@ -131,15 +135,15 @@ parameter_types! {
 }
 
 impl session::Trait for Runtime {
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type Event = ();
+	type Keys = UintAuthorityId;
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
-	type SessionHandler = (ImOnline, );
+	type SelectInitialValidators = ();
+	type SessionHandler = (ImOnline,);
+	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type Keys = UintAuthorityId;
-	type Event = ();
-	type SelectInitialValidators = ();
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl session::historical::Trait for Runtime {
@@ -152,19 +156,19 @@ parameter_types! {
 }
 
 impl authorship::Trait for Runtime {
+	type EventHandler = ImOnline;
+	type FilterUncle = ();
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
-	type EventHandler = ImOnline;
 }
 
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type Event = ();
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
+	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
+	type SubmitTransaction = SubmitTransaction;
 }
 
 /// Im Online module.

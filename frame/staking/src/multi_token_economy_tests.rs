@@ -18,7 +18,6 @@
 // apart from that this file is simplified copy of `mock.rs`
 
 use primitives::H256;
-use std::collections::HashSet;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, UintAuthorityId},
@@ -26,13 +25,17 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::SessionIndex;
+use std::collections::HashSet;
 use support::{impl_outer_origin, parameter_types};
 
 use crate::{
-	EraIndex, GenesisConfig, Module, Trait, StakingLedger, StakerStatus, RewardDestination,
-	inflation
+	inflation,
+	mock::{
+		Author11, CurrencyToVoteHandler, ExistentialDeposit, SlashDeferDuration,
+		TestSessionHandler, SESSION,
+	},
+	EraIndex, GenesisConfig, Module, RewardDestination, StakerStatus, StakingLedger, Trait,
 };
-use crate::mock::{Author11, CurrencyToVoteHandler, TestSessionHandler, ExistentialDeposit, SlashDeferDuration, SESSION};
 
 const REWARD_ASSET_ID: u32 = 101;
 const STAKING_ASSET_ID: u32 = 100;
@@ -42,7 +45,7 @@ pub type AccountId = u64;
 pub type BlockNumber = u64;
 pub type Balance = u64;
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
@@ -56,23 +59,23 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = AccountId;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = BlockNumber;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 parameter_types! {
 	pub const TransferFee: Balance = 0;
@@ -80,18 +83,18 @@ parameter_types! {
 }
 impl balances::Trait for Test {
 	type Balance = Balance;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = ();
+	type ExistentialDeposit = ExistentialDeposit;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
-	type Event = ();
-	type TransferPayment = ();
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 impl generic_asset::Trait for Test {
-	type Balance = u64;
 	type AssetId = u32;
+	type Balance = u64;
 	type Event = ();
 }
 parameter_types! {
@@ -101,15 +104,15 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 impl session::Trait for Test {
-	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
-	type Keys = UintAuthorityId;
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
-	type SessionHandler = TestSessionHandler;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type Event = ();
+	type Keys = UintAuthorityId;
+	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
+	type SelectInitialValidators = Staking;
+	type SessionHandler = TestSessionHandler;
+	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
-	type SelectInitialValidators = Staking;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl session::historical::Trait for Test {
@@ -117,18 +120,18 @@ impl session::historical::Trait for Test {
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 impl authorship::Trait for Test {
+	type EventHandler = Module<Test>;
+	type FilterUncle = ();
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
-	type EventHandler = Module<Test>;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
 impl timestamp::Trait for Test {
+	type MinimumPeriod = MinimumPeriod;
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
 }
 pallet_staking_reward_curve::build! {
 	const I_NPOS: PiecewiseLinear<'static> = curve!(
@@ -146,21 +149,21 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 }
 impl Trait for Test {
-	type Currency = generic_asset::StakingAssetCurrency<Self>;
-	type RewardCurrency = generic_asset::SpendingAssetCurrency<Self>;
-	type CurrencyToReward = Balance;
-	type Time = timestamp::Module<Self>;
-	type CurrencyToVote = CurrencyToVoteHandler;
-	type RewardRemainder = ();
-	type Event = ();
-	type Slash = ();
-	type Reward = ();
-	type SessionsPerEra = SessionsPerEra;
-	type SlashDeferDuration = SlashDeferDuration;
-	type SlashCancelOrigin = system::EnsureRoot<Self::AccountId, ()>;
 	type BondingDuration = BondingDuration;
-	type SessionInterface = Self;
+	type Currency = generic_asset::StakingAssetCurrency<Self>;
+	type CurrencyToReward = Balance;
+	type CurrencyToVote = CurrencyToVoteHandler;
+	type Event = ();
+	type Reward = ();
+	type RewardCurrency = generic_asset::SpendingAssetCurrency<Self>;
 	type RewardCurve = RewardCurve;
+	type RewardRemainder = ();
+	type SessionInterface = Self;
+	type SessionsPerEra = SessionsPerEra;
+	type Slash = ();
+	type SlashCancelOrigin = system::EnsureRoot<Self::AccountId, ()>;
+	type SlashDeferDuration = SlashDeferDuration;
+	type Time = timestamp::Module<Self>;
 }
 
 pub struct ExtBuilder {
@@ -181,25 +184,30 @@ impl Default for ExtBuilder {
 
 impl ExtBuilder {
 	pub fn build(self) -> runtime_io::TestExternalities {
-		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10 + 1) as u64)
 			.collect::<Vec<_>>();
 
-		let _ = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let _ = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 
-		let _ = generic_asset::GenesisConfig::<Test>{
+		let _ = generic_asset::GenesisConfig::<Test> {
 			endowed_accounts: vec![10, 11],
 			initial_balance: 1_000_000_000,
 			staking_asset_id: STAKING_ASSET_ID,
 			spending_asset_id: REWARD_ASSET_ID,
 			assets: vec![STAKING_ASSET_ID, REWARD_ASSET_ID],
 			next_asset_id: 102,
-		}.assimilate_storage(&mut storage);
+		}
+		.assimilate_storage(&mut storage);
 
-		let _ = GenesisConfig::<Test>{
+		let _ = GenesisConfig::<Test> {
 			current_era: 0,
 			stakers: vec![
 				// (stash, controller, staked_amount, status)
@@ -209,18 +217,21 @@ impl ExtBuilder {
 			minimum_validator_count: self.minimum_validator_count,
 			slash_reward_fraction: Perbill::from_percent(10),
 			..Default::default()
-		}.assimilate_storage(&mut storage);
+		}
+		.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
-			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut storage);
+			keys: validators
+				.iter()
+				.map(|x| (*x, UintAuthorityId(*x)))
+				.collect(),
+		}
+		.assimilate_storage(&mut storage);
 
 		let mut t = runtime_io::TestExternalities::new(storage);
 		t.execute_with(|| {
 			let validators = Session::validators();
-			SESSION.with(|x|
-				*x.borrow_mut() = (validators.clone(), HashSet::new())
-			);
+			SESSION.with(|x| *x.borrow_mut() = (validators.clone(), HashSet::new()));
 		});
 		t
 	}
@@ -255,7 +266,8 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 		<Module<Test>>::slot_stake() * 2,
 		GenericAsset::total_issuance(&STAKING_ASSET_ID),
 		duration,
-	).0
+	)
+	.0
 }
 
 #[test]
@@ -265,16 +277,25 @@ fn validator_reward_is_not_added_to_staked_amount_in_dual_currency_model() {
 		// Check that account 11 is a validator
 		assert!(Staking::current_elected().contains(&11));
 		// Check the balance of the validator account
-		assert_eq!(GenericAsset::free_balance(&STAKING_ASSET_ID, &10), 1_000_000_000);
+		assert_eq!(
+			GenericAsset::free_balance(&STAKING_ASSET_ID, &10),
+			1_000_000_000
+		);
 		// Check the balance of the stash account
-		assert_eq!(GenericAsset::free_balance(&REWARD_ASSET_ID, &11), 1_000_000_000);
+		assert_eq!(
+			GenericAsset::free_balance(&REWARD_ASSET_ID, &11),
+			1_000_000_000
+		);
 		// Check how much is at stake
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11,
-			total: 500_000,
-			active: 500_000,
-			unlocking: vec![],
-		}));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 500_000,
+				active: 500_000,
+				unlocking: vec![],
+			})
+		);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
@@ -286,13 +307,19 @@ fn validator_reward_is_not_added_to_staked_amount_in_dual_currency_model() {
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
 		// Check that reward went to the stash account of validator
-		assert_eq!(GenericAsset::free_balance(&REWARD_ASSET_ID, &11), 1_000_000_000 + total_payout_0);
+		assert_eq!(
+			GenericAsset::free_balance(&REWARD_ASSET_ID, &11),
+			1_000_000_000 + total_payout_0
+		);
 		// Check that amount at stake has NOT changed
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11,
-			total: 500_000,
-			active: 500_000,
-			unlocking: vec![],
-		}));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 500_000,
+				active: 500_000,
+				unlocking: vec![],
+			})
+		);
 	});
 }

@@ -19,11 +19,11 @@
 pub mod error;
 pub mod hash;
 
+use self::error::{FutureResult, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::Bytes;
 use txpool_api::TransactionStatus;
-use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as AuthorClient;
 
@@ -39,11 +39,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Insert a key into the keystore.
 	#[rpc(name = "author_insertKey")]
-	fn insert_key(&self,
-		key_type: String,
-		suri: String,
-		public: Bytes,
-	) -> Result<()>;
+	fn insert_key(&self, key_type: String, suri: String, public: Bytes) -> Result<()>;
 
 	/// Generate new session keys and returns the corresponding public keys.
 	#[rpc(name = "author_rotateKeys")]
@@ -55,8 +51,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
 	#[rpc(name = "author_removeExtrinsic")]
-	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>
+	fn remove_extrinsic(
+		&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>,
 	) -> Result<Vec<Hash>>;
 
 	/// Submit an extrinsic to watch.
@@ -65,10 +62,11 @@ pub trait AuthorApi<Hash, BlockHash> {
 		subscribe,
 		name = "author_submitAndWatchExtrinsic"
 	)]
-	fn watch_extrinsic(&self,
+	fn watch_extrinsic(
+		&self,
 		metadata: Self::Metadata,
 		subscriber: Subscriber<TransactionStatus<Hash, BlockHash>>,
-		bytes: Bytes
+		bytes: Bytes,
 	);
 
 	/// Unsubscribe from extrinsic watching.
@@ -77,8 +75,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 		unsubscribe,
 		name = "author_unwatchExtrinsic"
 	)]
-	fn unwatch_extrinsic(&self,
+	fn unwatch_extrinsic(
+		&self,
 		metadata: Option<Self::Metadata>,
-		id: SubscriptionId
+		id: SubscriptionId,
 	) -> Result<bool>;
 }

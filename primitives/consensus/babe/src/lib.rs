@@ -22,13 +22,13 @@
 mod digest;
 pub mod inherents;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use rstd::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
-pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
+pub use digest::{NextEpochDescriptor, RawBabePreDigest, BABE_VRF_PREFIX};
 
 mod app {
 	use app_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -107,9 +107,7 @@ impl Epoch {
 
 	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
 	// i.e. the slots covered by the epoch are `self.start_slot .. self.end_slot()`.
-	pub fn end_slot(&self) -> SlotNumber {
-		self.start_slot + self.duration
-	}
+	pub fn end_slot(&self) -> SlotNumber { self.start_slot + self.duration }
 }
 
 /// An consensus log item for BABE.
@@ -158,11 +156,9 @@ pub struct BabeConfiguration {
 
 #[cfg(feature = "std")]
 impl sp_consensus::SlotData for BabeConfiguration {
-	fn slot_duration(&self) -> u64 {
-		self.slot_duration
-	}
-
 	const SLOT_KEY: &'static [u8] = b"babe_configuration";
+
+	fn slot_duration(&self) -> u64 { self.slot_duration }
 }
 
 sp_api::decl_runtime_apis! {

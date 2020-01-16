@@ -18,13 +18,13 @@
 
 use std::sync::Arc;
 
-use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use primitives::{H256, Bytes};
+use primitives::{Bytes, H256};
 use rpc_primitives::number;
 use serde::{Deserialize, Serialize};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi},
@@ -63,14 +63,14 @@ impl From<GetStorageError> for Error {
 				code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
 				message: "The contract is a tombstone and doesn't have any storage.".into(),
 				data: None,
-			}
+			},
 		}
 	}
 }
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct CallRequest<AccountId, Balance> {
 	origin: AccountId,
@@ -99,12 +99,11 @@ pub enum RpcContractExecResult {
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r {
-			ContractExecResult::Success { status, data } => {
-				RpcContractExecResult::Success { status, data: data.into() }
+			ContractExecResult::Success { status, data } => RpcContractExecResult::Success {
+				status,
+				data: data.into(),
 			},
-			ContractExecResult::Error => {
-				RpcContractExecResult::Error(())
-			},
+			ContractExecResult::Error => RpcContractExecResult::Error(()),
 		}
 	}
 }
@@ -145,11 +144,15 @@ pub struct Contracts<C, B> {
 impl<C, B> Contracts<C, B> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Contracts { client, _marker: Default::default() }
+		Contracts {
+			client,
+			_marker: Default::default(),
+		}
 	}
 }
 
-impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance> for Contracts<C, Block>
+impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance>
+	for Contracts<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static,
@@ -167,15 +170,14 @@ where
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		));
+			self.client.info().best_hash));
 
 		let CallRequest {
 			origin,
 			dest,
 			value,
 			gas_limit,
-			input_data
+			input_data,
 		} = call_request;
 		let gas_limit = gas_limit.to_number().map_err(|e| Error {
 			code: ErrorCode::InvalidParams,
@@ -189,11 +191,10 @@ where
 				code: ErrorCode::InvalidParams,
 				message: format!(
 					"Requested gas limit is greater than maximum allowed: {} > {}",
-					gas_limit,
-					max_gas_limit
+					gas_limit, max_gas_limit
 				),
 				data: None,
-			});
+			})
 		}
 
 		let exec_result = api
@@ -241,7 +242,7 @@ mod tests {
 	#[test]
 	fn should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: RpcContractExecResult  = serde_json::from_str(expected).unwrap();
+			let res: RpcContractExecResult = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}

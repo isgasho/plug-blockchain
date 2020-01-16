@@ -17,8 +17,11 @@
 //! Contains the state storage behind the peerset.
 
 use libp2p::PeerId;
-use std::{borrow::Cow, collections::{HashSet, HashMap}};
 use log::warn;
+use std::{
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+};
 
 /// State storage behind the peerset.
 ///
@@ -26,7 +29,6 @@ use log::warn;
 ///
 /// This struct is nothing more but a data structure containing a list of nodes, where each node
 /// has a reputation and is either connected to us or not.
-///
 #[derive(Debug, Clone)]
 pub struct PeersState {
 	/// List of nodes that we know about.
@@ -114,10 +116,12 @@ impl PeersState {
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
 		match self.nodes.get_mut(peer_id) {
-			None => return Peer::Unknown(UnknownPeer {
-				parent: self,
-				peer_id: Cow::Borrowed(peer_id),
-			}),
+			None => {
+				return Peer::Unknown(UnknownPeer {
+					parent: self,
+					peer_id: Cow::Borrowed(peer_id),
+				})
+			},
 			Some(peer) => {
 				if peer.connection_state.is_connected() {
 					Peer::Connected(ConnectedPeer {
@@ -130,22 +134,21 @@ impl PeersState {
 						peer_id: Cow::Borrowed(peer_id),
 					})
 				}
-			}
+			},
 		}
 	}
 
 	/// Returns the list of all the peers we know of.
 	// Note: this method could theoretically return a `Peer`, but implementing that
 	// isn't simple.
-	pub fn peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.nodes.keys()
-	}
+	pub fn peers(&self) -> impl Iterator<Item = &PeerId> { self.nodes.keys() }
 
 	/// Returns the list of peers we are connected to.
 	// Note: this method could theoretically return a `ConnectedPeer`, but implementing that
 	// isn't simple.
 	pub fn connected_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.nodes.iter()
+		self.nodes
+			.iter()
 			.filter(|(_, p)| p.connection_state.is_connected())
 			.map(|(p, _)| p)
 	}
@@ -154,9 +157,15 @@ impl PeersState {
 	///
 	/// If multiple nodes are prioritized, which one is returned is unspecified.
 	pub fn priority_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
-		let id = self.priority_nodes.values()
+		let id = self
+			.priority_nodes
+			.values()
 			.flatten()
-			.find(|id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
+			.find(|id| {
+				self.nodes
+					.get(id)
+					.map_or(false, |node| !node.connection_state.is_connected())
+			})
 			.cloned();
 		id.map(move |id| NotConnectedPeer {
 			state: self,
@@ -167,11 +176,20 @@ impl PeersState {
 	/// Returns the first priority peer that we are not connected to.
 	///
 	/// If multiple nodes are prioritized, which one is returned is unspecified.
-	pub fn priority_not_connected_peer_from_group(&mut self, group_id: &str) -> Option<NotConnectedPeer> {
-		let id = self.priority_nodes.get(group_id)
-			.and_then(|group| group.iter()
-				.find(|id| self.nodes.get(id).map_or(false, |node| !node.connection_state.is_connected()))
-				.cloned());
+	pub fn priority_not_connected_peer_from_group(
+		&mut self,
+		group_id: &str,
+	) -> Option<NotConnectedPeer> {
+		let id = self.priority_nodes.get(group_id).and_then(|group| {
+			group
+				.iter()
+				.find(|id| {
+					self.nodes
+						.get(id)
+						.map_or(false, |node| !node.connection_state.is_connected())
+				})
+				.cloned()
+		});
 		id.map(move |id| NotConnectedPeer {
 			state: self,
 			peer_id: Cow::Owned(id),
@@ -182,13 +200,21 @@ impl PeersState {
 	///
 	/// If multiple nodes have the same reputation, which one is returned is unspecified.
 	pub fn highest_not_connected_peer(&mut self) -> Option<NotConnectedPeer> {
-		let outcome = self.nodes
+		let outcome = self
+			.nodes
 			.iter_mut()
-			.filter(|(_, Node { connection_state, .. })| !connection_state.is_connected())
+			.filter(
+				|(
+					_,
+					Node {
+						connection_state, ..
+					},
+				)| !connection_state.is_connected(),
+			)
 			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
-						return Some(cur_node);
+						return Some(cur_node)
 					}
 				}
 				Some(to_try)
@@ -212,8 +238,10 @@ impl PeersState {
 				match node.connection_state {
 					ConnectionState::In => self.num_in -= 1,
 					ConnectionState::Out => self.num_out -= 1,
-					ConnectionState::NotConnected =>
-						debug_assert!(false, "State inconsistency: disconnecting a disconnected node")
+					ConnectionState::NotConnected => debug_assert!(
+						false,
+						"State inconsistency: disconnecting a disconnected node"
+					),
 				}
 			}
 			node.connection_state = ConnectionState::NotConnected;
@@ -228,13 +256,13 @@ impl PeersState {
 
 		// We are only accepting connections from priority nodes.
 		if !is_priority && self.priority_only {
-			return false;
+			return false
 		}
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		if self.num_out >= self.max_out && !is_priority {
-			return false;
+			return false
 		}
 
 		if let Some(mut peer) = self.nodes.get_mut(peer_id) {
@@ -242,7 +270,7 @@ impl PeersState {
 			if !is_priority {
 				self.num_out += 1;
 			}
-			return true;
+			return true
 		}
 		false
 	}
@@ -258,20 +286,20 @@ impl PeersState {
 
 		// We are only accepting connections from priority nodes.
 		if !is_priority && self.priority_only {
-			return false;
+			return false
 		}
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		if self.num_in >= self.max_in && !is_priority {
-			return false;
+			return false
 		}
 		if let Some(mut peer) = self.nodes.get_mut(peer_id) {
 			peer.connection_state = ConnectionState::In;
 			if !is_priority {
 				self.num_in += 1;
 			}
-			return true;
+			return true
 		}
 		false
 	}
@@ -279,7 +307,8 @@ impl PeersState {
 	/// Sets priority group
 	pub fn set_priority_group(&mut self, group_id: &str, peers: HashSet<PeerId>) {
 		// update slot counters
-		let all_other_groups: HashSet<_> = self.priority_nodes
+		let all_other_groups: HashSet<_> = self
+			.priority_nodes
 			.iter()
 			.filter(|(g, _)| *g != group_id)
 			.flat_map(|(_, id)| id.clone())
@@ -314,14 +343,22 @@ impl PeersState {
 
 	/// Add a peer to a priority group.
 	pub fn add_to_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
-		let mut peers = self.priority_nodes.get(group_id).cloned().unwrap_or_default();
+		let mut peers = self
+			.priority_nodes
+			.get(group_id)
+			.cloned()
+			.unwrap_or_default();
 		peers.insert(peer_id);
 		self.set_priority_group(group_id, peers);
 	}
 
 	/// Remove a peer from a priority group.
 	pub fn remove_from_priority_group(&mut self, group_id: &str, peer_id: &PeerId) {
-		let mut peers = self.priority_nodes.get(group_id).cloned().unwrap_or_default();
+		let mut peers = self
+			.priority_nodes
+			.get(group_id)
+			.cloned()
+			.unwrap_or_default();
 		peers.remove(&peer_id);
 		self.set_priority_group(group_id, peers);
 	}
@@ -336,13 +373,13 @@ impl PeersState {
 	/// enabling priority only will not disconnect from any non-priority peers
 	/// we are already connected to, only future incoming/outgoing connection
 	/// attempts will be affected.
-	pub fn set_priority_only(&mut self, priority: bool) {
-		self.priority_only = priority;
-	}
+	pub fn set_priority_only(&mut self, priority: bool) { self.priority_only = priority; }
 
 	/// Check that node is any priority group.
 	fn is_priority(&self, peer_id: &PeerId) -> bool {
-		self.priority_nodes.iter().any(|(_, group)| group.contains(peer_id))
+		self.priority_nodes
+			.iter()
+			.any(|(_, group)| group.contains(peer_id))
 	}
 
 	/// Returns the reputation value of the node.
@@ -352,9 +389,7 @@ impl PeersState {
 
 	/// Sets the reputation of the peer.
 	fn set_reputation(&mut self, peer_id: &PeerId, value: i32) {
-		let node = self.nodes
-			.entry(peer_id.clone())
-			.or_default();
+		let node = self.nodes.entry(peer_id.clone()).or_default();
 		node.reputation = value;
 	}
 
@@ -363,9 +398,7 @@ impl PeersState {
 	/// In case of overflow, the value will be capped.
 	/// If the peer is unknown to us, we insert it and consider that it has a reputation of 0.
 	fn add_reputation(&mut self, peer_id: &PeerId, modifier: i32) {
-		let node = self.nodes
-			.entry(peer_id.clone())
-			.or_default();
+		let node = self.nodes.entry(peer_id.clone()).or_default();
 		node.reputation = node.reputation.saturating_add(modifier);
 	}
 }
@@ -393,7 +426,7 @@ impl<'a> Peer<'a> {
 
 	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
 	/// otherwise.
-	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
+	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
 			Peer::Connected(_) => None,
@@ -404,7 +437,7 @@ impl<'a> Peer<'a> {
 
 	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
 	/// otherwise.
-	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
+	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn into_unknown(self) -> Option<UnknownPeer<'a>> {
 		match self {
 			Peer::Connected(_) => None,
@@ -422,9 +455,7 @@ pub struct ConnectedPeer<'a> {
 
 impl<'a> ConnectedPeer<'a> {
 	/// Destroys this `ConnectedPeer` and returns the `PeerId` inside of it.
-	pub fn into_peer_id(self) -> PeerId {
-		self.peer_id.into_owned()
-	}
+	pub fn into_peer_id(self) -> PeerId { self.peer_id.into_owned() }
 
 	/// Switches the peer to "not connected".
 	pub fn disconnect(self) -> NotConnectedPeer<'a> {
@@ -436,14 +467,10 @@ impl<'a> ConnectedPeer<'a> {
 	}
 
 	/// Returns the reputation value of the node.
-	pub fn reputation(&self) -> i32 {
-		self.state.reputation(&self.peer_id)
-	}
+	pub fn reputation(&self) -> i32 { self.state.reputation(&self.peer_id) }
 
 	/// Sets the reputation of the peer.
-	pub fn set_reputation(&mut self, value: i32) {
-		self.state.set_reputation(&self.peer_id, value)
-	}
+	pub fn set_reputation(&mut self, value: i32) { self.state.set_reputation(&self.peer_id, value) }
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
@@ -462,10 +489,8 @@ pub struct NotConnectedPeer<'a> {
 
 impl<'a> NotConnectedPeer<'a> {
 	/// Destroys this `NotConnectedPeer` and returns the `PeerId` inside of it.
-	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
-	pub fn into_peer_id(self) -> PeerId {
-		self.peer_id.into_owned()
-	}
+	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
+	pub fn into_peer_id(self) -> PeerId { self.peer_id.into_owned() }
 
 	/// Tries to set the peer as connected as an outgoing connection.
 	///
@@ -502,14 +527,10 @@ impl<'a> NotConnectedPeer<'a> {
 	}
 
 	/// Returns the reputation value of the node.
-	pub fn reputation(&self) -> i32 {
-		self.state.reputation(&self.peer_id)
-	}
+	pub fn reputation(&self) -> i32 { self.state.reputation(&self.peer_id) }
 
 	/// Sets the reputation of the peer.
-	pub fn set_reputation(&mut self, value: i32) {
-		self.state.set_reputation(&self.peer_id, value)
-	}
+	pub fn set_reputation(&mut self, value: i32) { self.state.set_reputation(&self.peer_id, value) }
 
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
@@ -532,10 +553,12 @@ impl<'a> UnknownPeer<'a> {
 	/// The node starts with a reputation of 0. You can adjust these default
 	/// values using the `NotConnectedPeer` that this method returns.
 	pub fn discover(self) -> NotConnectedPeer<'a> {
-		self.parent.nodes.insert(self.peer_id.clone().into_owned(), Node {
-			connection_state: ConnectionState::NotConnected,
-			reputation: 0,
-		});
+		self.parent
+			.nodes
+			.insert(self.peer_id.clone().into_owned(), Node {
+				connection_state: ConnectionState::NotConnected,
+				reputation: 0,
+			});
 
 		let state = self.parent;
 		NotConnectedPeer {
@@ -547,7 +570,7 @@ impl<'a> UnknownPeer<'a> {
 
 #[cfg(test)]
 mod tests {
-	use super::{PeersState, Peer};
+	use super::{Peer, PeersState};
 	use libp2p::PeerId;
 
 	#[test]
@@ -574,11 +597,15 @@ mod tests {
 		peers_state.set_priority_group("test", vec![id1.clone()].into_iter().collect());
 		if let Peer::NotConnected(p) = peers_state.peer(&id1) {
 			assert!(p.try_accept_incoming().is_ok());
-		} else { panic!() }
+		} else {
+			panic!()
+		}
 
 		if let Peer::Unknown(e) = peers_state.peer(&id2) {
 			assert!(e.discover().try_accept_incoming().is_ok());
-		} else { panic!() }
+		} else {
+			panic!()
+		}
 	}
 
 	#[test]
@@ -587,10 +614,31 @@ mod tests {
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
-		assert!(peers_state.peer(&id1).into_unknown().unwrap().discover().try_accept_incoming().is_ok());
-		assert!(peers_state.peer(&id2).into_unknown().unwrap().discover().try_accept_incoming().is_err());
-		peers_state.peer(&id1).into_connected().unwrap().disconnect();
-		assert!(peers_state.peer(&id2).into_not_connected().unwrap().try_accept_incoming().is_ok());
+		assert!(peers_state
+			.peer(&id1)
+			.into_unknown()
+			.unwrap()
+			.discover()
+			.try_accept_incoming()
+			.is_ok());
+		assert!(peers_state
+			.peer(&id2)
+			.into_unknown()
+			.unwrap()
+			.discover()
+			.try_accept_incoming()
+			.is_err());
+		peers_state
+			.peer(&id1)
+			.into_connected()
+			.unwrap()
+			.disconnect();
+		assert!(peers_state
+			.peer(&id2)
+			.into_not_connected()
+			.unwrap()
+			.try_accept_incoming()
+			.is_ok());
 	}
 
 	#[test]
@@ -606,7 +654,8 @@ mod tests {
 		assert!(peers_state.priority_not_connected_peer().is_none());
 		peers_state.set_priority_group("test", vec![id1.clone()].into_iter().collect());
 		assert!(peers_state.priority_not_connected_peer().is_some());
-		peers_state.set_priority_group("test", vec![id2.clone(), id2.clone()].into_iter().collect());
+		peers_state
+			.set_priority_group("test", vec![id2.clone(), id2.clone()].into_iter().collect());
 		assert!(peers_state.priority_not_connected_peer().is_some());
 		peers_state.set_priority_group("test", vec![].into_iter().collect());
 		assert!(peers_state.priority_not_connected_peer().is_none());
@@ -619,18 +668,74 @@ mod tests {
 		let id2 = PeerId::random();
 
 		assert!(peers_state.highest_not_connected_peer().is_none());
-		peers_state.peer(&id1).into_unknown().unwrap().discover().set_reputation(50);
-		peers_state.peer(&id2).into_unknown().unwrap().discover().set_reputation(25);
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
-		peers_state.peer(&id2).into_not_connected().unwrap().set_reputation(75);
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
-		peers_state.peer(&id2).into_not_connected().unwrap().try_accept_incoming().unwrap();
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
-		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(100);
-		peers_state.peer(&id2).into_connected().unwrap().disconnect();
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
-		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(-100);
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
+		peers_state
+			.peer(&id1)
+			.into_unknown()
+			.unwrap()
+			.discover()
+			.set_reputation(50);
+		peers_state
+			.peer(&id2)
+			.into_unknown()
+			.unwrap()
+			.discover()
+			.set_reputation(25);
+		assert_eq!(
+			peers_state
+				.highest_not_connected_peer()
+				.map(|p| p.into_peer_id()),
+			Some(id1.clone())
+		);
+		peers_state
+			.peer(&id2)
+			.into_not_connected()
+			.unwrap()
+			.set_reputation(75);
+		assert_eq!(
+			peers_state
+				.highest_not_connected_peer()
+				.map(|p| p.into_peer_id()),
+			Some(id2.clone())
+		);
+		peers_state
+			.peer(&id2)
+			.into_not_connected()
+			.unwrap()
+			.try_accept_incoming()
+			.unwrap();
+		assert_eq!(
+			peers_state
+				.highest_not_connected_peer()
+				.map(|p| p.into_peer_id()),
+			Some(id1.clone())
+		);
+		peers_state
+			.peer(&id1)
+			.into_not_connected()
+			.unwrap()
+			.set_reputation(100);
+		peers_state
+			.peer(&id2)
+			.into_connected()
+			.unwrap()
+			.disconnect();
+		assert_eq!(
+			peers_state
+				.highest_not_connected_peer()
+				.map(|p| p.into_peer_id()),
+			Some(id1.clone())
+		);
+		peers_state
+			.peer(&id1)
+			.into_not_connected()
+			.unwrap()
+			.set_reputation(-100);
+		assert_eq!(
+			peers_state
+				.highest_not_connected_peer()
+				.map(|p| p.into_peer_id()),
+			Some(id2.clone())
+		);
 	}
 
 	#[test]
@@ -638,7 +743,12 @@ mod tests {
 		let mut peers_state = PeersState::new(1, 1, false);
 		let id = PeerId::random();
 		peers_state.set_priority_group("test", vec![id.clone()].into_iter().collect());
-		let peer = peers_state.peer(&id).into_not_connected().unwrap().try_outgoing().unwrap();
+		let peer = peers_state
+			.peer(&id)
+			.into_not_connected()
+			.unwrap()
+			.try_outgoing()
+			.unwrap();
 		peer.disconnect();
 	}
 
@@ -649,7 +759,9 @@ mod tests {
 
 		if let Peer::Unknown(p) = peers_state.peer(&id) {
 			assert!(p.discover().try_accept_incoming().is_ok());
-		} else { panic!() }
+		} else {
+			panic!()
+		}
 
 		assert_eq!(peers_state.num_in, 1);
 		peers_state.set_priority_group("test1", vec![id.clone()].into_iter().collect());
@@ -677,7 +789,10 @@ mod tests {
 			};
 
 			if incoming {
-				peers_state.peer(id).into_connected().map(|p| p.disconnect());
+				peers_state
+					.peer(id)
+					.into_connected()
+					.map(|p| p.disconnect());
 			}
 
 			let outgoing = if let Peer::NotConnected(p) = peers_state.peer(id) {
@@ -687,7 +802,10 @@ mod tests {
 			};
 
 			if outgoing {
-				peers_state.peer(id).into_connected().map(|p| p.disconnect());
+				peers_state
+					.peer(id)
+					.into_connected()
+					.map(|p| p.disconnect());
 			}
 
 			incoming || outgoing

@@ -17,19 +17,20 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
+use structopt::{
+	clap::{arg_enum, App, AppSettings, Arg, SubCommand},
+	StructOpt,
+};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
 /// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
-	( $type:ident ) => {
+	($type:ident) => {
 		impl $crate::GetLogFilter for $type {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
+			fn get_log_filter(&self) -> Option<String> { self.shared_params.get_log_filter() }
 		}
-	}
+	};
 }
 
 impl Into<client_api::ExecutionStrategy> for ExecutionStrategy {
@@ -103,7 +104,12 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
+	#[structopt(
+		long = "base-path",
+		short = "d",
+		value_name = "PATH",
+		parse(from_os_str)
+	)]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter.
@@ -149,14 +155,16 @@ pub struct ImportParams {
 	pub database_cache_size: u32,
 
 	/// Specify the state cache size.
-	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	#[structopt(
+		long = "state-cache-size",
+		value_name = "Bytes",
+		default_value = "67108864"
+	)]
 	pub state_cache_size: usize,
 }
 
 impl GetLogFilter for SharedParams {
-	fn get_log_filter(&self) -> Option<String> {
-		self.log.clone()
-	}
+	fn get_log_filter(&self) -> Option<String> { self.log.clone() }
 }
 
 /// Parameters used to create the network configuration.
@@ -220,12 +228,16 @@ pub struct NetworkConfigurationParams {
 	///
 	/// This allows downlading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	#[structopt(
+		long = "max-parallel-downloads",
+		value_name = "COUNT",
+		default_value = "5"
+	)]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub node_key_params: NodeKeyParams
+	pub node_key_params: NodeKeyParams,
 }
 
 arg_enum! {
@@ -261,17 +273,16 @@ pub struct NodeKeyParams {
 	///
 	/// The secret key of the node is obtained as follows:
 	///
-	///   * If the `--node-key` option is given, the value is parsed as a secret key
-	///     according to the type. See the documentation for `--node-key`.
+	///   * If the `--node-key` option is given, the value is parsed as a secret key according to
+	///     the type. See the documentation for `--node-key`.
 	///
-	///   * If the `--node-key-file` option is given, the secret key is read from the
-	///     specified file. See the documentation for `--node-key-file`.
+	///   * If the `--node-key-file` option is given, the secret key is read from the specified
+	///     file. See the documentation for `--node-key-file`.
 	///
-	///   * Otherwise, the secret key is read from a file with a predetermined,
-	///     type-specific name from the chain-specific network config directory
-	///     inside the base directory specified by `--base-dir`. If this file does
-	///     not exist, it is created with a newly generated secret key of the
-	///     chosen type.
+	///   * Otherwise, the secret key is read from a file with a predetermined, type-specific name
+	///     from the chain-specific network config directory inside the base directory specified by
+	///     `--base-dir`. If this file does not exist, it is created with a newly generated secret
+	///     key of the chosen type.
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
@@ -295,7 +306,7 @@ pub struct NodeKeyParams {
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
 	#[structopt(long = "node-key-file", value_name = "FILE")]
-	pub node_key_file: Option<PathBuf>
+	pub node_key_file: Option<PathBuf>,
 }
 
 /// Parameters used to create the pool configuration.
@@ -372,7 +383,8 @@ pub struct ExecutionStrategies {
 	)]
 	pub execution_offchain_worker: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
+	/// The means of execution used when calling into the runtime while not syncing, importing or
+	/// constructing blocks.
 	#[structopt(
 		long = "execution-other",
 		value_name = "STRATEGY",
@@ -428,7 +440,8 @@ pub struct RunCmd {
 	)]
 	pub sentry: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
+	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA
+	/// observer.
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
@@ -576,7 +589,7 @@ pub struct RunCmd {
 		parse(from_os_str),
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
-	pub password_filename: Option<PathBuf>
+	pub password_filename: Option<PathBuf>,
 }
 
 /// Stores all required Cli values for a keyring test account.
@@ -620,13 +633,14 @@ pub struct Keyring {
 }
 
 impl StructOpt for Keyring {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		unimplemented!("Should not be called for `TestAccounts`.")
-	}
+	fn clap<'a, 'b>() -> App<'a, 'b> { unimplemented!("Should not be called for `TestAccounts`.") }
 
 	fn from_clap(m: &::structopt::clap::ArgMatches) -> Self {
 		Keyring {
-			account: TEST_ACCOUNTS_CLI_VALUES.iter().find(|a| m.is_present(&a.name)).map(|a| a.variant),
+			account: TEST_ACCOUNTS_CLI_VALUES
+				.iter()
+				.find(|a| m.is_present(&a.name))
+				.map(|a| a.variant),
 		}
 	}
 }
@@ -634,37 +648,37 @@ impl StructOpt for Keyring {
 impl AugmentClap for Keyring {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		TEST_ACCOUNTS_CLI_VALUES.iter().fold(app, |app, a| {
-			let conflicts_with_strs = a.conflicts_with.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+			let conflicts_with_strs = a
+				.conflicts_with
+				.iter()
+				.map(|s| s.as_str())
+				.collect::<Vec<_>>();
 
 			app.arg(
 				Arg::with_name(&a.name)
 					.long(&a.name)
 					.help(&a.help)
 					.conflicts_with_all(&conflicts_with_strs)
-					.takes_value(false)
+					.takes_value(false),
 			)
 		})
 	}
 }
 
 impl Keyring {
-	fn is_subcommand() -> bool {
-		false
-	}
+	fn is_subcommand() -> bool { false }
 }
 
 /// Default to verbosity level 0, if none is provided.
 fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
-		None => {
-			Ok((s.to_owned(), 0))
-		},
+		None => Ok((s.to_owned(), 0)),
 		Some(pos_) => {
 			let verbosity = s[pos_ + 1..].parse()?;
 			let url = s[..pos_].parse()?;
 			Ok((url, verbosity))
-		}
+		},
 	}
 }
 
@@ -697,13 +711,17 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break;
+				break
 			},
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all { Cors::All } else { Cors::List(origins) })
+	Ok(if is_all {
+		Cors::All
+	} else {
+		Cors::List(origins)
+	})
 }
 
 impl_augment_clap!(RunCmd);
@@ -872,63 +890,71 @@ pub enum CoreParams<CC, RP> {
 	Custom(CC),
 }
 
-impl<CC, RP> StructOpt for CoreParams<CC, RP> where
+impl<CC, RP> StructOpt for CoreParams<CC, RP>
+where
 	CC: StructOpt + GetLogFilter,
-	RP: StructOpt + AugmentClap
+	RP: StructOpt + AugmentClap,
 {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
-		RP::augment_clap(
-			RunCmd::augment_clap(
-				CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp)
-			)
-		).subcommand(
+		RP::augment_clap(RunCmd::augment_clap(
+			CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp),
+		))
+		.subcommand(
 			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputting to stdout.")
+				.about("Build a spec.json file, outputting to stdout."),
 		)
 		.subcommand(
-			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
-				.about("Export blocks to a file. This file can only be re-imported \
-						if it is in binary format (not JSON!)."
-					)
+			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks")).about(
+				"Export blocks to a file. This file can only be re-imported if it is in binary \
+				 format (not JSON!).",
+			),
 		)
 		.subcommand(
 			ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
-				.about("Import blocks from file.")
+				.about("Import blocks from file."),
 		)
 		.subcommand(
 			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
-				.about("Re-validate a known block.")
+				.about("Re-validate a known block."),
 		)
 		.subcommand(
 			RevertCmd::augment_clap(SubCommand::with_name("revert"))
-				.about("Revert chain to the previous state.")
+				.about("Revert chain to the previous state."),
 		)
 		.subcommand(
 			PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
-				.about("Remove the whole chain data.")
+				.about("Remove the whole chain data."),
 		)
 	}
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		match matches.subcommand() {
-			("build-spec", Some(matches)) =>
-				CoreParams::BuildSpec(BuildSpecCmd::from_clap(matches)),
-			("export-blocks", Some(matches)) =>
-				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
-			("import-blocks", Some(matches)) =>
-				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
-			("check-block", Some(matches)) =>
-				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches)),
+			("build-spec", Some(matches)) => {
+				CoreParams::BuildSpec(BuildSpecCmd::from_clap(matches))
+			},
+			("export-blocks", Some(matches)) => {
+				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches))
+			},
+			("import-blocks", Some(matches)) => {
+				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches))
+			},
+			("check-block", Some(matches)) => {
+				CoreParams::CheckBlock(CheckBlockCmd::from_clap(matches))
+			},
 			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
-			("purge-chain", Some(matches)) =>
-				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
+			("purge-chain", Some(matches)) => {
+				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches))
+			},
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
 		}
 	}
 }
 
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
+impl<CC, RP> GetLogFilter for CoreParams<CC, RP>
+where
+	CC: GetLogFilter,
+{
 	fn get_log_filter(&self) -> Option<String> {
 		match self {
 			CoreParams::Run(c) => c.left.get_log_filter(),
@@ -949,25 +975,17 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 pub struct NoCustom {}
 
 impl StructOpt for NoCustom {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		App::new("NoCustom")
-	}
+	fn clap<'a, 'b>() -> App<'a, 'b> { App::new("NoCustom") }
 
-	fn from_clap(_: &::structopt::clap::ArgMatches) -> Self {
-		NoCustom {}
-	}
+	fn from_clap(_: &::structopt::clap::ArgMatches) -> Self { NoCustom {} }
 }
 
 impl AugmentClap for NoCustom {
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
-		app
-	}
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> { app }
 }
 
 impl GetLogFilter for NoCustom {
-	fn get_log_filter(&self) -> Option<String> {
-		None
-	}
+	fn get_log_filter(&self) -> Option<String> { None }
 }
 
 /// Merge all CLI parameters of `L` and `R` into the same level.
@@ -979,10 +997,12 @@ pub struct MergeParameters<L, R> {
 	pub right: R,
 }
 
-impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
-	fn clap<'a, 'b>() -> App<'a, 'b> {
-		L::augment_clap(R::clap())
-	}
+impl<L, R> StructOpt for MergeParameters<L, R>
+where
+	L: StructOpt + AugmentClap,
+	R: StructOpt,
+{
+	fn clap<'a, 'b>() -> App<'a, 'b> { L::augment_clap(R::clap()) }
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		MergeParameters {

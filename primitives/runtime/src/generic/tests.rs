@@ -16,9 +16,9 @@
 
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
+use super::DigestItem;
 use crate::codec::{Decode, Encode};
 use primitives::H256;
-use super::DigestItem;
 
 #[test]
 fn system_digest_item_encoding() {
@@ -26,16 +26,9 @@ fn system_digest_item_encoding() {
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::ChangesTrieRoot
-		2,
-		// trie root
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
+		2, // trie root
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0,
 	]);
 
 	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
@@ -48,10 +41,8 @@ fn non_system_digest_item_encoding() {
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::Other
-		0,
-		// length of other data
-		12,
-		// authorities
+		0,  // length of other data
+		12, // authorities
 		10, 20, 30,
 	]);
 

@@ -2,8 +2,7 @@
 //! FIXME: REMOVE THIS ONCE THE PR WAS MERGE
 //! https://github.com/slog-rs/async/pull/14
 
-use slog::{Record, RecordStatic, Level, SingleKV, KV, BorrowedKV};
-use slog::{Serializer, OwnedKVList, Key};
+use slog::{BorrowedKV, Key, Level, OwnedKVList, Record, RecordStatic, Serializer, SingleKV, KV};
 
 use std::fmt;
 use take_mut::take;
@@ -13,13 +12,9 @@ struct ToSendSerializer {
 }
 
 impl ToSendSerializer {
-	fn new() -> Self {
-		ToSendSerializer { kv: Box::new(()) }
-	}
+	fn new() -> Self { ToSendSerializer { kv: Box::new(()) } }
 
-	fn finish(self) -> Box<dyn KV + Send> {
-		self.kv
-	}
+	fn finish(self) -> Box<dyn KV + Send> { self.kv }
 }
 
 impl Serializer for ToSendSerializer {
@@ -27,77 +22,90 @@ impl Serializer for ToSendSerializer {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_unit(&mut self, key: Key) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, ()))));
 		Ok(())
 	}
+
 	fn emit_none(&mut self, key: Key) -> slog::Result {
 		let val: Option<()> = None;
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_char(&mut self, key: Key, val: char) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_u8(&mut self, key: Key, val: u8) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_i8(&mut self, key: Key, val: i8) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_u16(&mut self, key: Key, val: u16) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_i16(&mut self, key: Key, val: i16) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_u32(&mut self, key: Key, val: u32) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_i32(&mut self, key: Key, val: i32) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_f32(&mut self, key: Key, val: f32) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_u64(&mut self, key: Key, val: u64) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_i64(&mut self, key: Key, val: i64) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_f64(&mut self, key: Key, val: f64) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_usize(&mut self, key: Key, val: usize) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_isize(&mut self, key: Key, val: isize) -> slog::Result {
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
+
 	fn emit_str(&mut self, key: Key, val: &str) -> slog::Result {
 		let val = val.to_owned();
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
 	}
-	fn emit_arguments(
-		&mut self,
-		key: Key,
-		val: &fmt::Arguments,
-	) -> slog::Result {
+
+	fn emit_arguments(&mut self, key: Key, val: &fmt::Arguments) -> slog::Result {
 		let val = fmt::format(*val);
 		take(&mut self.kv, |kv| Box::new((kv, SingleKV(key, val))));
 		Ok(())
@@ -146,10 +154,9 @@ impl AsyncRecord {
 			tag: &self.tag,
 		};
 
-		f(&Record::new(
-			&rs,
-			&format_args!("{}", self.msg),
-			BorrowedKV(&self.kv),
-		), &self.logger_values)
+		f(
+			&Record::new(&rs, &format_args!("{}", self.msg), BorrowedKV(&self.kv)),
+			&self.logger_values,
+		)
 	}
 }

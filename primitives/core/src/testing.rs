@@ -16,9 +16,12 @@
 
 //! Types that should only be used for testing!
 
-#[cfg(feature = "std")]
-use crate::{ed25519, sr25519, crypto::{Public, Pair}};
 use crate::crypto::KeyTypeId;
+#[cfg(feature = "std")]
+use crate::{
+	crypto::{Pair, Public},
+	ed25519, sr25519,
+};
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
@@ -44,13 +47,16 @@ impl KeyStore {
 #[cfg(feature = "std")]
 impl crate::traits::BareCryptoStore for KeyStore {
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.keys.get(&id)
-			.map(|keys|
+		self.keys
+			.get(&id)
+			.map(|keys| {
 				keys.values()
-					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
+					.map(|s| {
+						sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid")
+					})
 					.map(|p| p.public())
 					.collect()
-			)
+			})
 			.unwrap_or_default()
 	}
 
@@ -61,34 +67,44 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	) -> Result<sr25519::Public, String> {
 		match seed {
 			Some(seed) => {
-				let pair = sr25519::Pair::from_string(seed, None).expect("Generates an `sr25519` pair.");
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				let pair =
+					sr25519::Pair::from_string(seed, None).expect("Generates an `sr25519` pair.");
+				self.keys
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = sr25519::Pair::generate_with_phrase(None);
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				self.keys
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
-			}
+			},
 		}
 	}
 
 	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
-			)
+		self.keys.get(&id).and_then(|inner| {
+			inner.get(pub_key.as_slice()).map(|s| {
+				sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid")
+			})
+		})
 	}
 
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.keys.get(&id)
-			.map(|keys|
+		self.keys
+			.get(&id)
+			.map(|keys| {
 				keys.values()
-					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
+					.map(|s| {
+						ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid")
+					})
 					.map(|p| p.public())
 					.collect()
-			)
+			})
 			.unwrap_or_default()
 	}
 
@@ -99,34 +115,42 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	) -> Result<ed25519::Public, String> {
 		match seed {
 			Some(seed) => {
-				let pair = ed25519::Pair::from_string(seed, None).expect("Generates an `ed25519` pair.");
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				let pair =
+					ed25519::Pair::from_string(seed, None).expect("Generates an `ed25519` pair.");
+				self.keys
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = ed25519::Pair::generate_with_phrase(None);
-				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				self.keys
+					.entry(id)
+					.or_default()
+					.insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
-			}
+			},
 		}
 	}
 
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
-			)
+		self.keys.get(&id).and_then(|inner| {
+			inner.get(pub_key.as_slice()).map(|s| {
+				ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid")
+			})
+		})
 	}
 
 	fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-		self.keys.entry(id).or_default().insert(public.to_owned(), suri.to_string());
+		self.keys
+			.entry(id)
+			.or_default()
+			.insert(public.to_owned(), suri.to_string());
 		Ok(())
 	}
 
-	fn password(&self) -> Option<&str> {
-		None
-	}
+	fn password(&self) -> Option<&str> { None }
 }
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
@@ -144,14 +168,14 @@ impl crate::traits::BareCryptoStore for KeyStore {
 /// # use sp_core::wasm_export_functions;
 ///
 /// wasm_export_functions! {
-///     fn test_in_wasm(value: bool, another_value: Vec<u8>) -> bool {
-///         value && another_value.is_empty()
-///     }
+/// fn test_in_wasm(value: bool, another_value: Vec<u8>) -> bool {
+/// 	value && another_value.is_empty()
+/// 			}
 ///
-///     fn without_return_value() {
-///         // do something
-///     }
-/// }
+/// fn without_return_value() {
+/// 	// do something
+/// 			}
+/// 			}
 /// ```
 #[macro_export]
 macro_rules! wasm_export_functions {
@@ -232,18 +256,22 @@ macro_rules! wasm_export_functions {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::sr25519;
-	use crate::testing::{ED25519, SR25519};
+	use crate::{
+		sr25519,
+		testing::{ED25519, SR25519},
+	};
 
 	#[test]
 	fn store_key_and_extract() {
 		let store = KeyStore::new();
 
-		let public = store.write()
+		let public = store
+			.write()
 			.ed25519_generate_new(ED25519, None)
 			.expect("Genrates key");
 
-		let store_key_pair = store.read()
+		let store_key_pair = store
+			.read()
 			.ed25519_key_pair(ED25519, &public)
 			.expect("Key should exists in store");
 
@@ -257,16 +285,15 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		store.write().insert_unknown(
-			SR25519,
-			secret_uri,
-			key_pair.public().as_ref(),
-		).expect("Inserts unknown key");
+		store
+			.write()
+			.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+			.expect("Inserts unknown key");
 
-		let store_key_pair = store.read().sr25519_key_pair(
-			SR25519,
-			&key_pair.public(),
-		).expect("Gets key pair from keystore");
+		let store_key_pair = store
+			.read()
+			.sr25519_key_pair(SR25519, &key_pair.public())
+			.expect("Gets key pair from keystore");
 
 		assert_eq!(key_pair.public(), store_key_pair.public());
 	}

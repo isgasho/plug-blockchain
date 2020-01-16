@@ -40,9 +40,9 @@
 //! ### Executing Privileged Functions
 //!
 //! The Sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
-//! You can execute these privileged functions by calling `sudo` with the sudo key account.
-//! Privileged functions cannot be directly executed via an extrinsic.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in
+//! other modules. You can execute these privileged functions by calling `sudo` with the sudo key
+//! account. Privileged functions cannot be directly executed via an extrinsic.
 //!
 //! Learn more about privileged functions and `Root` origin in the [`Origin`] type documentation.
 //!
@@ -57,16 +57,16 @@
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         pub fn privileged_function(origin) -> Result {
-//!             ensure_root(origin)?;
+//! pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub fn privileged_function(origin) -> Result {
+//! 		ensure_root(origin)?;
 //!
-//!             // do something...
+//! 		// do something...
 //!
-//!             Ok(())
-//!         }
-//!     }
-//! }
+//! 		Ok(())
+//! 			}
+//! 			}
+//! 			}
 //! # fn main() {}
 //! ```
 //!
@@ -88,11 +88,11 @@
 
 use rstd::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Dispatchable}, DispatchError,
+	traits::{Dispatchable, StaticLookup},
+	DispatchError,
 };
 use support::{
-	Parameter, decl_module, decl_event, decl_storage, ensure,
-	weights::SimpleDispatchInfo,
+	decl_event, decl_module, decl_storage, ensure, weights::SimpleDispatchInfo, Parameter,
 };
 use system::ensure_signed;
 
@@ -101,7 +101,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin = Self::Origin>;
 }
 
 decl_module! {
@@ -190,7 +190,10 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
+	pub enum Event<T>
+	where
+		AccountId = <T as system::Trait>::AccountId,
+	{
 		/// A sudo just took place.
 		Sudid(bool),
 		/// The sudoer just switched identity; the old key is supplied.

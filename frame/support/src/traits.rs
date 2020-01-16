@@ -18,12 +18,12 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode};
+use codec::{Codec, Decode, Encode, FullCodec};
 use primitives::u32_trait::Value as U32;
+use rstd::{fmt::Debug, marker::PhantomData, ops::Div, prelude::*, result};
 use sp_runtime::{
+	traits::{MaybeSerializeDeserialize, Saturating, SimpleArithmetic},
 	ConsensusEngineId,
-	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
 use crate::dispatch::Parameter;
@@ -34,10 +34,11 @@ pub trait Len {
 	fn len(&self) -> usize;
 }
 
-impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
-	fn len(&self) -> usize {
-		self.clone().into_iter().len()
-	}
+impl<T: IntoIterator + Clone> Len for T
+where
+	<T as IntoIterator>::IntoIter: ExactSizeIterator,
+{
+	fn len(&self) -> usize { self.clone().into_iter().len() }
 }
 
 /// A trait for querying a single fixed value from a type.
@@ -59,9 +60,7 @@ pub trait Contains<T> {
 }
 
 impl<V: PartialEq, T: Get<V>> Contains<V> for T {
-	fn contains(t: &V) -> bool {
-		&Self::get() == t
-	}
+	fn contains(t: &V) -> bool { &Self::get() == t }
 }
 
 /// The account with the given id was killed.
@@ -84,12 +83,14 @@ pub enum UpdateBalanceOutcome {
 pub trait FindAuthor<Author> {
 	/// Find the author of a block based on the pre-runtime digests.
 	fn find_author<'a, I>(digests: I) -> Option<Author>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>;
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>;
 }
 
 impl<A> FindAuthor<A> for () {
 	fn find_author<'a, I>(_: I) -> Option<A>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		None
 	}
@@ -137,7 +138,9 @@ pub trait KeyOwnerProofSystem<Key> {
 pub trait OnUnbalanced<Imbalance: TryDrop> {
 	/// Handler for some imbalance. Infallible.
 	fn on_unbalanced(amount: Imbalance) {
-		amount.try_drop().unwrap_or_else(Self::on_nonzero_unbalanced)
+		amount
+			.try_drop()
+			.unwrap_or_else(Self::on_nonzero_unbalanced)
 	}
 
 	/// Actually handle a non-zero imbalance. You probably want to implement this rather than
@@ -250,7 +253,7 @@ pub trait Imbalance<Balance>: Sized + TryDrop {
 }
 
 /// Either a positive or a negative imbalance.
-pub enum SignedImbalance<B, P: Imbalance<B>>{
+pub enum SignedImbalance<B, P: Imbalance<B>> {
 	/// A positive imbalance (funds have been created but none destroyed).
 	Positive(P),
 	/// A negative imbalance (funds have been destroyed but none created).
@@ -258,13 +261,12 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 }
 
 impl<
-	P: Imbalance<B, Opposite=N>,
-	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
-> SignedImbalance<B, P> {
-	pub fn zero() -> Self {
-		SignedImbalance::Positive(P::zero())
-	}
+		P: Imbalance<B, Opposite = N>,
+		N: Imbalance<B, Opposite = P>,
+		B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	> SignedImbalance<B, P>
+{
+	pub fn zero() -> Self { SignedImbalance::Positive(P::zero()) }
 
 	pub fn drop_zero(self) -> Result<(), Self> {
 		match self {
@@ -277,39 +279,37 @@ impl<
 	/// both.
 	pub fn merge(self, other: Self) -> Self {
 		match (self, other) {
-			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) =>
-				SignedImbalance::Positive(one.merge(other)),
-			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) =>
-				SignedImbalance::Negative(one.merge(other)),
-			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) =>
+			(SignedImbalance::Positive(one), SignedImbalance::Positive(other)) => {
+				SignedImbalance::Positive(one.merge(other))
+			},
+			(SignedImbalance::Negative(one), SignedImbalance::Negative(other)) => {
+				SignedImbalance::Negative(one.merge(other))
+			},
+			(SignedImbalance::Positive(one), SignedImbalance::Negative(other)) => {
 				if one.peek() > other.peek() {
 					SignedImbalance::Positive(one.offset(other).ok().unwrap_or_else(P::zero))
 				} else {
 					SignedImbalance::Negative(other.offset(one).ok().unwrap_or_else(N::zero))
-				},
+				}
+			},
 			(one, other) => other.merge(one),
 		}
 	}
 }
 
 /// Split an unbalanced amount two ways between a common divisor.
-pub struct SplitTwoWays<
-	Balance,
-	Imbalance,
-	Part1,
-	Target1,
-	Part2,
-	Target2,
->(PhantomData<(Balance, Imbalance, Part1, Target1, Part2, Target2)>);
+pub struct SplitTwoWays<Balance, Imbalance, Part1, Target1, Part2, Target2>(
+	PhantomData<(Balance, Imbalance, Part1, Target1, Part2, Target2)>,
+);
 
 impl<
-	Balance: From<u32> + Saturating + Div<Output=Balance>,
-	I: Imbalance<Balance>,
-	Part1: U32,
-	Target1: OnUnbalanced<I>,
-	Part2: U32,
-	Target2: OnUnbalanced<I>,
-> OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
+		I: Imbalance<Balance>,
+		Part1: U32,
+		Target1: OnUnbalanced<I>,
+		Part2: U32,
+		Target2: OnUnbalanced<I>,
+	> OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
 {
 	fn on_nonzero_unbalanced(amount: I) {
 		let total: u32 = Part1::VALUE + Part2::VALUE;
@@ -327,11 +327,11 @@ pub trait Currency<AccountId> {
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
-	type PositiveImbalance: Imbalance<Self::Balance, Opposite=Self::NegativeImbalance>;
+	type PositiveImbalance: Imbalance<Self::Balance, Opposite = Self::NegativeImbalance>;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
-	type NegativeImbalance: Imbalance<Self::Balance, Opposite=Self::PositiveImbalance>;
+	type NegativeImbalance: Imbalance<Self::Balance, Opposite = Self::PositiveImbalance>;
 
 	// PUBLIC IMMUTABLES
 
@@ -345,8 +345,8 @@ pub trait Currency<AccountId> {
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
-	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
-	/// `ExistentialDeposit`.
+	/// The minimum balance any single account may have. This is equivalent to the `Balances`
+	/// module's `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
@@ -408,17 +408,14 @@ pub trait Currency<AccountId> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then a non-zero second item will be returned.
-	fn slash(
-		who: &AccountId,
-		value: Self::Balance
-	) -> (Self::NegativeImbalance, Self::Balance);
+	fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// Mints `value` to the free balance of `who`.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	fn deposit_into_existing(
 		who: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
 	) -> result::Result<Self::PositiveImbalance, &'static str>;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
@@ -437,17 +434,11 @@ pub trait Currency<AccountId> {
 	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
 	///
 	/// Infallible.
-	fn deposit_creating(
-		who: &AccountId,
-		value: Self::Balance,
-	) -> Self::PositiveImbalance;
+	fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
-	fn resolve_creating(
-		who: &AccountId,
-		value: Self::NegativeImbalance,
-	) {
+	fn resolve_creating(who: &AccountId, value: Self::NegativeImbalance) {
 		let v = value.peek();
 		drop(value.offset(Self::deposit_creating(who, v)));
 	}
@@ -484,8 +475,8 @@ pub trait Currency<AccountId> {
 	/// Ensure an account's free balance equals some value; this will create the account
 	/// if needed.
 	///
-	/// Returns a signed imbalance and status to indicate if the account was successfully updated or update
-	/// has led to killing of the account.
+	/// Returns a signed imbalance and status to indicate if the account was successfully updated or
+	/// update has led to killing of the account.
 	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,
@@ -507,7 +498,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// is less than `value`, then a non-zero second item will be returned.
 	fn slash_reserved(
 		who: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
 	) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// The amount of the balance of a given account that is externally reserved; this can still get
@@ -522,7 +513,6 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
-
 
 	/// Moves `value` from balance to reserved balance.
 	///
@@ -551,7 +541,7 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	fn repatriate_reserved(
 		slashed: &AccountId,
 		beneficiary: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
 	) -> result::Result<Self::Balance, &'static str>;
 }
 
@@ -596,10 +586,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 
 	/// Remove an existing lock.
-	fn remove_lock(
-		id: LockIdentifier,
-		who: &AccountId,
-	);
+	fn remove_lock(id: LockIdentifier, who: &AccountId);
 }
 
 /// A currency whose accounts can have balances which vest over time.
@@ -659,9 +646,12 @@ impl WithdrawReasons {
 	/// # use frame_support::traits::{WithdrawReason, WithdrawReasons};
 	/// # fn main() {
 	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
+	/// 	WithdrawReason::Fee
+	/// 		| WithdrawReason::Transfer
+	/// 		| WithdrawReason::Reserve
+	/// 		| WithdrawReason::Tip,
 	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
-	///	);
+	/// 	);
 	/// # }
 	/// ```
 	pub fn except(one: WithdrawReason) -> WithdrawReasons {
@@ -690,18 +680,18 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		sorted_new: &[AccountId],
 	);
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it
+	/// to call `change_members_sorted`.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
 		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it
+	/// to call `change_members_sorted`.
 	fn compute_members_diff(
 		new_members: &[AccountId],
-		old_members: &[AccountId]
+		old_members: &[AccountId],
 	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
@@ -715,19 +705,19 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				(Some(old), Some(new)) if old == new => {
 					old_i = old_iter.next();
 					new_i = new_iter.next();
-				}
+				},
 				(Some(old), Some(new)) if old < new => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(Some(old), None) => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(_, Some(new)) => {
 					incoming.push(new.clone());
 					new_i = new_iter.next();
-				}
+				},
 			}
 		}
 		(incoming, outgoing)
@@ -736,7 +726,9 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
+
 	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
+
 	fn set_members_sorted(_: &[T], _: &[T]) {}
 }
 
@@ -765,16 +757,14 @@ pub trait Randomness<Output> {
 	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
 	/// subject for the random result and whose value will be independently low-influence random
 	/// from any other such seeds.
-	fn random_seed() -> Output {
-		Self::random(&[][..])
-	}
+	fn random_seed() -> Output { Self::random(&[][..]) }
 }
 
 /// Implementors of this trait provide information about whether or not some validator has
-/// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
+/// been registered with them. The [Session module](../../pallet_session/index.html) is an
+/// implementor.
 pub trait ValidatorRegistration<ValidatorId> {
 	/// Returns true if the provided validator ID has been registered with the implementing runtime
 	/// module
 	fn is_registered(id: &ValidatorId) -> bool;
 }
-

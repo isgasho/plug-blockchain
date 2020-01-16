@@ -17,8 +17,8 @@
 //! A simple pseudo random number generator that allows a stream of random numbers to be efficiently
 //! created from a single initial seed hash.
 
-use codec::{Encode, Decode};
 use crate::traits::{Hash, TrailingZeroInput};
+use codec::{Decode, Encode};
 
 /// Pseudo-random number streamer. This retains the state of the random number stream. It's as
 /// secure as the combination of the seed with which it is constructed and the hash function it uses
@@ -28,8 +28,10 @@ use crate::traits::{Hash, TrailingZeroInput};
 ///
 /// Example:
 /// ```
-/// use sp_runtime::traits::{Hash, BlakeTwo256};
-/// use sp_runtime::RandomNumberGenerator;
+/// use sp_runtime::{
+/// 	traits::{BlakeTwo256, Hash},
+/// 	RandomNumberGenerator,
+/// 	};
 /// let random_seed = BlakeTwo256::hash(b"Sixty-nine");
 /// let mut rng = <RandomNumberGenerator<BlakeTwo256>>::new(random_seed);
 /// assert_eq!(rng.pick_u32(100), 59);
@@ -85,9 +87,7 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 	/// Returns a number at least zero, at most `max`.
 	///
 	/// This returns a `usize`, but internally it only uses `u32` so avoid consensus problems.
-	pub fn pick_usize(&mut self, max: usize) -> usize {
-		self.pick_u32(max as u32) as usize
-	}
+	pub fn pick_usize(&mut self, max: usize) -> usize { self.pick_u32(max as u32) as usize }
 
 	/// Pick a random element from an array of `items`.
 	///

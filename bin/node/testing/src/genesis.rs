@@ -19,23 +19,27 @@
 use crate::keyring::*;
 use keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
-	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
-	GrandpaConfig, IndicesConfig, ContractsConfig, WASM_BINARY,
+	constants::currency::*, BalancesConfig, ContractsConfig, GenesisConfig, GrandpaConfig,
+	IndicesConfig, SessionConfig, StakingConfig, SystemConfig, WASM_BINARY,
 };
-use node_runtime::constants::currency::*;
 use primitives::ChangesTrieConfiguration;
 use sp_runtime::Perbill;
-
 
 /// Create genesis runtime configuration for tests.
 pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
-			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
-				digest_interval: 2,
-				digest_levels: 2,
-			}) } else { None },
-			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
+			changes_trie_config: if support_changes_trie {
+				Some(ChangesTrieConfiguration {
+					digest_interval: 2,
+					digest_levels: 2,
+				})
+			} else {
+				None
+			},
+			code: code
+				.map(|x| x.to_vec())
+				.unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		indices: Some(IndicesConfig {
 			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
@@ -53,32 +57,47 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		}),
 		session: Some(SessionConfig {
 			keys: vec![
-				(alice(), to_session_keys(
-					&Ed25519Keyring::Alice,
-					&Sr25519Keyring::Alice,
-				)),
-				(bob(), to_session_keys(
-					&Ed25519Keyring::Bob,
-					&Sr25519Keyring::Bob,
-				)),
-				(charlie(), to_session_keys(
-					&Ed25519Keyring::Charlie,
-					&Sr25519Keyring::Charlie,
-				)),
-			]
+				(
+					alice(),
+					to_session_keys(&Ed25519Keyring::Alice, &Sr25519Keyring::Alice),
+				),
+				(
+					bob(),
+					to_session_keys(&Ed25519Keyring::Bob, &Sr25519Keyring::Bob),
+				),
+				(
+					charlie(),
+					to_session_keys(&Ed25519Keyring::Charlie, &Sr25519Keyring::Charlie),
+				),
+			],
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			stakers: vec![
-				(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
-				(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
-				(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
+				(
+					dave(),
+					alice(),
+					111 * DOLLARS,
+					staking::StakerStatus::Validator,
+				),
+				(
+					eve(),
+					bob(),
+					100 * DOLLARS,
+					staking::StakerStatus::Validator,
+				),
+				(
+					ferdie(),
+					charlie(),
+					100 * DOLLARS,
+					staking::StakerStatus::Validator,
+				),
 			],
 			validator_count: 3,
 			minimum_validator_count: 0,
 			slash_reward_fraction: Perbill::from_percent(10),
 			invulnerables: vec![alice(), bob(), charlie()],
-			.. Default::default()
+			..Default::default()
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),

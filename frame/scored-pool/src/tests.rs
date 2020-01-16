@@ -19,8 +19,8 @@
 use super::*;
 use mock::*;
 
-use support::{assert_ok, assert_noop};
 use sp_runtime::traits::OnInitialize;
+use support::{assert_noop, assert_ok};
 
 type ScoredPool = Module<Test>;
 type System = system::Module<Test>;
@@ -78,7 +78,12 @@ fn scoring_works() {
 
 		// when
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, score));
+		assert_ok!(ScoredPool::score(
+			Origin::signed(ScoreOrigin::get()),
+			who,
+			index,
+			score
+		));
 
 		// then
 		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
@@ -95,7 +100,12 @@ fn scoring_same_element_with_same_score_works() {
 		let score = 2;
 
 		// when
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, score));
+		assert_ok!(ScoredPool::score(
+			Origin::signed(ScoreOrigin::get()),
+			who,
+			index,
+			score
+		));
 
 		// then
 		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
@@ -111,7 +121,10 @@ fn kicking_works_only_for_authorized() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
-		assert_noop!(ScoredPool::kick(Origin::signed(99), who, index), "bad origin");
+		assert_noop!(
+			ScoredPool::kick(Origin::signed(99), who, index),
+			"bad origin"
+		);
 	});
 }
 
@@ -125,7 +138,11 @@ fn kicking_works() {
 
 		// when
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
-		assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
+		assert_ok!(ScoredPool::kick(
+			Origin::signed(KickOrigin::get()),
+			who,
+			index
+		));
 
 		// then
 		assert_eq!(find_in_pool(who), None);
@@ -144,14 +161,16 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 
 		// when
 		// we remove every scored member
-		ScoredPool::pool()
-			.into_iter()
-			.for_each(|(who, score)| {
-				if let Some(_) = score {
-					let index = find_in_pool(who).expect("entity must be in pool") as u32;
-					assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
-				}
-			});
+		ScoredPool::pool().into_iter().for_each(|(who, score)| {
+			if let Some(_) = score {
+				let index = find_in_pool(who).expect("entity must be in pool") as u32;
+				assert_ok!(ScoredPool::kick(
+					Origin::signed(KickOrigin::get()),
+					who,
+					index
+				));
+			}
+		});
 
 		// then
 		// the `None` candidates should not have been filled in
@@ -167,7 +186,12 @@ fn refreshing_works() {
 		let who = 15;
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		assert_ok!(ScoredPool::score(
+			Origin::signed(ScoreOrigin::get()),
+			who,
+			index,
+			99
+		));
 
 		// when
 		ScoredPool::refresh_members(ScoredPool::pool(), ChangeReceiver::MembershipChanged);
@@ -185,7 +209,12 @@ fn refreshing_happens_every_period() {
 		System::set_block_number(1);
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
 		let index = find_in_pool(15).expect("entity must be in pool") as u32;
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, index, 99));
+		assert_ok!(ScoredPool::score(
+			Origin::signed(ScoreOrigin::get()),
+			15,
+			index,
+			99
+		));
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
 
 		// when
@@ -203,7 +232,10 @@ fn withdraw_candidacy_must_only_work_for_members() {
 	new_test_ext().execute_with(|| {
 		let who = 77;
 		let index = 0;
-		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), index),
+			INDEX_ERR
+		);
 	});
 }
 
@@ -212,9 +244,18 @@ fn oob_index_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), OOB_ERR);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), OOB_ERR);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), OOB_ERR);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index),
+			OOB_ERR
+		);
+		assert_noop!(
+			ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99),
+			OOB_ERR
+		);
+		assert_noop!(
+			ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index),
+			OOB_ERR
+		);
 	});
 }
 
@@ -223,9 +264,18 @@ fn index_mismatches_should_abort() {
 	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = 3;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), INDEX_ERR);
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), INDEX_ERR);
+		assert_noop!(
+			ScoredPool::withdraw_candidacy(Origin::signed(who), index),
+			INDEX_ERR
+		);
+		assert_noop!(
+			ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99),
+			INDEX_ERR
+		);
+		assert_noop!(
+			ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index),
+			INDEX_ERR
+		);
 	});
 }
 

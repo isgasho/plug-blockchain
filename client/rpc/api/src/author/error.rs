@@ -29,30 +29,30 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
+	#[display(fmt = "Client error: {}", _0)]
 	#[from(ignore)]
 	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
-	#[display(fmt="Transaction pool error: {}", _0)]
+	#[display(fmt = "Transaction pool error: {}", _0)]
 	Pool(txpool_api::error::Error),
 	/// Verification error
-	#[display(fmt="Extrinsic verification error: {}", _0)]
+	#[display(fmt = "Extrinsic verification error: {}", _0)]
 	#[from(ignore)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format: {}", _0)]
+	#[display(fmt = "Invalid extrinsic format: {}", _0)]
 	BadFormat(codec::Error),
 	/// Incorrect seed phrase.
-	#[display(fmt="Invalid seed phrase/SURI")]
+	#[display(fmt = "Invalid seed phrase/SURI")]
 	BadSeedPhrase,
 	/// Key type ID has an unknown format.
-	#[display(fmt="Invalid key type ID format (should be of length four)")]
+	#[display(fmt = "Invalid key type ID format (should be of length four)")]
 	BadKeyType,
 	/// Key type ID has some unsupported crypto.
-	#[display(fmt="The crypto of key type ID is unknown")]
+	#[display(fmt = "The crypto of key type ID is unknown")]
 	UnsupportedKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
-	#[display(fmt="The key store is unavailable")]
+	#[display(fmt = "The key store is unavailable")]
 	KeyStoreUnavailable,
 }
 
@@ -93,7 +93,7 @@ const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
-		use txpool_api::error::{Error as PoolError};
+		use txpool_api::error::Error as PoolError;
 
 		match e {
 			Error::BadFormat(e) => rpc::Error {
@@ -129,7 +129,11 @@ impl From<Error> for rpc::Error {
 			Error::Pool(PoolError::TooLowPriority { old, new }) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TOO_LOW_PRIORITY),
 				message: format!("Priority is too low: ({} vs {})", old, new),
-				data: Some("The transaction has too low priority to replace another transaction already in the pool.".into()),
+				data: Some(
+					"The transaction has too low priority to replace another transaction already \
+					 in the pool."
+						.into(),
+				),
 			},
 			Error::Pool(PoolError::CycleDetected) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_CYCLE_DETECTED),
@@ -143,10 +147,11 @@ impl From<Error> for rpc::Error {
 			},
 			Error::UnsupportedKeyType => rpc::Error {
 				code: rpc::ErrorCode::ServerError(UNSUPPORTED_KEY_TYPE),
-				message: "Unknown key type crypto" .into(),
+				message: "Unknown key type crypto".into(),
 				data: Some(
-					"The crypto for the given key type is unknown, please add the public key to the \
-					request to insert the key successfully.".into()
+					"The crypto for the given key type is unknown, please add the public key to \
+					 the request to insert the key successfully."
+						.into(),
 				),
 			},
 			e => errors::internal(e),

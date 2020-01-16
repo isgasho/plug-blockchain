@@ -17,16 +17,19 @@
 //! This is part of the Substrate runtime.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(lang_items))]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
-
-#![cfg_attr(feature = "std",
-   doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
-#![cfg_attr(not(feature = "std"),
-   doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
+#![cfg_attr(
+	feature = "std",
+	doc = "Substrate runtime standard library as compiled when linked with Rust's standard \
+	       library."
+)]
+#![cfg_attr(
+	not(feature = "std"),
+	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
+)]
 
 use rstd::vec::Vec;
 
@@ -36,28 +39,30 @@ use rstd::ops::Deref;
 #[cfg(feature = "std")]
 use primitives::{
 	crypto::Pair,
-	traits::KeystoreExt,
-	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
+	offchain::{OffchainExt, TransactionPoolExt},
 	storage::ChildStorageKey,
+	traits::KeystoreExt,
 };
 
 use primitives::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
+	crypto::KeyTypeId,
+	ed25519,
 	offchain::{
-		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
+		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
+	sr25519, LogLevel, H256,
 };
 
 #[cfg(feature = "std")]
-use ::trie::{TrieConfiguration, trie_types::Layout};
+use ::trie::{trie_types::Layout, TrieConfiguration};
 
 use runtime_interface::{runtime_interface, Pointer};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
-use externalities::{ExternalitiesExt, Externalities};
+use externalities::{Externalities, ExternalitiesExt};
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -87,9 +92,7 @@ fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|s| s.to_vec())
-	}
+	fn get(&self, key: &[u8]) -> Option<Vec<u8>> { self.storage(key).map(|s| s.to_vec()) }
 
 	/// Returns the data for `key` in the child storage or `None` if the key can not be found.
 	fn child_get(&self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -125,20 +128,17 @@ pub trait Storage {
 		value_offset: u32,
 	) -> Option<u32> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, key)
-			.map(|value| {
-				let value_offset = value_offset as usize;
-				let data = &value[value_offset.min(value.len())..];
-				let written = std::cmp::min(data.len(), value_out.len());
-				value_out[..written].copy_from_slice(&data[..written]);
-				value.len() as u32
-			})
+		self.child_storage(storage_key, key).map(|value| {
+			let value_offset = value_offset as usize;
+			let data = &value[value_offset.min(value.len())..];
+			let written = std::cmp::min(data.len(), value_out.len());
+			value_out[..written].copy_from_slice(&data[..written]);
+			value.len() as u32
+		})
 	}
 
 	/// Set `key` to `value` in the storage.
-	fn set(&mut self, key: &[u8], value: &[u8]) {
-		self.set_storage(key.to_vec(), value.to_vec());
-	}
+	fn set(&mut self, key: &[u8], value: &[u8]) { self.set_storage(key.to_vec(), value.to_vec()); }
 
 	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
 	fn child_set(&mut self, child_storage_key: &[u8], key: &[u8], value: &[u8]) {
@@ -147,9 +147,7 @@ pub trait Storage {
 	}
 
 	/// Clear the storage of the given `key` and its value.
-	fn clear(&mut self, key: &[u8]) {
-		self.clear_storage(key)
-	}
+	fn clear(&mut self, key: &[u8]) { self.clear_storage(key) }
 
 	/// Clear the given child storage of the given `key` and its value.
 	fn child_clear(&mut self, child_storage_key: &[u8], key: &[u8]) {
@@ -164,9 +162,7 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	fn exists(&self, key: &[u8]) -> bool {
-		self.exists_storage(key)
-	}
+	fn exists(&self, key: &[u8]) -> bool { self.exists_storage(key) }
 
 	/// Check whether the given `key` exists in storage.
 	fn child_exists(&self, child_storage_key: &[u8], key: &[u8]) -> bool {
@@ -175,9 +171,7 @@ pub trait Storage {
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		Externalities::clear_prefix(*self, prefix)
-	}
+	fn clear_prefix(&mut self, prefix: &[u8]) { Externalities::clear_prefix(*self, prefix) }
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
 	fn child_clear_prefix(&mut self, child_storage_key: &[u8], prefix: &[u8]) {
@@ -190,9 +184,7 @@ pub trait Storage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
-	fn root(&mut self) -> Vec<u8> {
-		self.storage_root()
-	}
+	fn root(&mut self) -> Vec<u8> { self.storage_root() }
 
 	/// "Commit" all existing operations and compute the resulting child storage root.
 	///
@@ -215,9 +207,7 @@ pub trait Storage {
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.
-	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.next_storage_key(&key)
-	}
+	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> { self.next_storage_key(&key) }
 
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
 	fn child_next_key(&mut self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -240,13 +230,12 @@ pub trait Trie {
 	}
 }
 
-/// Interface that provides miscellaneous functions for communicating between the runtime and the node.
+/// Interface that provides miscellaneous functions for communicating between the runtime and the
+/// node.
 #[runtime_interface]
 pub trait Misc {
 	/// The current relay chain identifier.
-	fn chain_id(&self) -> u64 {
-		externalities::Externalities::chain_id(*self)
-	}
+	fn chain_id(&self) -> u64 { externalities::Externalities::chain_id(*self) }
 
 	/// Print a number.
 	fn print_num(val: u64) {
@@ -284,7 +273,9 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed
+			.as_ref()
+			.map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.write()
@@ -336,7 +327,9 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed
+			.as_ref()
+			.map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.write()
@@ -376,10 +369,11 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
-			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let rs =
+			secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v =
+			secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
+				.map_err(|_| EcdsaVerifyError::BadV)?;
 		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
@@ -394,10 +388,11 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
-			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let rs =
+			secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v =
+			secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
+				.map_err(|_| EcdsaVerifyError::BadV)?;
 		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
@@ -408,39 +403,25 @@ pub trait Crypto {
 #[runtime_interface]
 pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
-	fn keccak_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::keccak_256(data)
-	}
+	fn keccak_256(data: &[u8]) -> [u8; 32] { primitives::hashing::keccak_256(data) }
 
 	/// Conduct a 256-bit Sha2 hash.
-	fn sha2_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::sha2_256(data)
-	}
+	fn sha2_256(data: &[u8]) -> [u8; 32] { primitives::hashing::sha2_256(data) }
 
 	/// Conduct a 128-bit Blake2 hash.
-	fn blake2_128(data: &[u8]) -> [u8; 16] {
-		primitives::hashing::blake2_128(data)
-	}
+	fn blake2_128(data: &[u8]) -> [u8; 16] { primitives::hashing::blake2_128(data) }
 
 	/// Conduct a 256-bit Blake2 hash.
-	fn blake2_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::blake2_256(data)
-	}
+	fn blake2_256(data: &[u8]) -> [u8; 32] { primitives::hashing::blake2_256(data) }
 
 	/// Conduct four XX hashes to give a 256-bit result.
-	fn twox_256(data: &[u8]) -> [u8; 32] {
-		primitives::hashing::twox_256(data)
-	}
+	fn twox_256(data: &[u8]) -> [u8; 32] { primitives::hashing::twox_256(data) }
 
 	/// Conduct two XX hashes to give a 128-bit result.
-	fn twox_128(data: &[u8]) -> [u8; 16] {
-		primitives::hashing::twox_128(data)
-	}
+	fn twox_128(data: &[u8]) -> [u8; 16] { primitives::hashing::twox_128(data) }
 
 	/// Conduct two XX hashes to give a 64-bit result.
-	fn twox_64(data: &[u8]) -> [u8; 8] {
-		primitives::hashing::twox_64(data)
-	}
+	fn twox_64(data: &[u8]) -> [u8; 8] { primitives::hashing::twox_64(data) }
 }
 
 /// Interface that provides functions to access the offchain functionality.
@@ -461,8 +442,10 @@ pub trait Offchain {
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
 		self.extension::<TransactionPoolExt>()
-			.expect("submit_transaction can be called only in the offchain call context with
-				TransactionPool capabilities enabled")
+			.expect(
+				"submit_transaction can be called only in the offchain call context with
+				TransactionPool capabilities enabled",
+			)
 			.submit_transaction(data)
 	}
 
@@ -525,7 +508,12 @@ pub trait Offchain {
 	) -> bool {
 		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
-			.local_storage_compare_and_set(kind, key, old_value.as_ref().map(|v| v.deref()), new_value)
+			.local_storage_compare_and_set(
+				kind,
+				key,
+				old_value.as_ref().map(|v| v.deref()),
+				new_value,
+			)
 	}
 
 	/// Gets a value from the local storage.
@@ -541,8 +529,8 @@ pub trait Offchain {
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
-	/// Returns the id of newly started request.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded
+	/// parameters. Returns the id of newly started request.
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -636,12 +624,14 @@ pub trait Offchain {
 trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
-		self.allocate_memory(size).expect("Failed to allocate memory")
+		self.allocate_memory(size)
+			.expect("Failed to allocate memory")
 	}
 
 	/// Free the given pointer.
 	fn free(&mut self, ptr: Pointer<u8>) {
-		self.deallocate_memory(ptr).expect("Failed to deallocate memory")
+		self.deallocate_memory(ptr)
+			.expect("Failed to deallocate memory")
 	}
 }
 
@@ -656,12 +646,7 @@ pub trait Logging {
 	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
 	fn log(level: LogLevel, target: &str, message: &[u8]) {
 		if let Ok(message) = std::str::from_utf8(message) {
-			log::log!(
-				target: target,
-				log::Level::from(level),
-				"{}",
-				message,
-			)
+			log::log!(target: target, log::Level::from(level), "{}", message,)
 		}
 	}
 }
@@ -692,14 +677,16 @@ pub trait Sandbox {
 		return_val_len: u32,
 		state_ptr: Pointer<u8>,
 	) -> u32 {
-		self.sandbox().invoke(
-			instance_idx,
-			&function,
-			&args,
-			return_val_ptr,
-			return_val_len,
-			state_ptr.into(),
-		).expect("Failed to invoke function with sandbox")
+		self.sandbox()
+			.invoke(
+				instance_idx,
+				&function,
+				&args,
+				return_val_ptr,
+				return_val_len,
+				state_ptr.into(),
+			)
+			.expect("Failed to invoke function with sandbox")
 	}
 
 	/// Create a new memory instance with the given `initial` and `maximum` size.
@@ -737,12 +724,16 @@ pub trait Sandbox {
 
 	/// Teardown the memory instance with the given `memory_idx`.
 	fn memory_teardown(&mut self, memory_idx: u32) {
-		self.sandbox().memory_teardown(memory_idx).expect("Failed to teardown memory with sandbox")
+		self.sandbox()
+			.memory_teardown(memory_idx)
+			.expect("Failed to teardown memory with sandbox")
 	}
 
 	/// Teardown the sandbox instance with the given `instance_idx`.
 	fn instance_teardown(&mut self, instance_idx: u32) {
-		self.sandbox().instance_teardown(instance_idx).expect("Failed to teardown sandbox instance")
+		self.sandbox()
+			.instance_teardown(instance_idx)
+			.expect("Failed to teardown sandbox instance")
 	}
 }
 
@@ -764,9 +755,7 @@ mod allocator_impl {
 			allocator::malloc(layout.size() as u32)
 		}
 
-		unsafe fn dealloc(&self, ptr: *mut u8, _: Layout) {
-			allocator::free(ptr)
-		}
+		unsafe fn dealloc(&self, ptr: *mut u8, _: Layout) { allocator::free(ptr) }
 	}
 }
 
@@ -783,9 +772,13 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
-pub extern fn oom(_: core::alloc::Layout) -> ! {
+pub extern "C" fn oom(_: core::alloc::Layout) -> ! {
 	unsafe {
-		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
+		logging::log(
+			LogLevel::Error,
+			"runtime",
+			b"Runtime memory exhausted. Aborting",
+		);
 		core::intrinsics::abort();
 	}
 }

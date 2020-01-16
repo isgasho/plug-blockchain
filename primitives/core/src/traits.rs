@@ -65,7 +65,12 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
+	fn insert_unknown(
+		&mut self,
+		_key_type: KeyTypeId,
+		_suri: &str,
+		_public: &[u8],
+	) -> Result<(), ()>;
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;

@@ -18,17 +18,18 @@
 
 #![cfg(test)]
 
-use crate::{Trait, Module, GenesisConfig};
+use crate::{GenesisConfig, Module, Trait};
+use primitives::H256;
+use runtime_io;
 use sp_consensus_aura::ed25519::AuthorityId;
 use sp_runtime::{
-	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+	Perbill,
 };
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use runtime_io;
-use primitives::H256;
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
@@ -45,29 +46,29 @@ parameter_types! {
 }
 
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 
 impl pallet_timestamp::Trait for Test {
+	type MinimumPeriod = MinimumPeriod;
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = MinimumPeriod;
 }
 
 impl Trait for Test {
@@ -75,10 +76,17 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test>{
-		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
-	}.assimilate_storage(&mut t).unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
+	GenesisConfig::<Test> {
+		authorities: authorities
+			.into_iter()
+			.map(|a| UintAuthorityId(a).to_public_key())
+			.collect(),
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 

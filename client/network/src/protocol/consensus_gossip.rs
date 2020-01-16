@@ -43,19 +43,22 @@
 //! These status packets will typically contain light pieces of information
 //! used to inform peers of a current view of protocol state.
 
-use std::collections::{HashMap, HashSet, hash_map::Entry};
-use std::sync::Arc;
-use std::iter;
-use std::time;
-use log::{trace, debug};
+pub use crate::message::generic::{ConsensusMessage, Message};
+use crate::{config::Roles, protocol::Context};
 use futures03::channel::mpsc;
-use lru::LruCache;
 use libp2p::PeerId;
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use sp_runtime::ConsensusEngineId;
-pub use crate::message::generic::{Message, ConsensusMessage};
-use crate::protocol::Context;
-use crate::config::Roles;
+use log::{debug, trace};
+use lru::LruCache;
+use sp_runtime::{
+	traits::{Block as BlockT, Hash, HashFor},
+	ConsensusEngineId,
+};
+use std::{
+	collections::{hash_map::Entry, HashMap, HashSet},
+	iter,
+	sync::Arc,
+	time,
+};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -129,9 +132,7 @@ pub enum ValidationResult<H> {
 }
 
 impl MessageIntent {
-	fn broadcast() -> MessageIntent {
-		MessageIntent::Broadcast
-	}
+	fn broadcast() -> MessageIntent { MessageIntent::Broadcast }
 }
 
 /// Validation context. Allows reacting to incoming messages by sending out further messages.
@@ -163,22 +164,27 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 		self.gossip.multicast(
 			self.protocol,
 			topic,
-			ConsensusMessage{ data: message, engine_id: self.engine_id.clone() },
+			ConsensusMessage {
+				data: message,
+				engine_id: self.engine_id.clone(),
+			},
 			force,
 		);
 	}
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.protocol.send_consensus(who.clone(), vec![ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		}]);
+		self.protocol
+			.send_consensus(who.clone(), vec![ConsensusMessage {
+				engine_id: self.engine_id,
+				data: message,
+			}]);
 	}
 
 	/// Send all messages with given topic to a peer.
 	fn send_topic(&mut self, who: &PeerId, topic: B::Hash, force: bool) {
-		self.gossip.send_topic(self.protocol, who, topic, self.engine_id, force);
+		self.gossip
+			.send_topic(self.protocol, who, topic, self.engine_id, force);
 	}
 }
 
@@ -189,46 +195,50 @@ fn propagate<'a, B: BlockT, I>(
 	peers: &mut HashMap<PeerId, PeerConsensus<B::Hash>>,
 	validators: &HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
 )
-	// (msg_hash, topic, message)
-	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,  
+// (msg_hash, topic, message)
+where
+	I: Clone + IntoIterator<Item = (&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,
 {
 	let mut check_fns = HashMap::new();
-	let mut message_allowed = move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
-		let engine_id = message.engine_id;
-		let check_fn = match check_fns.entry(engine_id) {
-			Entry::Occupied(entry) => entry.into_mut(),
-			Entry::Vacant(vacant) => match validators.get(&engine_id) {
-				None => return false, // treat all messages with no validator as not allowed
-				Some(validator) => vacant.insert(validator.message_allowed()),
-			}
-		};
+	let mut message_allowed =
+		move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
+			let engine_id = message.engine_id;
+			let check_fn = match check_fns.entry(engine_id) {
+				Entry::Occupied(entry) => entry.into_mut(),
+				Entry::Vacant(vacant) => match validators.get(&engine_id) {
+					None => return false, // treat all messages with no validator as not allowed
+					Some(validator) => vacant.insert(validator.message_allowed()),
+				},
+			};
 
-		(check_fn)(who, intent, topic, &message.data)
-	};
+			(check_fn)(who, intent, topic, &message.data)
+		};
 
 	for (id, ref mut peer) in peers.iter_mut() {
 		let mut batch = Vec::new();
 		for (message_hash, topic, message) in messages.clone() {
 			let intent = match intent {
-				MessageIntent::Broadcast { .. } =>
+				MessageIntent::Broadcast { .. } => {
 					if peer.known_messages.contains(&message_hash) {
-						continue;
+						continue
 					} else {
 						MessageIntent::Broadcast
-					},
-				MessageIntent::PeriodicRebroadcast =>
+					}
+				},
+				MessageIntent::PeriodicRebroadcast => {
 					if peer.known_messages.contains(&message_hash) {
 						MessageIntent::PeriodicRebroadcast
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
 						// initial broadcast.
 						MessageIntent::Broadcast
-					},
+					}
+				},
 				other => other,
 			};
 
 			if !message_allowed(id, intent, &topic, &message) {
-				continue;
+				continue
 			}
 
 			peer.known_messages.insert(message_hash.clone());
@@ -243,19 +253,17 @@ fn propagate<'a, B: BlockT, I>(
 /// Validates consensus messages.
 pub trait Validator<B: BlockT>: Send + Sync {
 	/// New peer is connected.
-	fn new_peer(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId, _roles: Roles) {
-	}
+	fn new_peer(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId, _roles: Roles) {}
 
 	/// New connection is dropped.
-	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId) {
-	}
+	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId) {}
 
 	/// Validate consensus message.
 	fn validate(
 		&self,
 		context: &mut dyn ValidatorContext<B>,
 		sender: &PeerId,
-		data: &[u8]
+		data: &[u8],
 	) -> ValidationResult<B::Hash>;
 
 	/// Produce a closure for validating messages on a given topic.
@@ -264,7 +272,9 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	}
 
 	/// Produce a closure for filtering egress messages.
-	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
+	fn message_allowed<'a>(
+		&'a self,
+	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		Box::new(move |_who, _intent, _topic, _data| true)
 	}
 }
@@ -272,7 +282,8 @@ pub trait Validator<B: BlockT>: Send + Sync {
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
-	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::UnboundedSender<TopicNotification>>>,
+	live_message_sinks:
+		HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::UnboundedSender<TopicNotification>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
@@ -293,26 +304,36 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Closes all notification streams.
-	pub fn abort(&mut self) {
-		self.live_message_sinks.clear();
-	}
+	pub fn abort(&mut self) { self.live_message_sinks.clear(); }
 
 	/// Register message validator for a message type.
 	pub fn register_validator(
 		&mut self,
 		protocol: &mut dyn Context<B>,
 		engine_id: ConsensusEngineId,
-		validator: Arc<dyn Validator<B>>
+		validator: Arc<dyn Validator<B>>,
 	) {
 		self.register_validator_internal(engine_id, validator.clone());
-		let peers: Vec<_> = self.peers.iter().map(|(id, peer)| (id.clone(), peer.roles)).collect();
+		let peers: Vec<_> = self
+			.peers
+			.iter()
+			.map(|(id, peer)| (id.clone(), peer.roles))
+			.collect();
 		for (id, roles) in peers {
-			let mut context = NetworkContext { gossip: self, protocol, engine_id: engine_id.clone() };
+			let mut context = NetworkContext {
+				gossip: self,
+				protocol,
+				engine_id: engine_id.clone(),
+			};
 			validator.new_peer(&mut context, &id, roles);
 		}
 	}
 
-	fn register_validator_internal(&mut self, engine_id: ConsensusEngineId, validator: Arc<dyn Validator<B>>) {
+	fn register_validator_internal(
+		&mut self,
+		engine_id: ConsensusEngineId,
+		validator: Arc<dyn Validator<B>>,
+	) {
 		self.validators.insert(engine_id, validator.clone());
 	}
 
@@ -320,7 +341,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	pub fn new_peer(&mut self, protocol: &mut dyn Context<B>, who: PeerId, roles: Roles) {
 		// light nodes are not valid targets for consensus gossip messages
 		if !roles.is_full() {
-			return;
+			return
 		}
 
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
@@ -329,7 +350,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 			roles,
 		});
 		for (engine_id, v) in self.validators.clone() {
-			let mut context = NetworkContext { gossip: self, protocol, engine_id: engine_id.clone() };
+			let mut context = NetworkContext {
+				gossip: self,
+				protocol,
+				engine_id: engine_id.clone(),
+			};
 			v.new_peer(&mut context, &who, roles);
 		}
 	}
@@ -356,11 +381,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
-	pub fn register_message(
-		&mut self,
-		topic: B::Hash,
-		message: ConsensusMessage,
-	) {
+	pub fn register_message(&mut self, topic: B::Hash, message: ConsensusMessage) {
 		let message_hash = HashFor::<B>::hash(&message.data[..]);
 		self.register_message_hashed(message_hash, topic, message, None);
 	}
@@ -368,7 +389,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Call when a peer has been disconnected to stop tracking gossip status.
 	pub fn peer_disconnected(&mut self, protocol: &mut dyn Context<B>, who: PeerId) {
 		for (engine_id, v) in self.validators.clone() {
-			let mut context = NetworkContext { gossip: self, protocol, engine_id: engine_id.clone() };
+			let mut context = NetworkContext {
+				gossip: self,
+				protocol,
+				engine_id: engine_id.clone(),
+			};
 			v.peer_disconnected(&mut context, &who);
 		}
 	}
@@ -384,19 +409,40 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Rebroadcast all messages to all peers.
 	fn rebroadcast(&mut self, protocol: &mut dyn Context<B>) {
-		let messages = self.messages.iter()
+		let messages = self
+			.messages
+			.iter()
 			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
-		propagate(protocol, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validators);
+		propagate(
+			protocol,
+			messages,
+			MessageIntent::PeriodicRebroadcast,
+			&mut self.peers,
+			&self.validators,
+		);
 	}
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, protocol: &mut dyn Context<B>, topic: B::Hash, force: bool) {
-		let messages = self.messages.iter()
-			.filter_map(|entry|
-				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
-			);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
-		propagate(protocol, messages, intent, &mut self.peers, &self.validators);
+		let messages = self.messages.iter().filter_map(|entry| {
+			if entry.topic == topic {
+				Some((&entry.message_hash, &entry.topic, &entry.message))
+			} else {
+				None
+			}
+		});
+		let intent = if force {
+			MessageIntent::ForcedBroadcast
+		} else {
+			MessageIntent::broadcast()
+		};
+		propagate(
+			protocol,
+			messages,
+			intent,
+			&mut self.peers,
+			&self.validators,
+		);
 	}
 
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
@@ -419,7 +465,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				Entry::Vacant(vacant) => match validators.get(&engine_id) {
 					None => return true, // treat all messages with no validator as expired
 					Some(validator) => vacant.insert(validator.message_expired()),
-				}
+				},
 			};
 
 			(check_fn)(entry.topic, &entry.message.data)
@@ -439,29 +485,36 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
-	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
-	{
+	pub fn messages_for(
+		&mut self,
+		engine_id: ConsensusEngineId,
+		topic: B::Hash,
+	) -> mpsc::UnboundedReceiver<TopicNotification> {
 		let (tx, rx) = mpsc::unbounded();
-		for entry in self.messages.iter_mut()
+		for entry in self
+			.messages
+			.iter_mut()
 			.filter(|e| e.topic == topic && e.message.engine_id == engine_id)
 		{
 			tx.unbounded_send(TopicNotification {
-					message: entry.message.data.clone(),
-					sender: entry.sender.clone(),
-				})
-				.expect("receiver known to be live; qed");
+				message: entry.message.data.clone(),
+				sender: entry.sender.clone(),
+			})
+			.expect("receiver known to be live; qed");
 		}
 
-		self.live_message_sinks.entry((engine_id, topic)).or_default().push(tx);
+		self.live_message_sinks
+			.entry((engine_id, topic))
+			.or_default()
+			.push(tx);
 
 		rx
 	}
 
 	/// Handle an incoming ConsensusMessage for topic by who via protocol. Discard message if topic
-	/// already known, the message is old, its source peers isn't a registered peer or the connection
-	/// to them is broken. Return `Some(topic, message)` if it was added to the internal queue, `None`
-	/// in all other cases.
+	/// already known, the message is old, its source peers isn't a registered peer or the
+	/// connection to them is broken. Return `Some(topic, message)` if it was added to the internal
+	/// queue, `None` in all other cases.
 	pub fn on_incoming(
 		&mut self,
 		protocol: &mut dyn Context<B>,
@@ -475,17 +528,19 @@ impl<B: BlockT> ConsensusGossip<B> {
 			if self.known_messages.contains(&message_hash) {
 				trace!(target:"gossip", "Ignored already known message from {}", who);
 				protocol.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
-				continue;
+				continue
 			}
 
 			let engine_id = message.engine_id;
 			// validate the message
-			let validation = self.validators.get(&engine_id)
-				.cloned()
-				.map(|v| {
-					let mut context = NetworkContext { gossip: self, protocol, engine_id };
-					v.validate(&mut context, &who, &message.data)
-				});
+			let validation = self.validators.get(&engine_id).cloned().map(|v| {
+				let mut context = NetworkContext {
+					gossip: self,
+					protocol,
+					engine_id,
+				};
+				v.validate(&mut context, &who, &message.data)
+			});
 
 			let validation_result = match validation {
 				Some(ValidationResult::ProcessAndKeep(topic)) => Some((topic, true)),
@@ -495,20 +550,22 @@ impl<B: BlockT> ConsensusGossip<B> {
 					trace!(target:"gossip", "Unknown message engine id {:?} from {}", engine_id, who);
 					protocol.report_peer(who.clone(), rep::UNKNOWN_GOSSIP);
 					protocol.disconnect_peer(who.clone());
-					continue;
-				}
+					continue
+				},
 			};
 
 			if let Some((topic, keep)) = validation_result {
 				protocol.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 				if let Some(ref mut peer) = self.peers.get_mut(&who) {
 					peer.known_messages.insert(message_hash);
-					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
+					if let Entry::Occupied(mut entry) =
+						self.live_message_sinks.entry((engine_id, topic))
+					{
 						debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
 						entry.get_mut().retain(|sink| {
 							if let Err(e) = sink.unbounded_send(TopicNotification {
 								message: message.data.clone(),
-								sender: Some(who.clone())
+								sender: Some(who.clone()),
 							}) {
 								trace!(target: "gossip", "Error broadcasting message notification: {:?}", e);
 							}
@@ -519,7 +576,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 						}
 					}
 					if keep {
-						self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
+						self.register_message_hashed(
+							message_hash,
+							topic,
+							message,
+							Some(who.clone()),
+						);
 					}
 				} else {
 					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -538,7 +600,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: &PeerId,
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
-		force: bool
+		force: bool,
 	) {
 		let validator = self.validators.get(&engine_id);
 		let mut message_allowed = match validator {
@@ -548,7 +610,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			let mut batch = Vec::new();
-			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
+			for entry in self
+				.messages
+				.iter()
+				.filter(|m| m.topic == topic && m.message.engine_id == engine_id)
+			{
 				let intent = if force {
 					MessageIntent::ForcedBroadcast
 				} else {
@@ -556,11 +622,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 				};
 
 				if !force && peer.known_messages.contains(&entry.message_hash) {
-					continue;
+					continue
 				}
 
 				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
-					continue;
+					continue
 				}
 
 				peer.known_messages.insert(entry.message_hash.clone());
@@ -585,8 +651,18 @@ impl<B: BlockT> ConsensusGossip<B> {
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
-		propagate(protocol, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
+		let intent = if force {
+			MessageIntent::ForcedBroadcast
+		} else {
+			MessageIntent::broadcast()
+		};
+		propagate(
+			protocol,
+			iter::once((&message_hash, &topic, &message)),
+			intent,
+			&mut self.peers,
+			&self.validators,
+		);
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
@@ -628,32 +704,37 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 		Box::new(move |_topic, _data| true)
 	}
 
-	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
+	fn message_allowed<'a>(
+		&'a self,
+	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		Box::new(move |_who, _intent, _topic, _data| false)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures03::executor::block_on_stream;
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256};
+	use std::sync::Arc;
 
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	macro_rules! push_msg {
-		($consensus:expr, $topic:expr, $hash: expr, $m:expr) => {
+		($consensus:expr, $topic:expr, $hash:expr, $m:expr) => {
 			if $consensus.known_messages.put($hash, ()).is_none() {
 				$consensus.messages.push(MessageEntry {
 					message_hash: $hash,
 					topic: $topic,
-					message: ConsensusMessage { data: $m, engine_id: [0, 0, 0, 0]},
+					message: ConsensusMessage {
+						data: $m,
+						engine_id: [0, 0, 0, 0],
+					},
 					sender: None,
 				});
-			}
-		}
+				}
+		};
 	}
 
 	struct AllowAll;
@@ -724,13 +805,22 @@ mod tests {
 		let mut consensus = ConsensusGossip::<Block>::new();
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
-		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-		let topic = HashFor::<Block>::hash(&[1,2,3]);
+		let message = ConsensusMessage {
+			data: vec![4, 5, 6],
+			engine_id: [0, 0, 0, 0],
+		};
+		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
 
 		consensus.register_message(topic, message.clone());
 		let mut stream = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream.next(), Some(TopicNotification { message: message.data, sender: None }));
+		assert_eq!(
+			stream.next(),
+			Some(TopicNotification {
+				message: message.data,
+				sender: None
+			})
+		);
 	}
 
 	#[test]
@@ -738,8 +828,14 @@ mod tests {
 		let mut consensus = ConsensusGossip::<Block>::new();
 
 		let topic = [1; 32].into();
-		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
-		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
+		let msg_a = ConsensusMessage {
+			data: vec![1, 2, 3],
+			engine_id: [0, 0, 0, 0],
+		};
+		let msg_b = ConsensusMessage {
+			data: vec![4, 5, 6],
+			engine_id: [0, 0, 0, 0],
+		};
 
 		consensus.register_message(topic, msg_a);
 		consensus.register_message(topic, msg_b);
@@ -753,7 +849,10 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let data = vec![4, 5, 6];
-		let message = ConsensusMessage { data: data.clone(), engine_id: [0, 0, 0, 0] };
+		let message = ConsensusMessage {
+			data: data.clone(),
+			engine_id: [0, 0, 0, 0],
+		};
 		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
 
 		consensus.register_message(topic, message.clone());
@@ -761,8 +860,20 @@ mod tests {
 		let mut stream1 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 		let mut stream2 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream1.next(), Some(TopicNotification { message: data.clone(), sender: None }));
-		assert_eq!(stream2.next(), Some(TopicNotification { message: data, sender: None }));
+		assert_eq!(
+			stream1.next(),
+			Some(TopicNotification {
+				message: data.clone(),
+				sender: None
+			})
+		);
+		assert_eq!(
+			stream2.next(),
+			Some(TopicNotification {
+				message: data,
+				sender: None
+			})
+		);
 	}
 
 	#[test]
@@ -771,15 +882,27 @@ mod tests {
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
 		let topic = [1; 32].into();
-		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
-		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 1] };
+		let msg_a = ConsensusMessage {
+			data: vec![1, 2, 3],
+			engine_id: [0, 0, 0, 0],
+		};
+		let msg_b = ConsensusMessage {
+			data: vec![4, 5, 6],
+			engine_id: [0, 0, 0, 1],
+		};
 
 		consensus.register_message(topic, msg_a);
 		consensus.register_message(topic, msg_b);
 
 		let mut stream = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream.next(), Some(TopicNotification { message: vec![1, 2, 3], sender: None }));
+		assert_eq!(
+			stream.next(),
+			Some(TopicNotification {
+				message: vec![1, 2, 3],
+				sender: None
+			})
+		);
 
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);

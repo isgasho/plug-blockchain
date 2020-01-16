@@ -22,20 +22,21 @@ mod state_light;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{Result as RpcResult, futures::Future};
+use rpc::{futures::Future, Result as RpcResult};
+use std::sync::Arc;
 
 use api::Subscriptions;
-use client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
+use client::{
+	light::{blockchain::RemoteBlockchain, fetcher::Fetcher},
+	CallExecutor, Client,
+};
 use primitives::{
+	storage::{StorageChangeSet, StorageData, StorageKey},
 	Blake2Hasher, Bytes, H256,
-	storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
-use sp_runtime::{
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
 
 use sp_api::Metadata;
 
@@ -45,11 +46,11 @@ pub use api::state::*;
 
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
-	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-		RA: Send + Sync + 'static,
+where
+	Block: BlockT<Hash = H256> + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
 	fn call(
@@ -86,8 +87,10 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
+		Box::new(
+			self.storage(block, key)
+				.map(|x| x.map(|x| x.0.len() as u64)),
+		)
 	}
 
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
@@ -121,8 +124,10 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		child_storage_key: StorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
-		Box::new(self.child_storage(block, child_storage_key, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
+		Box::new(
+			self.child_storage(block, child_storage_key, key)
+				.map(|x| x.map(|x| x.0.len() as u64)),
+		)
 	}
 
 	/// Returns the runtime metadata as an opaque blob.
@@ -131,7 +136,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// Get the runtime version.
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -177,14 +183,14 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	subscriptions: Subscriptions,
 ) -> State<B, E, Block, RA>
-	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-			Metadata<Block, Error = sp_blockchain::Error>,
+where
+	Block: BlockT<Hash = H256> + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+	RA: Send + Sync + 'static,
+	Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		Metadata<Block, Error = sp_blockchain::Error>,
 {
 	State {
 		backend: Box::new(self::state_full::FullState::new(client, subscriptions)),
@@ -198,12 +204,12 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> State<B, E, Block, RA>
-	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
-		F: Send + Sync + 'static,
+where
+	Block: BlockT<Hash = H256> + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+	RA: Send + Sync + 'static,
+	F: Send + Sync + 'static,
 {
 	State {
 		backend: Box::new(self::state_light::LightState::new(
@@ -221,11 +227,11 @@ pub struct State<B, E, Block, RA> {
 }
 
 impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
-	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+where
+	Block: BlockT<Hash = H256> + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+	RA: Send + Sync + 'static,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -241,15 +247,27 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.storage_keys(block, key_prefix)
 	}
 
-	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<StorageData>> {
+	fn storage(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, key)
 	}
 
-	fn storage_hash(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<Block::Hash>> {
+	fn storage_hash(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Option<Block::Hash>> {
 		self.backend.storage_hash(block, key)
 	}
 
-	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> FutureResult<Option<u64>> {
+	fn storage_size(
+		&self,
+		key: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Option<u64>> {
 		self.backend.storage_size(block, key)
 	}
 
@@ -257,7 +275,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>
+		block: Option<Block::Hash>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.child_storage(block, child_storage_key, key)
 	}
@@ -266,27 +284,30 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		&self,
 		child_storage_key: StorageKey,
 		key_prefix: StorageKey,
-		block: Option<Block::Hash>
+		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.child_storage_keys(block, child_storage_key, key_prefix)
+		self.backend
+			.child_storage_keys(block, child_storage_key, key_prefix)
 	}
 
 	fn child_storage_hash(
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>
+		block: Option<Block::Hash>,
 	) -> FutureResult<Option<Block::Hash>> {
-		self.backend.child_storage_hash(block, child_storage_key, key)
+		self.backend
+			.child_storage_hash(block, child_storage_key, key)
 	}
 
 	fn child_storage_size(
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>
+		block: Option<Block::Hash>,
 	) -> FutureResult<Option<u64>> {
-		self.backend.child_storage_size(block, child_storage_key, key)
+		self.backend
+			.child_storage_size(block, child_storage_key, key)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
@@ -297,7 +318,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		&self,
 		keys: Vec<StorageKey>,
 		from: Block::Hash,
-		to: Option<Block::Hash>
+		to: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend.query_storage(from, to, keys)
 	}
@@ -306,12 +327,16 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		&self,
 		meta: Self::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
-		keys: Option<Vec<StorageKey>>
+		keys: Option<Vec<StorageKey>>,
 	) {
 		self.backend.subscribe_storage(meta, subscriber, keys);
 	}
 
-	fn unsubscribe_storage(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_storage(
+		&self,
+		meta: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		self.backend.unsubscribe_storage(meta, id)
 	}
 
@@ -319,7 +344,11 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.runtime_version(at)
 	}
 
-	fn subscribe_runtime_version(&self, meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
+	fn subscribe_runtime_version(
+		&self,
+		meta: Self::Metadata,
+		subscriber: Subscriber<RuntimeVersion>,
+	) {
 		self.backend.subscribe_runtime_version(meta, subscriber);
 	}
 
@@ -332,6 +361,4 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	}
 }
 
-fn client_err(err: sp_blockchain::Error) -> Error {
-	Error::Client(Box::new(err))
-}
+fn client_err(err: sp_blockchain::Error) -> Error { Error::Client(Box::new(err)) }

@@ -29,15 +29,15 @@
 //! are feature-gated, so that one is compiled for the native and the other for the wasm side.
 
 use crate::utils::{
-	generate_crate_access, create_exchangeable_host_function_ident, get_function_arguments,
-	get_function_argument_names, get_trait_methods,
+	create_exchangeable_host_function_ident, generate_crate_access, get_function_argument_names,
+	get_function_arguments, get_trait_methods,
 };
 
 use syn::{
-	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, spanned::Spanned, parse_quote,
+	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, TraitItemMethod,
 };
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 use quote::{quote, quote_spanned};
 
@@ -62,13 +62,11 @@ fn function_for_method(
 	let std_impl = function_std_impl(trait_name, method, is_wasm_only)?;
 	let no_std_impl = function_no_std_impl(method)?;
 
-	Ok(
-		quote! {
-			#std_impl
+	Ok(quote! {
+		#std_impl
 
-			#no_std_impl
-		}
-	)
+		#no_std_impl
+	})
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
@@ -80,16 +78,14 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	let return_value = &method.sig.output;
 	let attrs = &method.attrs;
 
-	Ok(
-		quote! {
-			#[cfg(not(feature = "std"))]
-			#( #attrs )*
-			pub fn #function_name( #( #args, )* ) #return_value {
-				// Call the host function
-				#host_function_name.get()( #( #arg_names, )* )
-			}
+	Ok(quote! {
+		#[cfg(not(feature = "std"))]
+		#( #attrs )*
+		pub fn #function_name( #( #args, )* ) #return_value {
+			// Call the host function
+			#host_function_name.get()( #( #arg_names, )* )
 		}
-	)
+	})
 }
 
 /// Generates the bare function implementation for `cfg(feature = "std")`.
@@ -102,17 +98,16 @@ fn function_std_impl(
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
 		// Add the function context as last parameter when this is a wasm only interface.
-		iter::from_fn(||
+		iter::from_fn(|| {
 			if is_wasm_only {
-				Some(
-					parse_quote!(
-						mut __function_context__: &mut dyn #crate_::wasm_interface::FunctionContext
-					)
-				)
+				Some(parse_quote!(
+					mut __function_context__: &mut dyn #crate_::wasm_interface::FunctionContext
+				))
 			} else {
 				None
 			}
-		).take(1),
+		})
+		.take(1),
 	);
 	let return_value = &method.sig.output;
 	let attrs = &method.attrs;
@@ -120,15 +115,13 @@ fn function_std_impl(
 	let vis = if is_wasm_only { quote!() } else { quote!(pub) };
 	let call_to_trait = generate_call_to_trait(trait_name, method, is_wasm_only);
 
-	Ok(
-		quote_spanned! { method.span() =>
-			#[cfg(feature = "std")]
-			#( #attrs )*
-			#vis fn #function_name( #( #args, )* ) #return_value {
-				#call_to_trait
-			}
+	Ok(quote_spanned! { method.span() =>
+		#[cfg(feature = "std")]
+		#( #attrs )*
+		#vis fn #function_name( #( #args, )* ) #return_value {
+			#call_to_trait
 		}
-	)
+	})
 }
 
 /// Generate the call to the interface trait.

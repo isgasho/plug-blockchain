@@ -20,19 +20,29 @@
 //! See the documentation of [`Params`].
 
 pub use crate::protocol::ProtocolConfig;
-pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
 
-use crate::chain::{Client, FinalityProofProvider};
-use crate::on_demand_layer::OnDemand;
-use crate::service::{ExHashT, TransactionPool};
+use crate::{
+	chain::{Client, FinalityProofProvider},
+	on_demand_layer::OnDemand,
+	service::{ExHashT, TransactionPool},
+};
 use bitflags::bitflags;
 use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
+use sp_runtime::traits::Block as BlockT;
+use std::{
+	error::Error,
+	fs,
+	io::{self, Write},
+	net::Ipv4Addr,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
@@ -100,25 +110,17 @@ bitflags! {
 
 impl Roles {
 	/// Does this role represents a client that holds full chain data locally?
-	pub fn is_full(&self) -> bool {
-		self.intersects(Roles::FULL | Roles::AUTHORITY)
-	}
+	pub fn is_full(&self) -> bool { self.intersects(Roles::FULL | Roles::AUTHORITY) }
 
 	/// Does this role represents a client that does not participates in the consensus?
-	pub fn is_authority(&self) -> bool {
-		*self == Roles::AUTHORITY
-	}
+	pub fn is_authority(&self) -> bool { *self == Roles::AUTHORITY }
 
 	/// Does this role represents a client that does not hold full chain data locally?
-	pub fn is_light(&self) -> bool {
-		!self.is_full()
-	}
+	pub fn is_light(&self) -> bool { !self.is_full() }
 }
 
 impl codec::Encode for Roles {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) { dest.push_byte(self.bits()) }
 }
 
 impl codec::EncodeLike for Roles {}
@@ -140,9 +142,7 @@ pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
 pub struct DummyFinalityProofRequestBuilder;
 
 impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuilder {
-	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> {
-		Vec::new()
-	}
+	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> { Vec::new() }
 }
 
 /// Shared finality proof request builder struct used by the queue.
@@ -153,16 +153,12 @@ pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
 impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
-	}
+	fn from(bytes: &'a [u8]) -> ProtocolId { ProtocolId(bytes.into()) }
 }
 
 impl ProtocolId {
 	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
-	}
+	pub fn as_bytes(&self) -> &[u8] { self.0.as_ref() }
 }
 
 /// Parses a string address and splits it into Multiaddress and PeerId, if
@@ -173,22 +169,31 @@ impl ProtocolId {
 /// ```
 /// # use sc_network::{Multiaddr, PeerId, config::parse_str_addr};
 /// let (peer_id, addr) = parse_str_addr(
-/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-/// ).unwrap();
-/// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
-/// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
+/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+/// 	)
+/// .unwrap();
+/// assert_eq!(
+/// 	peer_id,
+/// 	"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
+/// 		.parse::<PeerId>()
+/// 		.unwrap()
+/// 	);
+/// assert_eq!(
+/// 	addr,
+/// 	"/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap()
+/// 	);
 /// ```
-///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let addr: Multiaddr = addr_str.parse()?;
 	parse_addr(addr)
 }
 
 /// Splits a Multiaddress into a Multiaddress and PeerId.
-pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
+pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) => {
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
+		},
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -227,9 +232,7 @@ impl std::error::Error for ParseErr {
 }
 
 impl From<multiaddr::Error> for ParseErr {
-	fn from(err: multiaddr::Error) -> ParseErr {
-		ParseErr::MultiaddrParse(err)
-	}
+	fn from(err: multiaddr::Error) -> ParseErr { ParseErr::MultiaddrParse(err) }
 }
 
 /// Network service configuration.
@@ -295,29 +298,31 @@ impl Default for NetworkConfiguration {
 
 impl NetworkConfiguration {
 	/// Create a new instance of default settings.
-	pub fn new() -> Self {
-		Self::default()
-	}
+	pub fn new() -> Self { Self::default() }
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
+		config.listen_addresses =
+			vec![
+				iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+					.chain(iter::once(multiaddr::Protocol::Tcp(0)))
+					.collect(),
+			];
 		config
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
 	pub fn new_memory() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
+		config.listen_addresses =
+			vec![
+				iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+					.chain(iter::once(multiaddr::Protocol::Tcp(0)))
+					.collect(),
+			];
 		config
 	}
 }
@@ -337,8 +342,8 @@ pub enum TransportConfig {
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or environment
-		/// and libp2p.
+		/// need some binding between the networking provided by the operating system or
+		/// environment and libp2p.
 		///
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
@@ -376,7 +381,7 @@ impl NonReservedPeerMode {
 #[derive(Clone, Debug)]
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
-	Ed25519(Secret<ed25519::SecretKey>)
+	Ed25519(Secret<ed25519::SecretKey>),
 }
 
 /// The options for obtaining a Ed25519 secret key.
@@ -394,7 +399,7 @@ pub enum Secret<K> {
 	///   * `ed25519::SecretKey`: An unencoded 32 bytes Ed25519 secret key.
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
-	New
+	New,
 }
 
 impl<K> fmt::Debug for Secret<K> {
@@ -412,28 +417,27 @@ impl NodeKeyConfig {
 	///
 	///  * If the secret is configured as input, the corresponding keypair is returned.
 	///
-	///  * If the secret is configured as a file, it is read from that file, if it exists.
-	///    Otherwise a new secret is generated and stored. In either case, the
-	///    keypair obtained from the secret is returned.
+	///  * If the secret is configured as a file, it is read from that file, if it exists. Otherwise
+	///    a new secret is generated and stored. In either case, the keypair obtained from the
+	///    secret is returned.
 	///
-	///  * If the secret is configured to be new, it is generated and the corresponding
-	///    keypair is returned.
+	///  * If the secret is configured to be new, it is generated and the corresponding keypair is
+	///    returned.
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {
-			Ed25519(Secret::New) =>
-				Ok(Keypair::generate_ed25519()),
+			Ed25519(Secret::New) => Ok(Keypair::generate_ed25519()),
 
-			Ed25519(Secret::Input(k)) =>
-				Ok(Keypair::Ed25519(k.into())),
+			Ed25519(Secret::Input(k)) => Ok(Keypair::Ed25519(k.into())),
 
-			Ed25519(Secret::File(f)) =>
-				get_secret(f,
-					|mut b| ed25519::SecretKey::from_bytes(&mut b),
-					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec())
-				.map(ed25519::Keypair::from)
-				.map(Keypair::Ed25519),
+			Ed25519(Secret::File(f)) => get_secret(
+				f,
+				|mut b| ed25519::SecretKey::from_bytes(&mut b),
+				ed25519::SecretKey::generate,
+				|b| b.as_ref().to_vec(),
+			)
+			.map(ed25519::Keypair::from)
+			.map(Keypair::Ed25519),
 		}
 	}
 }
@@ -450,9 +454,9 @@ where
 	W: Fn(&K) -> Vec<u8>,
 {
 	std::fs::read(&file)
-		.and_then(|mut sk_bytes|
-			parse(&mut sk_bytes)
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
+		.and_then(|mut sk_bytes| {
+			parse(&mut sk_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+		})
 		.or_else(|e| {
 			if e.kind() == io::ErrorKind::NotFound {
 				file.as_ref().parent().map_or(Ok(()), fs::create_dir_all)?;
@@ -470,7 +474,7 @@ where
 /// Write secret bytes to a file.
 fn write_secret_file<P>(path: P, sk_bytes: &[u8]) -> io::Result<()>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	let mut file = open_secret_file(&path)?;
 	file.write_all(sk_bytes)
@@ -480,7 +484,7 @@ where
 #[cfg(unix)]
 fn open_secret_file<P>(path: P) -> io::Result<fs::File>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	use std::os::unix::fs::OpenOptionsExt;
 	fs::OpenOptions::new()
@@ -494,7 +498,7 @@ where
 #[cfg(not(unix))]
 fn open_secret_file<P>(path: P) -> Result<fs::File, io::Error>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	fs::OpenOptions::new()
 		.write(true)
@@ -515,7 +519,7 @@ mod tests {
 		match kp {
 			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
 			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
-			_ => panic!("Unexpected keypair.")
+			_ => panic!("Unexpected keypair."),
 		}
 	}
 
@@ -524,16 +528,24 @@ mod tests {
 		let tmp = tempdir_with_prefix("x");
 		std::fs::remove_dir(tmp.path()).unwrap(); // should be recreated
 		let file = tmp.path().join("x").to_path_buf();
-		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
-		let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
+		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone()))
+			.into_keypair()
+			.unwrap();
+		let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone()))
+			.into_keypair()
+			.unwrap();
 		assert!(file.is_file() && secret_bytes(&kp1) == secret_bytes(&kp2))
 	}
 
 	#[test]
 	fn test_secret_input() {
 		let sk = ed25519::SecretKey::generate();
-		let kp1 = NodeKeyConfig::Ed25519(Secret::Input(sk.clone())).into_keypair().unwrap();
-		let kp2 = NodeKeyConfig::Ed25519(Secret::Input(sk)).into_keypair().unwrap();
+		let kp1 = NodeKeyConfig::Ed25519(Secret::Input(sk.clone()))
+			.into_keypair()
+			.unwrap();
+		let kp2 = NodeKeyConfig::Ed25519(Secret::Input(sk))
+			.into_keypair()
+			.unwrap();
 		assert!(secret_bytes(&kp1) == secret_bytes(&kp2));
 	}
 

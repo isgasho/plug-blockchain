@@ -18,14 +18,15 @@
 
 pub mod error;
 
-use jsonrpc_core::Result as RpcResult;
-use jsonrpc_core::futures::Future;
+use self::error::FutureResult;
+use jsonrpc_core::{futures::Future, Result as RpcResult};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::Bytes;
-use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
+use primitives::{
+	storage::{StorageChangeSet, StorageData, StorageKey},
+	Bytes,
+};
 use runtime_version::RuntimeVersion;
-use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;
 
@@ -41,7 +42,8 @@ pub trait StateApi<Hash> {
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>)
+		-> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
@@ -61,7 +63,7 @@ pub trait StateApi<Hash> {
 		&self,
 		child_storage_key: StorageKey,
 		prefix: StorageKey,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
@@ -70,7 +72,7 @@ pub trait StateApi<Hash> {
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
@@ -79,7 +81,7 @@ pub trait StateApi<Hash> {
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
@@ -88,7 +90,7 @@ pub trait StateApi<Hash> {
 		&self,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
@@ -99,7 +101,8 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
 	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
 
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	/// Query historical storage entries (by key) starting from a block given as the second
+	/// parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
@@ -108,7 +111,7 @@ pub trait StateApi<Hash> {
 		&self,
 		keys: Vec<StorageKey>,
 		block: Hash,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// New runtime version subscription
@@ -118,7 +121,11 @@ pub trait StateApi<Hash> {
 		name = "state_subscribeRuntimeVersion",
 		alias("chain_subscribeRuntimeVersion")
 	)]
-	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
+	fn subscribe_runtime_version(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<RuntimeVersion>,
+	);
 
 	/// Unsubscribe from runtime version subscription
 	#[pubsub(
@@ -127,17 +134,34 @@ pub trait StateApi<Hash> {
 		name = "state_unsubscribeRuntimeVersion",
 		alias("chain_unsubscribeRuntimeVersion")
 	)]
-	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_runtime_version(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 
 	/// New storage subscription
-	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
+	#[pubsub(
+		subscription = "state_storage",
+		subscribe,
+		name = "state_subscribeStorage"
+	)]
 	fn subscribe_storage(
-		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<StorageChangeSet<Hash>>,
+		keys: Option<Vec<StorageKey>>,
 	);
 
 	/// Unsubscribe from storage subscription
-	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
+	#[pubsub(
+		subscription = "state_storage",
+		unsubscribe,
+		name = "state_unsubscribeStorage"
+	)]
 	fn unsubscribe_storage(
-		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
 	) -> RpcResult<bool>;
 }

@@ -19,10 +19,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
-use codec::{Encode, Codec};
-use support::{Parameter, decl_module, decl_event, decl_storage};
-use sp_runtime::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
+use codec::{Codec, Encode};
+use rstd::{convert::TryInto, marker::PhantomData, prelude::*};
+use sp_runtime::traits::{LookupError, Member, One, SimpleArithmetic, StaticLookup};
+use support::{decl_event, decl_module, decl_storage, Parameter};
 use system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
@@ -47,11 +47,13 @@ pub trait ResolveHint<AccountId, AccountIndex> {
 
 /// Simple encode-based resolve hint implementation.
 pub struct SimpleResolveHint<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
-impl<AccountId: Encode, AccountIndex: From<u32>>
-	ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex>
+impl<AccountId: Encode, AccountIndex: From<u32>> ResolveHint<AccountId, AccountIndex>
+	for SimpleResolveHint<AccountId, AccountIndex>
 {
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex> {
-		Some(AccountIndex::from(who.using_encoded(|e| e[0] as u32 + e[1] as u32 * 256)))
+		Some(AccountIndex::from(
+			who.using_encoded(|e| e[0] as u32 + e[1] as u32 * 256),
+		))
 	}
 }
 
@@ -140,7 +142,7 @@ impl<T: Trait> Module<T> {
 
 	/// Lookup an address to get an Id, if there's one there.
 	pub fn lookup_address(
-		a: address::Address<T::AccountId, T::AccountIndex>
+		a: address::Address<T::AccountId, T::AccountIndex>,
 	) -> Option<T::AccountId> {
 		match a {
 			address::Address::Id(i) => Some(i),
@@ -150,9 +152,7 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	fn enum_set_size() -> T::AccountIndex {
-		ENUM_SET_SIZE.into()
-	}
+	fn enum_set_size() -> T::AccountIndex { ENUM_SET_SIZE.into() }
 }
 
 impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
@@ -161,11 +161,11 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	//
 	// # <weight>
 	// - Independent of the arguments.
-	// - Given the correct value of `Self::next_enum_set`, it always has a limited
-	//   number of reads and writes and no complex computation.
+	// - Given the correct value of `Self::next_enum_set`, it always has a limited number of reads
+	//   and writes and no complex computation.
 	//
-	// As for storage, calling this function with _non-dead-indices_ will linearly grow the length of
-	// of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
+	// As for storage, calling this function with _non-dead-indices_ will linearly grow the length
+	// of of `Self::enum_set`. Appropriate economic incentives should exist to make callers of this
 	// function provide a `who` argument that reclaims a dead account.
 	//
 	// At the time of this writing, only the Balances module calls this function upon creation
@@ -199,7 +199,7 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 		let mut set = loop {
 			let set = Self::enum_set(set_index);
 			if set.len() < ENUM_SET_SIZE as usize {
-				break set;
+				break set
 			}
 			set_index += One::one();
 		};
@@ -229,7 +229,5 @@ impl<T: Trait> StaticLookup for Module<T> {
 		Self::lookup_address(a).ok_or(LookupError)
 	}
 
-	fn unlookup(a: Self::Target) -> Self::Source {
-		address::Address::Id(a)
-	}
+	fn unlookup(a: Self::Target) -> Self::Source { address::Address::Id(a) }
 }

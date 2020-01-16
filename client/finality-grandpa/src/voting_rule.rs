@@ -23,11 +23,14 @@
 use std::sync::Arc;
 
 use client_api::blockchain::HeaderBackend;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, NumberFor, One, Zero},
+};
 
 /// A trait for custom voting rules in GRANDPA.
-pub trait VotingRule<Block, B>: Send + Sync where
+pub trait VotingRule<Block, B>: Send + Sync
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -52,7 +55,8 @@ pub trait VotingRule<Block, B>: Send + Sync where
 	) -> Option<(Block::Hash, NumberFor<Block>)>;
 }
 
-impl<Block, B> VotingRule<Block, B> for () where
+impl<Block, B> VotingRule<Block, B> for ()
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -71,7 +75,8 @@ impl<Block, B> VotingRule<Block, B> for () where
 /// block, in the best case exactly one block behind it.
 #[derive(Clone)]
 pub struct BeforeBestBlock;
-impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
+impl<Block, B> VotingRule<Block, B> for BeforeBestBlock
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -83,14 +88,14 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
 		if current_target.number().is_zero() {
-			return None;
+			return None
 		}
 
 		if current_target.number() == best_target.number() {
 			return Some((
 				current_target.parent_hash().clone(),
 				*current_target.number() - One::one(),
-			));
+			))
 		}
 
 		None
@@ -102,7 +107,8 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 /// should fall.
 pub struct ThreeQuartersOfTheUnfinalizedChain;
 
-impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
+impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -127,7 +133,7 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return None;
+			return None
 		}
 
 		let mut target_header = current_target.clone();
@@ -137,18 +143,18 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 		loop {
 			if *target_header.number() < target_number {
 				unreachable!(
-					"we are traversing backwards from a known block; \
-					 blocks are stored contiguously; \
-					 qed"
+					"we are traversing backwards from a known block; blocks are stored \
+					 contiguously; qed"
 				);
 			}
 			if *target_header.number() == target_number {
-				return Some((target_hash, target_number));
+				return Some((target_hash, target_number))
 			}
 
 			target_hash = *target_header.parent_hash();
-			target_header = backend.header(BlockId::Hash(target_hash)).ok()?
-				.expect("Header known to exist due to the existence of one of its descendents; qed");
+			target_header = backend.header(BlockId::Hash(target_hash)).ok()?.expect(
+				"Header known to exist due to the existence of one of its descendents; qed",
+			);
 		}
 	}
 }
@@ -165,7 +171,8 @@ impl<B, Block> Clone for VotingRules<B, Block> {
 	}
 }
 
-impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
+impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B>
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -176,20 +183,15 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		let restricted_target = self.rules.iter().fold(
-			current_target.clone(),
-			|current_target, rule| {
-				rule.restrict_vote(
-					backend,
-					base,
-					best_target,
-					&current_target,
-				)
-					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
-					.and_then(std::convert::identity)
-					.unwrap_or(current_target)
-			},
-		);
+		let restricted_target =
+			self.rules
+				.iter()
+				.fold(current_target.clone(), |current_target, rule| {
+					rule.restrict_vote(backend, base, best_target, &current_target)
+						.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
+						.and_then(std::convert::identity)
+						.unwrap_or(current_target)
+				});
 
 		let restricted_hash = restricted_target.hash();
 
@@ -207,7 +209,8 @@ pub struct VotingRulesBuilder<Block, B> {
 	rules: Vec<Box<dyn VotingRule<Block, B>>>,
 }
 
-impl<Block, B> Default for VotingRulesBuilder<Block, B> where
+impl<Block, B> Default for VotingRulesBuilder<Block, B>
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -218,19 +221,17 @@ impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 	}
 }
 
-impl<Block, B> VotingRulesBuilder<Block, B> where
+impl<Block, B> VotingRulesBuilder<Block, B>
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
 	/// Return a new voting rule builder using the given backend.
-	pub fn new() -> Self {
-		VotingRulesBuilder {
-			rules: Vec::new(),
-		}
-	}
+	pub fn new() -> Self { VotingRulesBuilder { rules: Vec::new() } }
 
 	/// Add a new voting rule to the builder.
-	pub fn add<R>(mut self, rule: R) -> Self where
+	pub fn add<R>(mut self, rule: R) -> Self
+	where
 		R: VotingRule<Block, B> + 'static,
 	{
 		self.rules.push(Box::new(rule));
@@ -238,8 +239,9 @@ impl<Block, B> VotingRulesBuilder<Block, B> where
 	}
 
 	/// Add all given voting rules to the builder.
-	pub fn add_all<I>(mut self, rules: I) -> Self where
-		I: IntoIterator<Item=Box<dyn VotingRule<Block, B>>>,
+	pub fn add_all<I>(mut self, rules: I) -> Self
+	where
+		I: IntoIterator<Item = Box<dyn VotingRule<Block, B>>>,
 	{
 		self.rules.extend(rules);
 		self
@@ -254,7 +256,8 @@ impl<Block, B> VotingRulesBuilder<Block, B> where
 	}
 }
 
-impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>> where
+impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>>
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {

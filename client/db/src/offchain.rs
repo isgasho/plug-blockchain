@@ -16,10 +16,7 @@
 
 //! RocksDB-based offchain workers local storage.
 
-use std::{
-	collections::HashMap,
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::columns;
 use kvdb::KeyValueDB;
@@ -34,8 +31,7 @@ pub struct LocalStorage {
 
 impl std::fmt::Debug for LocalStorage {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		fmt.debug_struct("LocalStorage")
-			.finish()
+		fmt.debug_struct("LocalStorage").finish()
 	}
 }
 
@@ -69,7 +65,8 @@ impl primitives::offchain::OffchainStorage for LocalStorage {
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.db.get(columns::OFFCHAIN, &key)
+		self.db
+			.get(columns::OFFCHAIN, &key)
 			.ok()
 			.and_then(|x| x)
 			.map(|v| v.to_vec())
@@ -91,9 +88,7 @@ impl primitives::offchain::OffchainStorage for LocalStorage {
 		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			let val = self.db.get(columns::OFFCHAIN, &key)
-				.ok()
-				.and_then(|x| x);
+			let val = self.db.get(columns::OFFCHAIN, &key).ok().and_then(|x| x);
 			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {
@@ -129,9 +124,15 @@ mod tests {
 		storage.set(prefix, key, value);
 		assert_eq!(storage.get(prefix, key), Some(value.to_vec()));
 
-		assert_eq!(storage.compare_and_set(prefix, key, Some(value), b"asd"), true);
+		assert_eq!(
+			storage.compare_and_set(prefix, key, Some(value), b"asd"),
+			true
+		);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
-		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
+		assert!(
+			storage.locks.lock().is_empty(),
+			"Locks map should be empty!"
+		);
 	}
 
 	#[test]
@@ -142,7 +143,9 @@ mod tests {
 
 		assert_eq!(storage.compare_and_set(prefix, key, None, b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
-		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
+		assert!(
+			storage.locks.lock().is_empty(),
+			"Locks map should be empty!"
+		);
 	}
-
 }

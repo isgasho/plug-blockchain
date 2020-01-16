@@ -20,15 +20,15 @@
 #![warn(missing_docs)]
 
 use core::marker::PhantomData;
+use frame_support::storage::generator::{
+	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue,
+};
 use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
 use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
-use serde::{de::DeserializeOwned, Serialize};
-use frame_support::storage::generator::{
-	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
-};
-use sp_core_storage::{StorageData, StorageKey};
 use sc_rpc_api::state::StateClient;
+use serde::{de::DeserializeOwned, Serialize};
+use sp_core_storage::{StorageData, StorageKey};
 
 /// A typed query on chain state usable from an RPC client.
 ///
@@ -55,7 +55,7 @@ use sc_rpc_api::state::StateClient;
 /// # struct TestRuntime;
 /// #
 /// # decl_module! {
-///	#     pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+/// 	#     pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 /// # }
 /// #
 /// pub type Loc = (i64, i64, i64);
@@ -63,13 +63,13 @@ use sc_rpc_api::state::StateClient;
 ///
 /// // Note that all fields are marked pub.
 /// decl_storage! {
-///     trait Store for Module<T: Trait> as TestRuntime {
-///         pub LastActionId: u64;
-///         pub Voxels: map Loc => Block;
-///         pub Actions: linked_map u64 => Loc;
-///         pub Prefab: double_map u128, blake2_256((i8, i8, i8)) => Block;
-///     }
-/// }
+/// trait Store for Module<T: Trait> as TestRuntime {
+/// 	pub LastActionId: u64;
+/// 	pub Voxels: map Loc => Block;
+/// 	pub Actions: linked_map u64 => Loc;
+/// 	pub Prefab: double_map u128, blake2_256((i8, i8, i8)) => Block;
+/// 			}
+/// 			}
 ///
 /// # async fn test() -> Result<(), RpcError> {
 /// let conn = http::connect("http://[::1]:9933").compat().await?;

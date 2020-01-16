@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::utils::{
-	unwrap_or_error, generate_crate_access, generate_hidden_includes,
-	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
-	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
-	return_type_extract_type, generate_call_api_at_fn_name, prefix_function_with_trait,
+	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
+	generate_hidden_includes, generate_method_runtime_api_impl_name,
+	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
+	prefix_function_with_trait, return_type_extract_type, unwrap_or_error,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -26,9 +26,11 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature,
-	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, parse_quote
+	fold::{self, Fold},
+	parse::{Error, Parse, ParseStream, Result},
+	parse_macro_input, parse_quote,
+	spanned::Spanned,
+	GenericArgument, Ident, ImplItem, ItemImpl, Path, PathArguments, Signature, Type, TypePath,
 };
 
 use std::{collections::HashSet, iter};
@@ -59,7 +61,7 @@ fn generate_impl_call(
 	signature: &Signature,
 	runtime: &Type,
 	input: &Ident,
-	impl_trait: &Path
+	impl_trait: &Path,
 ) -> Result<TokenStream> {
 	let params = extract_parameter_names_types_and_borrows(signature)?;
 
@@ -73,38 +75,37 @@ fn generate_impl_call(
 	let ptypes = params.iter().map(|v| &v.1);
 	let pborrow = params.iter().map(|v| &v.2);
 
-	Ok(
-		quote!(
-			#(
-				let #pnames : #ptypes = match #c_iter::Decode::decode(&mut #input) {
-					Ok(input) => input,
-					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
-				};
-			)*
+	Ok(quote!(
+		#(
+			let #pnames : #ptypes = match #c_iter::Decode::decode(&mut #input) {
+				Ok(input) => input,
+				Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
+			};
+		)*
 
-			#[allow(deprecated)]
-			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
-		)
-	)
+		#[allow(deprecated)]
+		<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
+	))
 }
 
 /// Extract the trait that is implemented in the given `ItemImpl`.
 fn extract_impl_trait<'a>(impl_: &'a ItemImpl) -> Result<&'a Path> {
-	impl_.trait_.as_ref().map(|v| &v.1).ok_or_else(
-		|| Error::new(impl_.span(), "Only implementation of traits are supported!")
-	).and_then(|p| {
-		if p.segments.len() > 1 {
-			Ok(p)
-		} else {
-			Err(
-				Error::new(
+	impl_
+		.trait_
+		.as_ref()
+		.map(|v| &v.1)
+		.ok_or_else(|| Error::new(impl_.span(), "Only implementation of traits are supported!"))
+		.and_then(|p| {
+			if p.segments.len() > 1 {
+				Ok(p)
+			} else {
+				Err(Error::new(
 					p.span(),
-					"The implemented trait has to be referenced with a path, \
-					e.g. `impl client::Core for Runtime`."
-				)
-			)
-		}
-	})
+					"The implemented trait has to be referenced with a path, e.g. `impl \
+					 client::Core for Runtime`.",
+				))
+			}
+		})
 }
 
 /// Extracts the runtime block identifier.
@@ -116,26 +117,29 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 		.ok_or_else(|| Error::new(span, "Empty path not supported"))?;
 
 	match &generics.arguments {
-		PathArguments::AngleBracketed(ref args) => {
-			args.args.first().and_then(|v| match v {
-			GenericArgument::Type(Type::Path(ref block)) => Some(block),
-				_ => None
-			}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
-		},
+		PathArguments::AngleBracketed(ref args) => args
+			.args
+			.first()
+			.and_then(|v| match v {
+				GenericArgument::Type(Type::Path(ref block)) => Some(block),
+				_ => None,
+			})
+			.ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter.")),
 		PathArguments::None => {
 			let span = trait_.segments.last().as_ref().unwrap().span();
 			Err(Error::new(span, "Missing `Block` generic parameter."))
 		},
-		PathArguments::Parenthesized(_) => {
-			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
-		}
+		PathArguments::Parenthesized(_) => Err(Error::new(
+			generics.arguments.span(),
+			"Unexpected parentheses in path!",
+		)),
 	}
 }
 
 /// Generate all the implementation calls for the given functions.
 fn generate_impl_calls(
 	impls: &[ItemImpl],
-	input: &Ident
+	input: &Ident,
 ) -> Result<Vec<(Ident, Ident, TokenStream)>> {
 	let mut impl_calls = Vec::new();
 
@@ -150,16 +154,14 @@ fn generate_impl_calls(
 
 		for item in &impl_.items {
 			if let ImplItem::Method(method) = item {
-				let impl_call = generate_impl_call(
-					&method.sig,
-					&impl_.self_ty,
-					input,
-					&impl_trait
-				)?;
+				let impl_call =
+					generate_impl_call(&method.sig, &impl_.self_ty, input, &impl_trait)?;
 
-				impl_calls.push(
-					(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
-				);
+				impl_calls.push((
+					impl_trait_ident.clone(),
+					method.sig.ident.clone(),
+					impl_call,
+				));
 			}
 		}
 	}
@@ -171,12 +173,13 @@ fn generate_impl_calls(
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let data = Ident::new("data", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let impl_calls = generate_impl_calls(impls, &data)?
-		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
-			let name = prefix_function_with_trait(&trait_, &fn_name);
-			quote!( #name => Some(#c::Encode::encode(&{ #impl_ })), )
-		});
+	let impl_calls =
+		generate_impl_calls(impls, &data)?
+			.into_iter()
+			.map(|(trait_, fn_name, impl_)| {
+				let name = prefix_function_with_trait(&trait_, &fn_name);
+				quote!( #name => Some(#c::Encode::encode(&{ #impl_ })), )
+			});
 
 	Ok(quote!(
 		#[cfg(feature = "std")]
@@ -193,31 +196,32 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let impl_calls = generate_impl_calls(impls, &input)?
-		.into_iter()
-		.map(|(trait_, fn_name, impl_)| {
-			let fn_name = Ident::new(
-				&prefix_function_with_trait(&trait_, &fn_name),
-				Span::call_site()
-			);
+	let impl_calls =
+		generate_impl_calls(impls, &input)?
+			.into_iter()
+			.map(|(trait_, fn_name, impl_)| {
+				let fn_name = Ident::new(
+					&prefix_function_with_trait(&trait_, &fn_name),
+					Span::call_site(),
+				);
 
-			quote!(
-				#[cfg(not(feature = "std"))]
-				#[no_mangle]
-				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
-					let mut #input = if input_len == 0 {
-						&[0u8; 0]
-					} else {
-						unsafe {
-							#c::slice::from_raw_parts(input_data, input_len)
-						}
-					};
+				quote!(
+					#[cfg(not(feature = "std"))]
+					#[no_mangle]
+					pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+						let mut #input = if input_len == 0 {
+							&[0u8; 0]
+						} else {
+							unsafe {
+								#c::slice::from_raw_parts(input_data, input_len)
+							}
+						};
 
-					let output = { #impl_ };
-					#c::to_substrate_wasm_fn_return_value(&output)
-				}
-			)
-		});
+						let output = { #impl_ };
+						#c::to_substrate_wasm_fn_return_value(&output)
+					}
+				)
+			});
 
 	Ok(quote!( #( #impl_calls )* ))
 }
@@ -243,9 +247,10 @@ fn generate_node_block_and_block_id_ty(runtime: &Type) -> (TokenStream, TokenStr
 
 fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let runtime = &impls.get(0).ok_or_else(||
-		Error::new(Span::call_site(), "No api implementation given!")
-	)?.self_ty;
+	let runtime = &impls
+		.get(0)
+		.ok_or_else(|| Error::new(Span::call_site(), "No api implementation given!"))?
+		.self_ty;
 	let (block, block_id) = generate_node_block_and_block_id_ty(runtime);
 
 	Ok(quote!(
@@ -406,7 +411,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
-
 /// Auxiliary data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
@@ -448,22 +452,30 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 			// Generate the access to the native parameters
 			let param_tuple_access = if input.sig.inputs.len() == 1 {
-				vec![ quote!( p ) ]
+				vec![quote!(p)]
 			} else {
-				input.sig.inputs.iter().enumerate().map(|(i, _)| {
-					let i = syn::Index::from(i);
-					quote!( p.#i )
-				}).collect::<Vec<_>>()
+				input
+					.sig
+					.inputs
+					.iter()
+					.enumerate()
+					.map(|(i, _)| {
+						let i = syn::Index::from(i);
+						quote!( p.#i )
+					})
+					.collect::<Vec<_>>()
 			};
 
 			let (param_types, error) = match extract_parameter_names_types_and_borrows(&input.sig) {
 				Ok(res) => (
-					res.into_iter().map(|v| {
-						let ty = v.1;
-						let borrow = v.2;
-						quote!( #borrow #ty )
-					}).collect::<Vec<_>>(),
-					None
+					res.into_iter()
+						.map(|v| {
+							let ty = v.1;
+							let borrow = v.2;
+							quote!( #borrow #ty )
+						})
+						.collect::<Vec<_>>(),
+					None,
 				),
 				Err(e) => (Vec::new(), Some(e.to_compile_error())),
 			};
@@ -477,10 +489,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				params_encoded: Vec<u8>,
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(
-				&self.impl_trait,
-				&input.sig.ident,
-			);
+			input.sig.ident =
+				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.output);
 
 			// Generate the correct return type.
@@ -518,7 +528,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			)
 		};
 
-		let mut input =	fold::fold_impl_item_method(self, input);
+		let mut input = fold::fold_impl_item_method(self, input);
 		// We need to set the block, after we modified the rest of the ast, otherwise we would
 		// modify our generated block as well.
 		input.block = block;
@@ -527,17 +537,20 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
 		// Implement the trait for the `RuntimeApiImpl`
-		input.self_ty = Box::new(parse_quote!( RuntimeApiImpl<RuntimeApiImplCall> ));
+		input.self_ty = Box::new(parse_quote!(RuntimeApiImpl<RuntimeApiImplCall>));
 
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 		let block = self.node_block;
-		input.generics.params.push(
-			parse_quote!( RuntimeApiImplCall: #crate_::CallRuntimeAt<#block> + 'static )
-		);
+		input
+			.generics
+			.params
+			.push(parse_quote!( RuntimeApiImplCall: #crate_::CallRuntimeAt<#block> + 'static ));
 
 		// The implementation for the `RuntimeApiImpl` is only required when compiling with
 		// the feature `std` or `test`.
-		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
+		input
+			.attrs
+			.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 
 		fold::fold_item_impl(self, input)
 	}
@@ -599,14 +612,11 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let span = trait_.span();
 		if !processed_traits.insert(trait_) {
-			return Err(
-				Error::new(
-					span,
-					"Two traits with the same name detected! \
-					The trait name is used to generate its ID. \
-					Please rename one trait at the declaration!"
-				)
-			)
+			return Err(Error::new(
+				span,
+				"Two traits with the same name detected! The trait name is used to generate its \
+				 ID. Please rename one trait at the declaration!",
+			))
 		}
 
 		let id: Path = parse_quote!( #path ID );
@@ -653,5 +663,6 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	).into()
+	)
+	.into()
 }

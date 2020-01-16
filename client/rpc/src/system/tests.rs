@@ -16,12 +16,11 @@
 
 use super::*;
 
-use network::{self, PeerId};
-use network::config::Roles;
-use test_client::runtime::Block;
 use assert_matches::assert_matches;
-use futures::{prelude::*, channel::mpsc};
+use futures::{channel::mpsc, prelude::*};
+use network::{self, config::Roles, PeerId};
 use std::thread;
+use test_client::runtime::Block;
 
 struct Status {
 	pub peers: usize,
@@ -67,33 +66,39 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						});
 					}
 					let _ = sender.send(peers);
-				}
+				},
 				Request::NetworkState(sender) => {
-					let _ = sender.send(serde_json::to_value(&network::NetworkState {
-						peer_id: String::new(),
-						listened_addresses: Default::default(),
-						external_addresses: Default::default(),
-						connected_peers: Default::default(),
-						not_connected_peers: Default::default(),
-						average_download_per_sec: 0,
-						average_upload_per_sec: 0,
-						peerset: serde_json::Value::Null,
-					}).unwrap());
+					let _ = sender.send(
+						serde_json::to_value(&network::NetworkState {
+							peer_id: String::new(),
+							listened_addresses: Default::default(),
+							external_addresses: Default::default(),
+							connected_peers: Default::default(),
+							not_connected_peers: Default::default(),
+							average_download_per_sec: 0,
+							average_upload_per_sec: 0,
+							peerset: serde_json::Value::Null,
+						})
+						.unwrap(),
+					);
 				},
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
-				}
+				},
 			};
 
 			future::ready(())
 		}))
 	});
-	System::new(SystemInfo {
-		impl_name: "testclient".into(),
-		impl_version: "0.2.0".into(),
-		chain_name: "testchain".into(),
-		properties: Default::default(),
-	}, tx)
+	System::new(
+		SystemInfo {
+			impl_name: "testclient".into(),
+			impl_version: "0.2.0".into(),
+			chain_name: "testchain".into(),
+			properties: Default::default(),
+		},
+		tx,
+	)
 }
 
 fn wait_receiver<T>(rx: Receiver<T>) -> T {
@@ -103,26 +108,17 @@ fn wait_receiver<T>(rx: Receiver<T>) -> T {
 
 #[test]
 fn system_name_works() {
-	assert_eq!(
-		api(None).system_name().unwrap(),
-		"testclient".to_owned()
-	);
+	assert_eq!(api(None).system_name().unwrap(), "testclient".to_owned());
 }
 
 #[test]
 fn system_version_works() {
-	assert_eq!(
-		api(None).system_version().unwrap(),
-		"0.2.0".to_owned()
-	);
+	assert_eq!(api(None).system_version().unwrap(), "0.2.0".to_owned());
 }
 
 #[test]
 fn system_chain_works() {
-	assert_eq!(
-		api(None).system_chain().unwrap(),
-		"testchain".to_owned()
-	);
+	assert_eq!(api(None).system_chain().unwrap(), "testchain".to_owned());
 }
 
 #[test]
@@ -135,22 +131,22 @@ fn system_properties_works() {
 
 #[test]
 fn system_health() {
-	assert_matches!(
-		wait_receiver(api(None).system_health()),
-		Health {
-			peers: 0,
-			is_syncing: false,
-			should_have_peers: true,
-		}
-	);
+	assert_matches!(wait_receiver(api(None).system_health()), Health {
+		peers: 0,
+		is_syncing: false,
+		should_have_peers: true,
+	});
 
 	assert_matches!(
-		wait_receiver(api(Status {
-			peer_id: PeerId::random(),
-			peers: 5,
-			is_syncing: true,
-			is_dev: true,
-		}).system_health()),
+		wait_receiver(
+			api(Status {
+				peer_id: PeerId::random(),
+				peers: 5,
+				is_syncing: true,
+				is_dev: true,
+			})
+			.system_health()
+		),
 		Health {
 			peers: 5,
 			is_syncing: true,
@@ -159,12 +155,15 @@ fn system_health() {
 	);
 
 	assert_eq!(
-		wait_receiver(api(Status {
-			peer_id: PeerId::random(),
-			peers: 5,
-			is_syncing: false,
-			is_dev: false,
-		}).system_health()),
+		wait_receiver(
+			api(Status {
+				peer_id: PeerId::random(),
+				peers: 5,
+				is_syncing: false,
+				is_dev: false,
+			})
+			.system_health()
+		),
 		Health {
 			peers: 5,
 			is_syncing: false,
@@ -173,12 +172,15 @@ fn system_health() {
 	);
 
 	assert_eq!(
-		wait_receiver(api(Status {
-			peer_id: PeerId::random(),
-			peers: 0,
-			is_syncing: false,
-			is_dev: true,
-		}).system_health()),
+		wait_receiver(
+			api(Status {
+				peer_id: PeerId::random(),
+				peers: 0,
+				is_syncing: false,
+				is_dev: true,
+			})
+			.system_health()
+		),
 		Health {
 			peers: 0,
 			is_syncing: false,
@@ -191,12 +193,15 @@ fn system_health() {
 fn system_peers() {
 	let peer_id = PeerId::random();
 	assert_eq!(
-		wait_receiver(api(Status {
-			peer_id: peer_id.clone(),
-			peers: 1,
-			is_syncing: false,
-			is_dev: true,
-		}).system_peers()),
+		wait_receiver(
+			api(Status {
+				peer_id: peer_id.clone(),
+				peers: 1,
+				is_syncing: false,
+				is_dev: true,
+			})
+			.system_peers()
+		),
 		vec![PeerInfo {
 			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
@@ -227,8 +232,7 @@ fn system_network_state() {
 
 #[test]
 fn system_node_roles() {
-	assert_eq!(
-		wait_receiver(api(None).system_node_roles()),
-		vec![NodeRole::Authority]
-	);
+	assert_eq!(wait_receiver(api(None).system_node_roles()), vec![
+		NodeRole::Authority
+	]);
 }

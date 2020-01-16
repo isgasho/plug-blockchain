@@ -18,12 +18,12 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![recursion_limit="512"]
+#![recursion_limit = "512"]
 
 extern crate proc_macro;
 
-mod storage;
 mod construct_runtime;
+mod storage;
 
 use proc_macro::TokenStream;
 
@@ -67,9 +67,9 @@ use proc_macro::TokenStream;
 ///   ```
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../frame_support/storage/generator/trait.StorageMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the [`StorageMap
+///   generator`](../frame_support/storage/generator/trait.StorageMap.html). And
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
@@ -89,8 +89,9 @@ use proc_macro::TokenStream;
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
 ///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageLinkedMap
+///   generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html). And
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
@@ -119,8 +120,9 @@ use proc_macro::TokenStream;
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
+///   [`StorageDoubleMap
+///   generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html). And
+///   [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
@@ -145,8 +147,8 @@ use proc_macro::TokenStream;
 ///
 ///   Thus keys are stored at:
 ///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2))
-///   ```
+///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++
+/// Hasher2(encode(key2))   ```
 ///
 /// Supported hashers (ordered from least to best security):
 ///
@@ -187,14 +189,14 @@ use proc_macro::TokenStream;
 ///
 /// 		// Your storage items
 /// 	}
-///		add_extra_genesis {
-///			config(genesis_field): GenesisFieldType;
-///			config(genesis_field2): GenesisFieldType;
-///			...
-///			build(|_: &Self| {
-///				// Modification of storage
-///			})
-///		}
+/// 		add_extra_genesis {
+/// 			config(genesis_field): GenesisFieldType;
+/// 			config(genesis_field2): GenesisFieldType;
+/// 			...
+/// 			build(|_: &Self| {
+/// 				// Modification of storage
+/// 			})
+/// 		}
 /// }
 /// ```
 ///
@@ -206,7 +208,7 @@ use proc_macro::TokenStream;
 ///         ...,
 ///         Example: example::{Module, Storage, ..., Config<T>},
 ///         ...,
-///	}
+/// 	}
 /// );
 /// ```
 ///
@@ -248,11 +250,8 @@ use proc_macro::TokenStream;
 ///
 /// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
-///
 #[proc_macro]
-pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::decl_storage_impl(input)
-}
+pub fn decl_storage(input: TokenStream) -> TokenStream { storage::decl_storage_impl(input) }
 
 /// Construct a runtime, with the given name and the given modules.
 ///
@@ -281,9 +280,9 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// )
 /// ```
 ///
-/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
-/// The identifier `System` is the name of the module and the lower case identifier `system` is the
-/// name of the Rust module/crate for this Substrate module.
+/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>,
+/// Config<T>}`. The identifier `System` is the name of the module and the lower case identifier
+/// `system` is the name of the Rust module/crate for this Substrate module.
 ///
 /// The module `Test: test::{default}` will expand to
 /// `Test: test::{Module, Call, Storage, Event<T>, Config<T>}`.
@@ -300,8 +299,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Origin` or `Origin<T>` (if the origin is generic)
 /// - `Config` or `Config<T>` (if the config is generic)
 /// - `Inherent ( $(CALL),* )` - If the module provides/can check inherents. The optional parameter
-///                             is for modules that use a `Call` from a different module as
-///                             inherent.
+///   is for modules that use a `Call` from a different module as inherent.
 /// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
 ///
 /// # Note

@@ -29,7 +29,6 @@ fn main() {
 		//
 		// The --export=__heap_base instructs LLD to export __heap_base as a global variable, which
 		// is used by the external memory allocator.
-		"-Clink-arg=-zstack-size=1048576 \
-		-Clink-arg=--export=__heap_base",
+		"-Clink-arg=-zstack-size=1048576 -Clink-arg=--export=__heap_base",
 	);
 }

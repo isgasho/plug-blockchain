@@ -27,32 +27,32 @@
 //! wasm engine used, instance cache.
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 #[macro_use]
 mod wasm_utils;
 mod wasmi_execution;
 #[macro_use]
 mod native_executor;
-mod sandbox;
 mod allocator;
 pub mod deprecated_host_interface;
+#[cfg(test)]
+mod integration_tests;
+mod sandbox;
 mod wasm_runtime;
 #[cfg(feature = "wasmtime")]
 mod wasmtime;
-#[cfg(test)]
-mod integration_tests;
 
 pub mod error;
-pub use wasmi;
-pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
+pub use native_executor::{with_native_environment, NativeExecutionDispatch, NativeExecutor};
 #[doc(hidden)]
 pub use primitives::traits::Externalities;
+pub use runtime_version::{NativeVersion, RuntimeVersion};
 #[doc(hidden)]
 pub use wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
+pub use wasmi;
 
 /// Call the given `function` in the given wasm `code`.
 ///
@@ -87,14 +87,14 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (&self, ext: &mut E) -> error::Result<RuntimeVersion>;
+	fn runtime_version<E: Externalities>(&self, ext: &mut E) -> error::Result<RuntimeVersion>;
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_test::WASM_BINARY;
 	use runtime_io::TestExternalities;
+	use runtime_test::WASM_BINARY;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
@@ -107,7 +107,8 @@ mod tests {
 			&mut ext,
 			&WASM_BINARY,
 			8,
-		).unwrap();
+		)
+		.unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}
 }

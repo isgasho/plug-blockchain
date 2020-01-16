@@ -16,10 +16,14 @@
 
 use crate::config::ProtocolId;
 use bytes::{Bytes, BytesMut};
-use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
-use libp2p::tokio_codec::Framed;
+use futures::{future, prelude::*, stream};
+use libp2p::{
+	core::{
+		upgrade::ProtocolName, Endpoint, InboundUpgrade, Negotiated, OutboundUpgrade, UpgradeInfo,
+	},
+	tokio_codec::Framed,
+};
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
-use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
 
@@ -41,8 +45,7 @@ pub struct RegisteredProtocol {
 impl RegisteredProtocol {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8])
-		-> Self {
+	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8]) -> Self {
 		let protocol = protocol.into();
 		let mut base_name = Bytes::from_static(b"/substrate/");
 		base_name.extend_from_slice(protocol.as_bytes());
@@ -92,15 +95,11 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// Returns the version of the protocol that was negotiated.
-	pub fn protocol_version(&self) -> u8 {
-		self.protocol_version
-	}
+	pub fn protocol_version(&self) -> u8 { self.protocol_version }
 
 	/// Returns whether the local node opened this substream (dialer), or we received this
 	/// substream from the remote (listener).
-	pub fn endpoint(&self) -> Endpoint {
-		self.endpoint
-	}
+	pub fn endpoint(&self) -> Endpoint { self.endpoint }
 
 	/// Starts a graceful shutdown process on this substream.
 	///
@@ -138,9 +137,11 @@ pub enum RegisteredProtocolEvent {
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite {
-	type Item = RegisteredProtocolEvent;
+where
+	TSubstream: AsyncRead + AsyncWrite,
+{
 	type Error = io::Error;
+	type Item = RegisteredProtocolEvent;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// Flushing the local queue.
@@ -164,12 +165,10 @@ where TSubstream: AsyncRead + AsyncWrite {
 			if !self.clogged_fuse {
 				// Note: this fuse is important not just for preventing us from flooding the logs;
 				// 	if you remove the fuse, then we will always return early from this function and
-				//	thus never read any message from the network.
+				// 	thus never read any message from the network.
 				self.clogged_fuse = true;
 				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
-					messages: self.send_queue.iter()
-						.map(|m| m.clone())
-						.collect(),
+					messages: self.send_queue.iter().map(|m| m.clone()).collect(),
 				})))
 			}
 		} else {
@@ -188,13 +187,14 @@ where TSubstream: AsyncRead + AsyncWrite {
 		match self.inner.poll()? {
 			Async::Ready(Some(data)) => {
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data))))
-			}
-			Async::Ready(None) =>
+			},
+			Async::Ready(None) => {
 				if !self.requires_poll_complete && self.send_queue.is_empty() {
 					Ok(Async::Ready(None))
 				} else {
 					Ok(Async::NotReady)
 				}
+			},
 			Async::NotReady => Ok(Async::NotReady),
 		}
 	}
@@ -207,16 +207,17 @@ impl UpgradeInfo for RegisteredProtocol {
 	#[inline]
 	fn protocol_info(&self) -> Self::InfoIter {
 		// Report each version as an individual protocol.
-		self.supported_versions.iter().map(|&version| {
-			let num = version.to_string();
+		self.supported_versions
+			.iter()
+			.map(|&version| {
+				let num = version.to_string();
 
-			let mut name = self.base_name.clone();
-			name.extend_from_slice(num.as_bytes());
-			RegisteredProtocolName {
-				name,
-				version,
-			}
-		}).collect::<Vec<_>>().into_iter()
+				let mut name = self.base_name.clone();
+				name.extend_from_slice(num.as_bytes());
+				RegisteredProtocolName { name, version }
+			})
+			.collect::<Vec<_>>()
+			.into_iter()
 	}
 }
 
@@ -230,26 +231,21 @@ pub struct RegisteredProtocolName {
 }
 
 impl ProtocolName for RegisteredProtocolName {
-	fn protocol_name(&self) -> &[u8] {
-		&self.name
-	}
+	fn protocol_name(&self) -> &[u8] { &self.name }
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where
+	TSubstream: AsyncRead + AsyncWrite,
 {
-	type Output = RegisteredProtocolSubstream<TSubstream>;
-	type Future = future::FutureResult<Self::Output, io::Error>;
 	type Error = io::Error;
+	type Future = future::FutureResult<Self::Output, io::Error>;
+	type Output = RegisteredProtocolSubstream<TSubstream>;
 
-	fn upgrade_inbound(
-		self,
-		socket: Negotiated<TSubstream>,
-		info: Self::Info,
-	) -> Self::Future {
+	fn upgrade_inbound(self, socket: Negotiated<TSubstream>, info: Self::Info) -> Self::Future {
 		let framed = {
 			let mut codec = UviBytes::default();
-			codec.set_max_len(16 * 1024 * 1024);		// 16 MiB hard limit for packets.
+			codec.set_max_len(16 * 1024 * 1024); // 16 MiB hard limit for packets.
 			Framed::new(socket, codec)
 		};
 
@@ -266,17 +262,14 @@ where TSubstream: AsyncRead + AsyncWrite,
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
+where
+	TSubstream: AsyncRead + AsyncWrite,
 {
-	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
-	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
 	type Error = <Self as InboundUpgrade<TSubstream>>::Error;
+	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
+	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
 
-	fn upgrade_outbound(
-		self,
-		socket: Negotiated<TSubstream>,
-		info: Self::Info,
-	) -> Self::Future {
+	fn upgrade_outbound(self, socket: Negotiated<TSubstream>, info: Self::Info) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());
 
 		future::ok(RegisteredProtocolSubstream {

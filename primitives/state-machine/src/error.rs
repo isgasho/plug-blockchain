@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 /// State Machine Errors
-
 use std::fmt;
 
 /// State Machine Error bound.

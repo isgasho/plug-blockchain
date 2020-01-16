@@ -17,9 +17,9 @@
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
 
-use sp_runtime::traits::{Block as BlockT, NumberFor, Header};
-use parking_lot::RwLock;
 use lru::LruCache;
+use parking_lot::RwLock;
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -136,7 +136,8 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 		from = backend.header_metadata(from.parent)?;
 	}
 
-	// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
+	// add the pivot block. and append the reversed to-branch (note that it's reverse order
+	// originals)
 	let pivot = from_branch.len();
 	from_branch.push(HashAndNumber {
 		number: to.number,
@@ -189,22 +190,19 @@ pub struct TreeRoute<Block: BlockT> {
 
 impl<Block: BlockT> TreeRoute<Block> {
 	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
-	pub fn retracted(&self) -> &[HashAndNumber<Block>] {
-		&self.route[..self.pivot]
-	}
+	pub fn retracted(&self) -> &[HashAndNumber<Block>] { &self.route[..self.pivot] }
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
 	/// route.
 	pub fn common_block(&self) -> &HashAndNumber<Block> {
-		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
-			which are included in the route; \
-			thus it is never empty; qed")
+		self.route.get(self.pivot).expect(
+			"tree-routes are computed between blocks; which are included in the route; thus it is \
+			 never empty; qed",
+		)
 	}
 
 	/// Get a slice of enacted blocks (descendents of the common ancestor)
-	pub fn enacted(&self) -> &[HashAndNumber<Block>] {
-		&self.route[self.pivot + 1 ..]
-	}
+	pub fn enacted(&self) -> &[HashAndNumber<Block>] { &self.route[self.pivot + 1..] }
 }
 
 /// Handles header metadata: hash, number, parent hash, etc.
@@ -212,8 +210,15 @@ pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
 	type Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
-	fn insert_header_metadata(&self, hash: Block::Hash, header_metadata: CachedHeaderMetadata<Block>);
+	fn header_metadata(
+		&self,
+		hash: Block::Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
+	fn insert_header_metadata(
+		&self,
+		hash: Block::Hash,
+		header_metadata: CachedHeaderMetadata<Block>,
+	);
 	fn remove_header_metadata(&self, hash: Block::Hash);
 }
 
@@ -242,8 +247,14 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 	type Error = String;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.cache.write().get(&hash).cloned()
+	fn header_metadata(
+		&self,
+		hash: Block::Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.cache
+			.write()
+			.get(&hash)
+			.cloned()
 			.ok_or("header metadata not found in cache".to_owned())
 	}
 
@@ -251,9 +262,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 		self.cache.write().put(hash, metadata);
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
-		self.cache.write().pop(&hash);
-	}
+	fn remove_header_metadata(&self, hash: Block::Hash) { self.cache.write().pop(&hash); }
 }
 
 /// Cached header metadata. Used to efficiently traverse the tree.

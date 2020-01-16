@@ -15,21 +15,25 @@
 #![allow(unused_must_use)]
 
 use crate::{
-	ComputeDispatchFee, ContractAddressFor, GenesisConfig, Module, Trait, TrieId, Schedule,
+	ComputeDispatchFee, ContractAddressFor, GenesisConfig, Module, Schedule, Trait, TrieId,
 	TrieIdGenerator,
 };
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use primitives::storage::well_known_keys;
 use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, Hash, IdentityLookup, PlugDoughnutApi},
 	testing::{Header, H256},
-};
-use support::{
-	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin,
-	parameter_types, StorageValue, traits::{Currency, Get}, weights::Weight,
-	additional_traits::DelegatedDispatchVerifier,
+	traits::{BlakeTwo256, Hash, IdentityLookup, PlugDoughnutApi},
+	Perbill,
 };
 use std::cell::RefCell;
+use support::{
+	additional_traits::DelegatedDispatchVerifier,
+	assert_err, assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin,
+	parameter_types,
+	traits::{Currency, Get},
+	weights::Weight,
+	StorageValue,
+};
 use system::{self, RawOrigin};
 
 mod contract {
@@ -88,31 +92,37 @@ pub struct MockDoughnut {
 	verifiable: bool,
 }
 impl MockDoughnut {
-	fn new(verifiable: bool) -> Self {
-		Self {
-			verifiable,
-		}
-	}
+	fn new(verifiable: bool) -> Self { Self { verifiable } }
 }
 impl PlugDoughnutApi for MockDoughnut {
 	type PublicKey = [u8; 32];
-	type Timestamp = u32;
 	type Signature = ();
+	type Timestamp = u32;
+
 	fn holder(&self) -> Self::PublicKey { Default::default() }
+
 	fn issuer(&self) -> Self::PublicKey { Default::default() }
+
 	fn expiry(&self) -> Self::Timestamp { 0 }
+
 	fn not_before(&self) -> Self::Timestamp { 0 }
+
 	fn payload(&self) -> Vec<u8> { Vec::default() }
+
 	fn signature(&self) -> Self::Signature {}
+
 	fn signature_version(&self) -> u8 { 0 }
+
 	fn get_domain(&self, _domain: &str) -> Option<&[u8]> { None }
 }
 
 pub struct MockDispatchVerifier;
 impl DelegatedDispatchVerifier for MockDispatchVerifier {
-	type Doughnut = MockDoughnut;
 	type AccountId = u64;
+	type Doughnut = MockDoughnut;
+
 	const DOMAIN: &'static str = "";
+
 	fn verify_dispatch(
 		_doughnut: &Self::Doughnut,
 		_module: &str,
@@ -120,6 +130,7 @@ impl DelegatedDispatchVerifier for MockDispatchVerifier {
 	) -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn verify_runtime_to_contract_call(
 		_caller: &Self::AccountId,
 		_doughnut: &Self::Doughnut,
@@ -127,6 +138,7 @@ impl DelegatedDispatchVerifier for MockDispatchVerifier {
 	) -> Result<(), &'static str> {
 		Ok(())
 	}
+
 	fn verify_contract_to_contract_call(
 		_caller: &Self::AccountId,
 		doughnut: &Self::Doughnut,
@@ -135,7 +147,10 @@ impl DelegatedDispatchVerifier for MockDispatchVerifier {
 		if doughnut.verifiable {
 			Ok(())
 		} else {
-			Err("Doughnut contract to contract call verification is not implemented for this domain")
+			Err(
+				"Doughnut contract to contract call verification is not implemented for this \
+				 domain",
+			)
 		}
 	}
 }
@@ -147,42 +162,42 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Call = ();
-	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = MetaEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
-	type Version = ();
-	type Doughnut = MockDoughnut;
+	type BlockHashCount = BlockHashCount;
+	type BlockNumber = u64;
+	type Call = ();
 	type DelegatedDispatchVerifier = MockDispatchVerifier;
+	type Doughnut = MockDoughnut;
+	type Event = MetaEvent;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type Header = Header;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
+	type Version = ();
 }
 impl balances::Trait for Test {
 	type Balance = u64;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = MetaEvent;
+	type ExistentialDeposit = ExistentialDeposit;
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
-	type Event = MetaEvent;
-	type DustRemoval = ();
-	type TransferPayment = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 }
 impl timestamp::Trait for Test {
+	type MinimumPeriod = MinimumPeriod;
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -200,32 +215,32 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 }
 impl Trait for Test {
-	type Currency = Balances;
-	type Time = Timestamp;
-	type Randomness = Randomness;
+	type BlockGasLimit = BlockGasLimit;
 	type Call = Call;
+	type CallBaseFee = CallBaseFee;
+	type ComputeDispatchFee = DummyComputeDispatchFee;
+	type ContractFee = ContractFee;
+	type CreationFee = CreationFee;
+	type Currency = Balances;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
-	type ComputeDispatchFee = DummyComputeDispatchFee;
-	type TrieIdGenerator = DummyTrieIdGenerator;
 	type GasPayment = ();
-	type RentPayment = ();
-	type SignedClaimHandicap = SignedClaimHandicap;
-	type TombstoneDeposit = TombstoneDeposit;
-	type StorageSizeOffset = StorageSizeOffset;
-	type RentByteFee = RentByteFee;
-	type RentDepositOffset = RentDepositOffset;
-	type SurchargeReward = SurchargeReward;
-	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type ContractFee = ContractFee;
-	type CallBaseFee = CallBaseFee;
 	type InstantiateBaseFee = InstantiateBaseFee;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
-	type BlockGasLimit = BlockGasLimit;
+	type Randomness = Randomness;
+	type RentByteFee = RentByteFee;
+	type RentDepositOffset = RentDepositOffset;
+	type RentPayment = ();
+	type SignedClaimHandicap = SignedClaimHandicap;
+	type StorageSizeOffset = StorageSizeOffset;
+	type SurchargeReward = SurchargeReward;
+	type Time = Timestamp;
+	type TombstoneDeposit = TombstoneDeposit;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type TransferFee = TransferFee;
+	type TrieIdGenerator = DummyTrieIdGenerator;
 }
 
 type Balances = balances::Module<Test>;
@@ -235,9 +250,7 @@ type Randomness = randomness_collective_flip::Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
-	fn contract_address_for(_code_hash: &H256, _data: &[u8], origin: &u64) -> u64 {
-		*origin + 1
-	}
+	fn contract_address_for(_code_hash: &H256, _data: &[u8], origin: &u64) -> u64 { *origin + 1 }
 }
 
 pub struct DummyTrieIdGenerator;
@@ -260,9 +273,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 
 pub struct DummyComputeDispatchFee;
 impl ComputeDispatchFee<Call, u64> for DummyComputeDispatchFee {
-	fn compute_dispatch_fee(_call: &Call) -> u64 {
-		69
-	}
+	fn compute_dispatch_fee(_call: &Call) -> u64 { 69 }
 }
 
 const ALICE: u64 = 1;
@@ -291,34 +302,44 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
+
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
+
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		balances::GenesisConfig::<Test> {
 			balances: vec![],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		GenesisConfig::<Test> {
 			current_schedule: Schedule {
 				enable_println: true,
 				..Default::default()
 			},
 			gas_price: self.gas_price,
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 }
 
 /// Generate Wasm binary and code hash from wabt source.
-fn compile_module<T>(wabt_module: &str)
-	-> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
-	where T: system::Trait
+fn compile_module<T>(
+	wabt_module: &str,
+) -> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
+where
+	T: system::Trait,
 {
 	let wasm = wabt::wat2wasm(wabt_module)?;
 	let code_hash = T::Hashing::hash(&wasm);
@@ -444,28 +465,39 @@ fn contract_to_contract_call_executes_with_verifiable_doughnut() {
 	let verifiable_doughnut = MockDoughnut::new(true);
 	let delegated_origin = RawOrigin::from((Some(ALICE), Some(verifiable_doughnut.clone())));
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, callee_wasm));
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, caller_wasm));
-		assert_ok!(Contract::instantiate(
-			delegated_origin.clone().into(),
-			100_000,
-			100_000,
-			caller_code_hash.into(),
-			vec![],
-			Some(verifiable_doughnut.clone()),
-		));
-		// Call BOB contract, which attempts to instantiate and call the callee contract
-		assert_ok!(Contract::call(
-			delegated_origin.into(),
-			BOB,
-			0,
-			200_000,
-			callee_code_hash.as_ref().to_vec(),
-			Some(verifiable_doughnut),
-		));
-	});
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				callee_wasm
+			));
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				caller_wasm
+			));
+			assert_ok!(Contract::instantiate(
+				delegated_origin.clone().into(),
+				100_000,
+				100_000,
+				caller_code_hash.into(),
+				vec![],
+				Some(verifiable_doughnut.clone()),
+			));
+			// Call BOB contract, which attempts to instantiate and call the callee contract
+			assert_ok!(Contract::call(
+				delegated_origin.into(),
+				BOB,
+				0,
+				200_000,
+				callee_code_hash.as_ref().to_vec(),
+				Some(verifiable_doughnut),
+			));
+		});
 }
 
 #[test]
@@ -474,28 +506,39 @@ fn contract_to_contract_call_executes_without_doughnut() {
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>(CODE_CALLER_CONTRACT).unwrap();
 	let delegated_origin = RawOrigin::from((Some(ALICE), None));
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, callee_wasm));
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, caller_wasm));
-		assert_ok!(Contract::instantiate(
-			delegated_origin.clone().into(),
-			100_000,
-			100_000,
-			caller_code_hash.into(),
-			vec![],
-			None,
-		));
-		// Call BOB contract, which attempts to instantiate and call the callee contract
-		assert_ok!(Contract::call(
-			delegated_origin.into(),
-			BOB,
-			0,
-			200_000,
-			callee_code_hash.as_ref().to_vec(),
-			None,
-		));
-	});
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				callee_wasm
+			));
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				caller_wasm
+			));
+			assert_ok!(Contract::instantiate(
+				delegated_origin.clone().into(),
+				100_000,
+				100_000,
+				caller_code_hash.into(),
+				vec![],
+				None,
+			));
+			// Call BOB contract, which attempts to instantiate and call the callee contract
+			assert_ok!(Contract::call(
+				delegated_origin.into(),
+				BOB,
+				0,
+				200_000,
+				callee_code_hash.as_ref().to_vec(),
+				None,
+			));
+		});
 }
 
 #[test]
@@ -505,29 +548,40 @@ fn contract_to_contract_call_returns_error_with_unverifiable_doughnut() {
 	let unverifiable_doughnut = MockDoughnut::new(false);
 	let delegated_origin = RawOrigin::from((Some(ALICE), Some(unverifiable_doughnut.clone())));
 
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, callee_wasm));
-		assert_ok!(Contract::put_code(delegated_origin.clone().into(), 100_000, caller_wasm));
-		assert_ok!(Contract::instantiate(
-			delegated_origin.clone().into(),
-			100_000,
-			100_000,
-			caller_code_hash.into(),
-			vec![],
-			Some(unverifiable_doughnut.clone()),
-		));
-		// Call BOB contract, which attempts to instantiate and call the callee contract
-		assert_err!(
-			Contract::call(
-				delegated_origin.into(),
-				BOB,
-				0,
-				200_000,
-				callee_code_hash.as_ref().to_vec(),
-				Some(unverifiable_doughnut),
-			),
-			"during execution", // due to $exit_code being non-zero
-		);
-	});
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				callee_wasm
+			));
+			assert_ok!(Contract::put_code(
+				delegated_origin.clone().into(),
+				100_000,
+				caller_wasm
+			));
+			assert_ok!(Contract::instantiate(
+				delegated_origin.clone().into(),
+				100_000,
+				100_000,
+				caller_code_hash.into(),
+				vec![],
+				Some(unverifiable_doughnut.clone()),
+			));
+			// Call BOB contract, which attempts to instantiate and call the callee contract
+			assert_err!(
+				Contract::call(
+					delegated_origin.into(),
+					BOB,
+					0,
+					200_000,
+					callee_code_hash.as_ref().to_vec(),
+					Some(unverifiable_doughnut),
+				),
+				"during execution", // due to $exit_code being non-zero
+			);
+		});
 }

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use grafana_data_source::{run_server, record_metrics};
-use std::time::Duration;
+use futures::{executor, future::join};
+use grafana_data_source::{record_metrics, run_server};
 use rand::Rng;
-use futures::{future::join, executor};
+use std::time::Duration;
 
 async fn randomness() {
 	loop {
@@ -39,6 +39,8 @@ async fn randomness() {
 fn main() {
 	executor::block_on(join(
 		run_server("127.0.0.1:9955".parse().unwrap()),
-		randomness()
-	)).0.unwrap();
+		randomness(),
+	))
+	.0
+	.unwrap();
 }

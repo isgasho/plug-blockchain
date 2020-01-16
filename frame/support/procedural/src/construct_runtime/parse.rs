@@ -66,9 +66,9 @@ impl Parse for WhereSection {
 			definitions.push(definition);
 			if !input.peek(Token![,]) {
 				if !input.peek(token::Brace) {
-					return Err(input.error("Expected `,` or `{`"));
+					return Err(input.error("Expected `,` or `{`"))
 				}
-				break;
+				break
 			}
 			input.parse::<Token![,]>()?;
 		}
@@ -86,7 +86,7 @@ impl Parse for WhereSection {
 				"`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
 				kind, kind
 			);
-			return Err(Error::new(*kind_span, msg));
+			return Err(Error::new(*kind_span, msg))
 		}
 		Ok(Self {
 			block,
@@ -126,7 +126,7 @@ impl Parse for WhereDefinition {
 				WhereKind::UncheckedExtrinsic,
 			)
 		} else {
-			return Err(lookahead.error());
+			return Err(lookahead.error())
 		};
 
 		Ok(Self {
@@ -183,23 +183,24 @@ impl Parse for ModuleDeclaration {
 					ModuleEntry::Part(part) if has_default => {
 						if part.is_included_in_default() {
 							let msg = format!(
-									"`{}` is already included in `default`. Either remove `default` or remove `{}`",
-									part.name,
-									part.name
-								);
-							return Err(Error::new(part.name.span(), msg));
+								"`{}` is already included in `default`. Either remove `default` \
+								 or remove `{}`",
+								part.name, part.name
+							);
+							return Err(Error::new(part.name.span(), msg))
 						}
-					}
+					},
 					ModuleEntry::Part(part) => {
 						if !resolved.insert(part.name.clone()) {
 							let msg = format!(
-								"`{}` was already declared before. Please remove the duplicate declaration",
+								"`{}` was already declared before. Please remove the duplicate \
+								 declaration",
 								part.name
 							);
-							return Err(Error::new(part.name.span(), msg));
+							return Err(Error::new(part.name.span(), msg))
 						}
-					}
-					_ => {}
+					},
+					_ => {},
 				}
 			}
 		}
@@ -232,9 +233,7 @@ impl ModuleDeclaration {
 			.find(|part| part.name == name)
 	}
 
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
-	}
+	pub fn exists_part(&self, name: &str) -> bool { self.find_part(name).is_some() }
 
 	fn default_modules(span: Span) -> Vec<ModulePart> {
 		let mut res: Vec<_> = ["Module", "Call", "Storage"]
@@ -292,22 +291,22 @@ impl Parse for ModulePart {
 		if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
 			let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
 			let msg = format!(
-				"`{}` is not allowed to have generics. \
-				 Only the following modules are allowed to have generics: {}.",
+				"`{}` is not allowed to have generics. Only the following modules are allowed to \
+				 have generics: {}.",
 				name, valid_generics
 			);
-			return Err(syn::Error::new(name.span(), msg));
+			return Err(syn::Error::new(name.span(), msg))
 		}
 		let args = if input.peek(token::Paren) {
 			if !Self::is_allowed_arg(&name) {
 				let syn::group::Parens { token: parens, .. } = syn::group::parse_parens(input)?;
 				let valid_names = ModulePart::format_names(ModulePart::allowed_args());
 				let msg = format!(
-					"`{}` is not allowed to have arguments in parens. \
-					 Only the following modules are allowed to have arguments in parens: {}.",
+					"`{}` is not allowed to have arguments in parens. Only the following modules \
+					 are allowed to have arguments in parens: {}.",
 					name, valid_names
 				);
-				return Err(syn::Error::new(parens.span, msg));
+				return Err(syn::Error::new(parens.span, msg))
 			}
 			Some(input.parse()?)
 		} else {
@@ -330,13 +329,9 @@ impl ModulePart {
 		Self::allowed_args().into_iter().any(|n| ident == n)
 	}
 
-	pub fn allowed_generics() -> Vec<&'static str> {
-		vec!["Event", "Origin", "Config"]
-	}
+	pub fn allowed_generics() -> Vec<&'static str> { vec!["Event", "Origin", "Config"] }
 
-	pub fn allowed_args() -> Vec<&'static str> {
-		vec!["Inherent"]
-	}
+	pub fn allowed_args() -> Vec<&'static str> { vec!["Inherent"] }
 
 	pub fn format_names(names: Vec<&'static str>) -> String {
 		let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();

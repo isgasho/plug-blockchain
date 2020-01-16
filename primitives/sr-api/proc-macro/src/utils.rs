@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error, token::And,
+	parse_quote, spanned::Spanned, token::And, Error, FnArg, Ident, Pat, Result, Signature, Type,
 };
 
 use quote::quote;
@@ -32,7 +32,10 @@ pub fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
 }
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
-	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
+	Ident::new(
+		&format!("sp_api_hidden_includes_{}", unique_id),
+		Span::call_site(),
+	)
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
@@ -54,36 +57,43 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 			Err(e) => {
 				let err = Error::new(Span::call_site(), &e).to_compile_error();
 				quote!( #err )
-			}
+			},
 		}
-
-	}.into()
+	}
+	.into()
 }
 
 /// Generates the access to the `sc_client` crate.
 pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
-		quote!( crate )
+		quote!(crate)
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote!( self::#mod_name::sp_api )
-	}.into()
+	}
+	.into()
 }
 
 /// Generates the name of the module that contains the trait declaration for the runtime.
 pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
-	Ident::new(&format!("runtime_decl_for_{}", trait_.to_string()), Span::call_site())
+	Ident::new(
+		&format!("runtime_decl_for_{}", trait_.to_string()),
+		Span::call_site(),
+	)
 }
 
 /// Generates a name for a method that needs to be implemented in the runtime for the client side.
 pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> Ident {
-	Ident::new(&format!("{}_{}_runtime_api_impl", trait_, method), Span::call_site())
+	Ident::new(
+		&format!("{}_{}_runtime_api_impl", trait_, method),
+		Span::call_site(),
+	)
 }
 
 /// Get the type of a `syn::ReturnType`.
 pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
 	match rt {
-		syn::ReturnType::Default => parse_quote!( () ),
+		syn::ReturnType::Default => parse_quote!(()),
 		syn::ReturnType::Type(_, ref ty) => *ty.clone(),
 	}
 }
@@ -91,23 +101,25 @@ pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
 /// Replace the `_` (wild card) parameter names in the given signature with unique identifiers.
 pub fn replace_wild_card_parameter_names(input: &mut Signature) {
 	let mut generated_pattern_counter = 0;
-	input.inputs.iter_mut().for_each(|arg| if let FnArg::Typed(arg) = arg {
-		arg.pat = Box::new(
-			generate_unique_pattern((*arg.pat).clone(), &mut generated_pattern_counter),
-		);
+	input.inputs.iter_mut().for_each(|arg| {
+		if let FnArg::Typed(arg) = arg {
+			arg.pat = Box::new(generate_unique_pattern(
+				(*arg.pat).clone(),
+				&mut generated_pattern_counter,
+			));
+		}
 	});
 }
 
 /// Fold the given `Signature` to make it usable on the client side.
-pub fn fold_fn_decl_for_client_side(
-	input: &mut Signature,
-	block_id: &TokenStream,
-) {
+pub fn fold_fn_decl_for_client_side(input: &mut Signature, block_id: &TokenStream) {
 	replace_wild_card_parameter_names(input);
 
 	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
-	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: &#block_id ));
-	input.inputs.insert(0, parse_quote!( &self ));
+	input
+		.inputs
+		.insert(0, parse_quote!( __runtime_api_at_param__: &#block_id ));
+	input.inputs.insert(0, parse_quote!(&self));
 
 	// Wrap the output in a `Result`
 	input.output = {
@@ -130,23 +142,21 @@ pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
 		},
 		_ => pat,
 	}
- }
+}
 
 /// Extracts the name, the type and `&` or ``(if it is a reference or not)
 /// for each parameter in the given function signature.
-pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
-	-> Result<Vec<(Pat, Type, Option<And>)>>
-{
+pub fn extract_parameter_names_types_and_borrows(
+	sig: &Signature,
+) -> Result<Vec<(Pat, Type, Option<And>)>> {
 	let mut result = Vec::new();
 	let mut generated_pattern_counter = 0;
 	for input in sig.inputs.iter() {
 		match input {
 			FnArg::Typed(arg) => {
 				let (ty, borrow) = match &*arg.ty {
-					Type::Reference(t) => {
-						((*t.elem).clone(), Some(t.and_token))
-					},
-					t => { (t.clone(), None) },
+					Type::Reference(t) => ((*t.elem).clone(), Some(t.and_token)),
+					t => (t.clone(), None),
 				};
 
 				let name =
@@ -155,7 +165,7 @@ pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
 			},
 			FnArg::Receiver(_) => {
 				return Err(Error::new(input.span(), "`self` parameter not supported!"))
-			}
+			},
 		}
 	}
 
@@ -164,12 +174,18 @@ pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
 
 /// Generates the name for the native call generator function.
 pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_native_call_generator", fn_name.to_string()), Span::call_site())
+	Ident::new(
+		&format!("{}_native_call_generator", fn_name.to_string()),
+		Span::call_site(),
+	)
 }
 
 /// Generates the name for the call api at function.
 pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_call_api_at", fn_name.to_string()), Span::call_site())
+	Ident::new(
+		&format!("{}_call_api_at", fn_name.to_string()),
+		Span::call_site(),
+	)
 }
 
 /// Prefix the given function with the trait name.

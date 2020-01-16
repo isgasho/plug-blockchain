@@ -16,34 +16,49 @@
 
 //! Testing utilities.
 
-use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, PlugDoughnutApi, MaybeDisplay, MaybeDoughnut,
-};
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
-pub use primitives::{H256, sr25519};
-use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
+use crate::{
+	codec::{Codec, Decode, Encode},
+	generic,
+	traits::{
+		self, Applyable, BlakeTwo256, Checkable, Dispatchable, MaybeDisplay, MaybeDoughnut,
+		OpaqueKeys, PlugDoughnutApi, SignedExtension,
+	},
+	transaction_validity::{TransactionValidity, TransactionValidityError},
+	ApplyExtrinsicResult, KeyTypeId,
+};
+use primitives::{
+	crypto::{key_types, CryptoType, Dummy, Public},
+	U256,
+};
+pub use primitives::{sr25519, H256};
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
+use std::{cell::RefCell, fmt, fmt::Debug, ops::Deref};
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+	Default,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	Debug,
+	Hash,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {
-	fn from(id: u64) -> Self {
-		UintAuthorityId(id)
-	}
+	fn from(id: u64) -> Self { UintAuthorityId(id) }
 }
 
 impl From<UintAuthorityId> for u64 {
-	fn from(id: UintAuthorityId) -> u64 {
-		id.0
-	}
+	fn from(id: UintAuthorityId) -> u64 { id.0 }
 }
 
 impl UintAuthorityId {
@@ -63,7 +78,10 @@ impl AsRef<[u8]> for UintAuthorityId {
 		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 		// keep `UintAuthorityId` as a u64 under the hood.
 		unsafe {
-			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
+			std::slice::from_raw_parts(
+				&self.0 as *const u64 as *const _,
+				std::mem::size_of::<u64>(),
+			)
 		}
 	}
 }
@@ -75,19 +93,17 @@ thread_local! {
 
 impl UintAuthorityId {
 	/// Set the list of keys returned by the runtime call for all keys of that type.
-	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item=T>) {
+	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item = T>) {
 		ALL_KEYS.with(|l| *l.borrow_mut() = keys.into_iter().map(Into::into).collect())
 	}
 }
 
 impl app_crypto::RuntimeAppPublic for UintAuthorityId {
-	const ID: KeyTypeId = key_types::DUMMY;
-
 	type Signature = u64;
 
-	fn all() -> Vec<Self> {
-		ALL_KEYS.with(|l| l.borrow().clone())
-	}
+	const ID: KeyTypeId = key_types::DUMMY;
+
+	fn all() -> Vec<Self> { ALL_KEYS.with(|l| l.borrow().clone()) }
 
 	fn generate_pair(_: Option<Vec<u8>>) -> Self {
 		use rand::RngCore;
@@ -96,22 +112,28 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 
 	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
 		let mut signature = [0u8; 8];
-		msg.as_ref().iter()
+		msg.as_ref()
+			.iter()
 			.chain(std::iter::repeat(&42u8))
 			.take(8)
 			.enumerate()
-			.for_each(|(i, v)| { signature[i] = *v; });
+			.for_each(|(i, v)| {
+				signature[i] = *v;
+			});
 
 		Some(u64::from_le_bytes(signature))
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 		let mut msg_signature = [0u8; 8];
-		msg.as_ref().iter()
+		msg.as_ref()
+			.iter()
 			.chain(std::iter::repeat(&42))
 			.take(8)
 			.enumerate()
-			.for_each(|(i, v)| { msg_signature[i] = *v; });
+			.for_each(|(i, v)| {
+				msg_signature[i] = *v;
+			});
 
 		u64::from_le_bytes(msg_signature) == *signature
 	}
@@ -120,13 +142,9 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIdProviders = ();
 
-	fn key_ids() -> &'static [KeyTypeId] {
-		&[key_types::DUMMY]
-	}
+	fn key_ids() -> &'static [KeyTypeId] { &[key_types::DUMMY] }
 
-	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
-		self.as_ref()
-	}
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] { self.as_ref() }
 
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
 		self.using_encoded(|mut x| T::decode(&mut x)).ok()
@@ -161,23 +179,28 @@ pub struct Header {
 }
 
 impl traits::Header for Header {
-	type Number = u64;
-	type Hashing = BlakeTwo256;
 	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type Number = u64;
 
 	fn number(&self) -> &Self::Number { &self.number }
+
 	fn set_number(&mut self, num: Self::Number) { self.number = num }
 
 	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
+
 	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
 
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
+
 	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
 
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
 	fn digest(&self) -> &Digest { &self.digest }
+
 	fn digest_mut(&mut self) -> &mut Digest { &mut self.digest }
 
 	fn new(
@@ -223,29 +246,26 @@ impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
 	type SignaturePayload = ();
 
-	fn is_signed(&self) -> Option<bool> {
-		None
-	}
+	fn is_signed(&self) -> Option<bool> { None }
 }
 
 impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 
 impl<Xt> From<Xt> for ExtrinsicWrapper<Xt> {
-	fn from(xt: Xt) -> Self {
-		ExtrinsicWrapper(xt)
-	}
+	fn from(xt: Xt) -> Self { ExtrinsicWrapper(xt) }
 }
 
 impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 	type Target = Xt;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Testing block
@@ -257,31 +277,33 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block
-	for Block<Xt>
+impl<
+		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
+	> traits::Block for Block<Xt>
 {
 	type Extrinsic = Xt;
-	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
+	type Header = Header;
 
-	fn header(&self) -> &Self::Header {
-		&self.header
-	}
-	fn extrinsics(&self) -> &[Self::Extrinsic] {
-		&self.extrinsics[..]
-	}
-	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) {
-		(self.header, self.extrinsics)
-	}
+	fn header(&self) -> &Self::Header { &self.header }
+
+	fn extrinsics(&self) -> &[Self::Extrinsic] { &self.extrinsics[..] }
+
+	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>) { (self.header, self.extrinsics) }
+
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
 	}
+
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
 		(header, extrinsics).encode()
 	}
 }
 
-impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
+impl<'a, Xt> Deserialize<'a> for Block<Xt>
+where
+	Block<Xt>: Decode,
+{
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
 		Decode::decode(&mut &r[..])
@@ -296,8 +318,14 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<AccountId, Call, Extra>(pub Option<(AccountId, Extra)>, pub Call);
 
-impl<AccountId, Call, Extra> Serialize for TestXt<AccountId, Call, Extra> where TestXt<AccountId, Call, Extra>: Encode {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
+impl<AccountId, Call, Extra> Serialize for TestXt<AccountId, Call, Extra>
+where
+	TestXt<AccountId, Call, Extra>: Encode,
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
@@ -308,30 +336,42 @@ impl<AccountId: Debug, Call, Extra> Debug for TestXt<AccountId, Call, Extra> {
 	}
 }
 
-impl<AccountId: Send + Sync, Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<AccountId, Call, Extra> {
+impl<AccountId: Send + Sync, Call: Codec + Sync + Send, Context, Extra> Checkable<Context>
+	for TestXt<AccountId, Call, Extra>
+{
 	type Checked = Self;
+
 	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
 
-impl<AccountId: Codec + Sync + Send, Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<AccountId, Call, Extra> {
+impl<AccountId: Codec + Sync + Send, Call: Codec + Sync + Send, Extra> traits::Extrinsic
+	for TestXt<AccountId, Call, Extra>
+{
 	type Call = Call;
 	type SignaturePayload = (AccountId, Extra);
 
-	fn is_signed(&self) -> Option<bool> {
-		Some(self.0.is_some())
-	}
+	fn is_signed(&self) -> Option<bool> { Some(self.0.is_some()) }
 
-	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(TestXt(sig, c))
-	}
+	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> { Some(TestXt(sig, c)) }
 }
 
-impl<AccountId, Origin, Call, Extra, Info, Doughnut> Applyable for TestXt<AccountId, Call, Extra> where
+impl<AccountId, Origin, Call, Extra, Info, Doughnut> Applyable for TestXt<AccountId, Call, Extra>
+where
 	AccountId: 'static + Send + Sync + Clone + Eq + Codec + Debug + MaybeDisplay + AsRef<[u8]>,
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Doughnut: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + PlugDoughnutApi<PublicKey=AccountId>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info> + MaybeDoughnut<Doughnut=Doughnut>,
-	Origin: From<(Option<AccountId>,Option<Doughnut>)>,
+	Call:
+		'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin = Origin>,
+	Doughnut: 'static
+		+ Sized
+		+ Send
+		+ Sync
+		+ Clone
+		+ Eq
+		+ Codec
+		+ Debug
+		+ PlugDoughnutApi<PublicKey = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId, Call = Call, DispatchInfo = Info>
+		+ MaybeDoughnut<Doughnut = Doughnut>,
+	Origin: From<(Option<AccountId>, Option<Doughnut>)>,
 	Info: Clone,
 {
 	type AccountId = AccountId;
@@ -342,7 +382,7 @@ impl<AccountId, Origin, Call, Extra, Info, Doughnut> Applyable for TestXt<Accoun
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		_info: Self::DispatchInfo,
 		_len: usize,
@@ -353,18 +393,22 @@ impl<AccountId, Origin, Call, Extra, Info, Doughnut> Applyable for TestXt<Accoun
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> ApplyExtrinsicResult {
-		// NOTE: This is lifted directly from the implemenation for `CheckedExtrinsic::apply()`, it handles
-		// switching origin for delegated calls
+		// NOTE: This is lifted directly from the implemenation for `CheckedExtrinsic::apply()`, it
+		// handles switching origin for delegated calls
 		let (pre, res) = if let Some((id, extra)) = self.0 {
 			let pre = Extra::pre_dispatch(&extra, &id, &self.1, info.clone(), len)?;
 			if let Some(doughnut) = extra.doughnut() {
 				// A delegated transaction
-				(pre, self.1.dispatch(Origin::from((Some(doughnut.issuer()), Some(doughnut)))))
+				(
+					pre,
+					self.1
+						.dispatch(Origin::from((Some(doughnut.issuer()), Some(doughnut)))),
+				)
 			} else {
 				// An ordinary signed transaction
 				(pre, self.1.dispatch(Origin::from((Some(id), None))))
@@ -382,28 +426,34 @@ impl<AccountId, Origin, Call, Extra, Info, Doughnut> Applyable for TestXt<Accoun
 }
 
 pub mod doughnut {
-	//!
 	//! Doughnut aware types for extrinsic tests
-	//!
 	use super::*;
 	use crate::traits::PlugDoughnutApi;
 
 	/// A test account ID. Stores a `u64` as a byte array
 	/// Gives more functionality than a raw `u64` for testing with Doughnuts
-	#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode, PartialOrd, Serialize, Deserialize, Default, Ord)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Clone,
+		Debug,
+		Decode,
+		Encode,
+		PartialOrd,
+		Serialize,
+		Deserialize,
+		Default,
+		Ord,
+	)]
 	pub struct TestAccountId(pub [u8; 8]);
 
 	impl TestAccountId {
 		/// Create a new TestAccountId
-		pub fn new(id: u64) -> Self {
-			TestAccountId(id.to_le_bytes())
-		}
+		pub fn new(id: u64) -> Self { TestAccountId(id.to_le_bytes()) }
 	}
 
 	impl From<u64> for TestAccountId {
-		fn from(val: u64) -> Self {
-			TestAccountId::new(val)
-		}
+		fn from(val: u64) -> Self { TestAccountId::new(val) }
 	}
 
 	impl From<[u8; 32]> for TestAccountId {
@@ -415,9 +465,7 @@ pub mod doughnut {
 	}
 
 	impl AsRef<[u8]> for TestAccountId {
-		fn as_ref(&self) -> &[u8] {
-			&self.0[..]
-		}
+		fn as_ref(&self) -> &[u8] { &self.0[..] }
 	}
 
 	impl Into<[u8; 32]> for TestAccountId {
@@ -447,7 +495,11 @@ pub mod doughnut {
 
 	impl fmt::Display for TestDoughnut {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(f, "TestDoughnut(issuer: {:?}, holder: {:?})", self.issuer, self.holder)
+			write!(
+				f,
+				"TestDoughnut(issuer: {:?}, holder: {:?})",
+				self.issuer, self.holder
+			)
 		}
 	}
 
@@ -455,13 +507,21 @@ pub mod doughnut {
 		type PublicKey = TestAccountId;
 		type Signature = [u8; 64];
 		type Timestamp = u32;
+
 		fn holder(&self) -> Self::PublicKey { self.holder.clone() }
+
 		fn issuer(&self) -> Self::PublicKey { self.issuer.clone() }
+
 		fn expiry(&self) -> Self::Timestamp { u32::max_value() }
+
 		fn not_before(&self) -> Self::Timestamp { 0 }
+
 		fn payload(&self) -> Vec<u8> { Default::default() }
+
 		fn signature(&self) -> Self::Signature { [0u8; 64] }
+
 		fn signature_version(&self) -> u8 { 0 }
+
 		fn get_domain(&self, _domain: &str) -> Option<&[u8]> { None }
 	}
 }

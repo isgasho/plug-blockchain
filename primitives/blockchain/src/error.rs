@@ -16,14 +16,14 @@
 
 //! Substrate client possible errors.
 
-use std::{self, error, result};
-use sp_state_machine;
-use sp_runtime::transaction_validity::TransactionValidityError;
+use derive_more::{Display, From};
+use parity_scale_codec::Error as CodecError;
 #[allow(deprecated)]
 use sp_block_builder_runtime_api::compatability_v3;
 use sp_consensus;
-use derive_more::{Display, From};
-use parity_scale_codec::Error as CodecError;
+use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_state_machine;
+use std::{self, error, result};
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
@@ -139,9 +139,7 @@ impl error::Error for Error {
 }
 
 impl<'a> From<&'a str> for Error {
-	fn from(s: &'a str) -> Self {
-		Error::Msg(s.into())
-	}
+	fn from(s: &'a str) -> Self { Error::Msg(s.into()) }
 }
 
 #[allow(deprecated)]
@@ -157,12 +155,8 @@ impl From<compatability_v3::ApplyError> for ApplyExtrinsicFailed {
 
 impl Error {
 	/// Chain a blockchain error.
-	pub fn from_blockchain(e: Box<Error>) -> Self {
-		Error::Blockchain(e)
-	}
+	pub fn from_blockchain(e: Box<Error>) -> Self { Error::Blockchain(e) }
 
 	/// Chain a state error.
-	pub fn from_state(e: Box<dyn sp_state_machine::Error>) -> Self {
-		Error::Execution(e)
-	}
+	pub fn from_state(e: Box<dyn sp_state_machine::Error>) -> Self { Error::Execution(e) }
 }

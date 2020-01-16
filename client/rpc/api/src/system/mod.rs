@@ -24,8 +24,10 @@ use jsonrpc_derive::rpc;
 
 use self::error::Result;
 
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
-pub use self::gen_client::Client as SystemClient;
+pub use self::{
+	gen_client::Client as SystemClient,
+	helpers::{Health, NodeRole, PeerInfo, Properties, SystemInfo},
+};
 
 /// Substrate system RPC API
 #[rpc]

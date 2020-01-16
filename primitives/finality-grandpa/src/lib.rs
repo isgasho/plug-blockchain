@@ -21,15 +21,14 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+use codec::{Codec, Decode, Encode, Input};
+use rstd::{borrow::Cow, vec::Vec};
 #[cfg(feature = "std")]
 use serde::Serialize;
-use codec::{Encode, Decode, Input, Codec};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-use rstd::borrow::Cow;
-use rstd::vec::Vec;
 
 mod app {
-	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	use app_crypto::{app_crypto, ed25519, key_types::GRANDPA};
 	app_crypto!(ed25519, GRANDPA);
 }
 
@@ -173,9 +172,7 @@ const AUTHORITIES_VERISON: u8 = 1;
 pub struct VersionedAuthorityList<'a>(Cow<'a, AuthorityList>);
 
 impl<'a> From<AuthorityList> for VersionedAuthorityList<'a> {
-	fn from(authorities: AuthorityList) -> Self {
-		VersionedAuthorityList(Cow::Owned(authorities))
-	}
+	fn from(authorities: AuthorityList) -> Self { VersionedAuthorityList(Cow::Owned(authorities)) }
 }
 
 impl<'a> From<&'a AuthorityList> for VersionedAuthorityList<'a> {
@@ -185,15 +182,11 @@ impl<'a> From<&'a AuthorityList> for VersionedAuthorityList<'a> {
 }
 
 impl<'a> Into<AuthorityList> for VersionedAuthorityList<'a> {
-	fn into(self) -> AuthorityList {
-		self.0.into_owned()
-	}
+	fn into(self) -> AuthorityList { self.0.into_owned() }
 }
 
 impl<'a> Encode for VersionedAuthorityList<'a> {
-	fn size_hint(&self) -> usize {
-		(AUTHORITIES_VERISON, self.0.as_ref()).size_hint()
-	}
+	fn size_hint(&self) -> usize { (AUTHORITIES_VERISON, self.0.as_ref()).size_hint() }
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		(AUTHORITIES_VERISON, self.0.as_ref()).using_encoded(f)
@@ -204,7 +197,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let (version, authorities): (u8, AuthorityList) = Decode::decode(value)?;
 		if version != AUTHORITIES_VERISON {
-			return Err("unknown Grandpa authorities version".into());
+			return Err("unknown Grandpa authorities version".into())
 		}
 		Ok(authorities.into())
 	}

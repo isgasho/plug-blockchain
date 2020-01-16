@@ -14,21 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::*;
-use super::state_full::split_range;
 use self::error::Error;
+use super::{state_full::split_range, *};
 
-use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use primitives::storage::well_known_keys;
-use primitives::hash::H256;
+use primitives::{hash::H256, storage::well_known_keys};
 use sp_io::hashing::blake2_256;
-use test_client::{
-	prelude::*,
-	consensus::BlockOrigin,
-	runtime,
-};
+use std::sync::Arc;
+use test_client::{consensus::BlockOrigin, prelude::*, runtime};
 
 #[test]
 fn should_return_storage() {
@@ -43,57 +37,83 @@ fn should_return_storage() {
 		.add_extra_child_storage(STORAGE_KEY.to_vec(), KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let client = new_full(
+		Arc::new(client),
+		Subscriptions::new(Arc::new(core.executor())),
+	);
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
 
 	assert_eq!(
-		client.storage(key.clone(), Some(genesis_hash).into()).wait()
-			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		client
+			.storage(key.clone(), Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.map(|x| x.0.len()))
+			.unwrap()
+			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client.storage_hash(key.clone(), Some(genesis_hash).into()).wait()
+		client
+			.storage_hash(key.clone(), Some(genesis_hash).into())
+			.wait()
 			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
-		client.storage_size(key.clone(), None).wait().unwrap().unwrap() as usize,
+		client
+			.storage_size(key.clone(), None)
+			.wait()
+			.unwrap()
+			.unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_eq!(
 		core.block_on(
-			client.child_storage(storage_key, key, Some(genesis_hash).into())
+			client
+				.child_storage(storage_key, key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
-		).unwrap().unwrap() as usize,
+		)
+		.unwrap()
+		.unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
-
 }
 
 #[test]
 fn should_return_child_storage() {
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::TestClientBuilder::new()
-		.add_child_storage("test", "key", vec![42_u8])
-		.build());
+	let client = Arc::new(
+		test_client::TestClientBuilder::new()
+			.add_child_storage("test", "key", vec![42_u8])
+			.build(),
+	);
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
+	let child_key = StorageKey(
+		well_known_keys::CHILD_STORAGE_KEY_PREFIX
+			.iter()
+			.chain(b"test")
+			.cloned()
+			.collect(),
+	);
 	let key = StorageKey(b"key".to_vec());
-
 
 	assert_matches!(
 		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		client.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into())
-			.wait().map(|x| x.is_some()),
+		client
+			.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into())
+			.wait()
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.child_storage_size(child_key.clone(), key.clone(), None).wait(),
+		client
+			.child_storage_size(child_key.clone(), key.clone(), None)
+			.wait(),
 		Ok(Some(1))
 	);
 }
@@ -106,7 +126,13 @@ fn should_call_contract() {
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
 
 	assert_matches!(
-		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
+		client
+			.call(
+				"balanceOf".into(),
+				Bytes(vec![1, 2, 3]),
+				Some(genesis_hash).into()
+			)
+			.wait(),
 		Err(Error::Client(_))
 	)
 }
@@ -127,13 +153,17 @@ fn should_notify_about_storage_changes() {
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
+		client
+			.import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 	}
 
 	// assert notification sent to transport
@@ -153,23 +183,31 @@ fn should_send_initial_storage_changes_and_notifications() {
 		let client = Arc::new(test_client::new());
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
-		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(
+			AccountKeyring::Alice.into(),
+		));
 
-		api.subscribe_storage(Default::default(), subscriber, Some(vec![
-			StorageKey(alice_balance_key.to_vec()),
-		]).into());
+		api.subscribe_storage(
+			Default::default(),
+			subscriber,
+			Some(vec![StorageKey(alice_balance_key.to_vec())]).into(),
+		);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
-		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		builder
+			.push_transfer(runtime::Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
+				amount: 42,
+				nonce: 0,
+			})
+			.unwrap();
+		client
+			.import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 	}
 
 	// assert initial values sent to transport
@@ -186,7 +224,10 @@ fn should_send_initial_storage_changes_and_notifications() {
 fn should_query_storage() {
 	fn run_tests(client: Arc<TestClient>) {
 		let core = tokio::runtime::Runtime::new().unwrap();
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let api = new_full(
+			client.clone(),
+			Subscriptions::new(Arc::new(core.executor())),
+		);
 
 		let add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -195,11 +236,17 @@ fn should_query_storage() {
 			// fake change: None -> Some(value) -> Some(value)
 			builder.push_storage_change(vec![2], Some(vec![2])).unwrap();
 			// actual change: None -> Some(value) -> None
-			builder.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None }).unwrap();
+			builder
+				.push_storage_change(vec![3], if nonce == 0 { Some(vec![3]) } else { None })
+				.unwrap();
 			// actual change: None -> Some(value)
-			builder.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) }).unwrap();
+			builder
+				.push_storage_change(vec![4], if nonce == 0 { None } else { Some(vec![4]) })
+				.unwrap();
 			// actual change: Some(value1) -> Some(value2)
-			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
+			builder
+				.push_storage_change(vec![5], Some(vec![nonce as u8]))
+				.unwrap();
 			let block = builder.bake().unwrap();
 			let hash = block.header.hash();
 			client.import(BlockOrigin::Own, block).unwrap();
@@ -232,20 +279,12 @@ fn should_query_storage() {
 
 		// Query changes only up to block1
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(block1_hash).into(),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Query all changes
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			None.into(),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
 
 		expected.push(StorageChangeSet {
 			block: block2_hash,
@@ -258,20 +297,12 @@ fn should_query_storage() {
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Query changes up to block2.
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(block2_hash),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
 		assert_eq!(result.wait().unwrap(), expected);
 
 		// Inverted range.
-		let result = api.query_storage(
-			keys.clone(),
-			block1_hash,
-			Some(genesis_hash),
-		);
+		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -279,18 +310,15 @@ fn should_query_storage() {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
 				details: "from number >= to number".to_owned(),
-			}).map_err(|e| e.to_string())
+			})
+			.map_err(|e| e.to_string())
 		);
 
 		let random_hash1 = H256::random();
 		let random_hash2 = H256::random();
 
 		// Invalid second hash.
-		let result = api.query_storage(
-			keys.clone(),
-			genesis_hash,
-			Some(random_hash1),
-		);
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(random_hash1));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -298,15 +326,12 @@ fn should_query_storage() {
 				from: format!("{:?}", genesis_hash),
 				to: format!("{:?}", Some(random_hash1)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string())
+			})
+			.map_err(|e| e.to_string())
 		);
 
 		// Invalid first hash with Some other hash.
-		let result = api.query_storage(
-			keys.clone(),
-			random_hash1,
-			Some(genesis_hash),
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, Some(genesis_hash));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -314,15 +339,12 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 
 		// Invalid first hash with None.
-		let result = api.query_storage(
-			keys.clone(),
-			random_hash1,
-			None,
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, None);
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -330,15 +352,12 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(block2_hash)), // Best block hash.
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 
 		// Both hashes invalid.
-		let result = api.query_storage(
-			keys.clone(), 
-			random_hash1,
-			Some(random_hash2),
-		);
+		let result = api.query_storage(keys.clone(), random_hash1, Some(random_hash2));
 
 		assert_eq!(
 			result.wait().map_err(|e| e.to_string()),
@@ -346,12 +365,17 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1), // First hash not found.
 				to: format!("{:?}", Some(random_hash2)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string()),
+			})
+			.map_err(|e| e.to_string()),
 		);
 	}
 
 	run_tests(Arc::new(test_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
+	run_tests(Arc::new(
+		TestClientBuilder::new()
+			.set_support_changes_trie(true)
+			.build(),
+	));
 }
 
 #[test]
@@ -363,14 +387,17 @@ fn should_split_ranges() {
 	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
 }
 
-
 #[test]
 fn should_return_runtime_version() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(test_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+	let api = new_full(
+		client.clone(),
+		Subscriptions::new(Arc::new(core.executor())),
+	);
 
+	#[rustfmt::skip]
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
@@ -392,7 +419,10 @@ fn should_notify_on_runtime_version_initially() {
 
 	{
 		let client = Arc::new(test_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let api = new_full(
+			client.clone(),
+			Subscriptions::new(Arc::new(core.executor())),
+		);
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 
@@ -403,7 +433,7 @@ fn should_notify_on_runtime_version_initially() {
 	// assert initial version sent.
 	let (notification, next) = core.block_on(transport.into_future()).unwrap();
 	assert!(notification.is_some());
-		// no more notifications on this channel
+	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
 

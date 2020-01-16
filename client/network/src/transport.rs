@@ -15,15 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p::{
-	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, bandwidth, wasm_ext
-};
-#[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket, noise};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::{either::EitherError, either::EitherOutput};
-use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
+use libp2p::{
+	bandwidth,
+	core::{
+		self,
+		muxing::StreamMuxerBox,
+		transport::{boxed::Boxed, OptionalTransport},
+		upgrade,
+	},
+	identity, mplex, secio, wasm_ext, yamux, InboundUpgradeExt, OutboundUpgradeExt, PeerId,
+	Transport,
+};
+#[cfg(not(target_os = "unknown"))]
+use libp2p::{dns, noise, tcp, websocket};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -38,8 +44,11 @@ pub use self::bandwidth::BandwidthSinks;
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>
-) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+) -> (
+	Boxed<(PeerId, StreamMuxerBox), io::Error>,
+	Arc<bandwidth::BandwidthSinks>,
+) {
 	// Build configuration objects for encryption mechanisms.
 	#[cfg(not(target_os = "unknown"))]
 	let noise_config = {
@@ -67,20 +76,24 @@ pub fn build_transport(
 		OptionalTransport::none()
 	};
 	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport(if !memory_only {
-		let desktop_trans = tcp::TcpConfig::new();
-		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
-			.or_transport(desktop_trans);
-		OptionalTransport::some(dns::DnsConfig::new(desktop_trans))
-	} else {
-		OptionalTransport::none()
-	});
+	let transport = transport.or_transport(
+		if !memory_only {
+			let desktop_trans = tcp::TcpConfig::new();
+			let desktop_trans =
+				websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
+			OptionalTransport::some(dns::DnsConfig::new(desktop_trans))
+		} else {
+			OptionalTransport::none()
+		},
+	);
 
-	let transport = transport.or_transport(if memory_only {
-		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
-	} else {
-		OptionalTransport::none()
-	});
+	let transport = transport.or_transport(
+		if memory_only {
+			OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
+		} else {
+			OptionalTransport::none()
+		},
+	);
 
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
@@ -90,20 +103,26 @@ pub fn build_transport(
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.and_then(move |stream, endpoint| {
 		let upgrade = core::upgrade::SelectUpgrade::new(noise_config, secio_config);
-		core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-			.and_then(|out| match out {
+		core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1).and_then(|out| {
+			match out {
 				// We negotiated noise
 				EitherOutput::First((remote_id, out)) => {
 					let remote_key = match remote_id {
 						noise::RemoteIdentity::IdentityKey(key) => key,
-						_ => return Err(upgrade::UpgradeError::Apply(EitherError::A(noise::NoiseError::InvalidKey)))
+						_ => {
+							return Err(upgrade::UpgradeError::Apply(EitherError::A(
+								noise::NoiseError::InvalidKey,
+							)))
+						},
 					};
 					Ok((EitherOutput::First(out), remote_key.into_peer_id()))
-				}
+				},
 				// We negotiated secio
-				EitherOutput::Second((remote_id, out)) =>
+				EitherOutput::Second((remote_id, out)) => {
 					Ok((EitherOutput::Second(out), remote_id))
-			})
+				},
+			}
+		})
 	});
 
 	// For WASM, we only support secio for now.
@@ -114,7 +133,8 @@ pub fn build_transport(
 	});
 
 	// Multiplexing
-	let transport = transport.and_then(move |(stream, peer_id), endpoint| {
+	let transport = transport
+		.and_then(move |(stream, peer_id), endpoint| {
 			let peer_id2 = peer_id.clone();
 			let upgrade = core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 				.map_inbound(move |muxer| (peer_id, muxer))
@@ -123,7 +143,6 @@ pub fn build_transport(
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
-
 		.timeout(Duration::from_secs(20))
 		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 		.boxed();

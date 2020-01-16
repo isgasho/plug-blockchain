@@ -45,17 +45,20 @@
 //! ## Example
 //!
 //! ```
-//! use std::sync::Arc;
-//! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use primitives::Blake2Hasher;
-//! use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
 //! use executor::{NativeExecutor, WasmExecutionMethod};
+//! use primitives::Blake2Hasher;
+//! use sc_client::{in_mem::Backend, Client, LocalCallExecutor};
+//! use sp_runtime::{ChildrenStorageOverlay, StorageOverlay};
+//! use std::sync::Arc;
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
 //! // `substrate-test-runtime-client` crate. These types are automatically generated when
 //! // compiling a runtime. In a typical use-case, these types would have been to be generated
 //! // from your runtime.
-//! use test_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
+//! use test_client::{
+//! 	runtime::{Block, RuntimeApi},
+//! 	LocalExecutor,
+//! 	};
 //!
 //! let backend = Arc::new(Backend::<Block, Blake2Hasher>::new());
 //! let client = Client::<_, _, _, RuntimeApi>::new(
@@ -63,43 +66,39 @@
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
-//!		),
+//! 		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
-//! );
+//! 	);
 //! ```
-//!
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-pub mod cht;
-pub mod in_mem;
-pub mod genesis;
-pub mod light;
-pub mod leaves;
 mod call_executor;
+pub mod cht;
 mod client;
+pub mod genesis;
+pub mod in_mem;
+pub mod leaves;
+pub mod light;
 
-pub use client_api::{
-	blockchain,
-	blockchain::well_known_cache_keys,
-	blockchain::Info as ChainInfo,
-	notifications::{StorageEventStream, StorageChangeSet},
-	call_executor::CallExecutor,
-	utils,
-};
 pub use crate::{
 	call_executor::LocalCallExecutor,
 	client::{
-		new_with_backend,
-		new_in_mem,
-		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
-		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
+		apply_aux, new_in_mem, new_with_backend, BlockBody, BlockImportNotification, BlockOf,
+		BlockchainEvents, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
+		FinalityNotifications, ForkBlocks, ImportNotifications, LongestChain, ProvideUncles,
 	},
 	leaves::LeafSet,
+};
+pub use client_api::{
+	blockchain,
+	blockchain::{well_known_cache_keys, Info as ChainInfo},
+	call_executor::CallExecutor,
+	notifications::{StorageChangeSet, StorageEventStream},
+	utils,
 };
 pub use state_machine::{ExecutionStrategy, StorageProof};

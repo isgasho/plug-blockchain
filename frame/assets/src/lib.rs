@@ -33,8 +33,8 @@
 //!
 //! ### Terminology
 //!
-//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the
-//!   account that issues the asset.
+//! * **Asset issuance:** The creation of a new asset, whose total supply will belong to the account
+//!   that issues the asset.
 //! * **Asset transfer:** The action of transferring assets from one account to another.
 //! * **Asset destruction:** The process of an account removing its entire holding of an asset.
 //! * **Fungible asset:** An asset whose units are interchangeable.
@@ -46,20 +46,22 @@
 //!
 //! * Issue a unique asset to its creator's account.
 //! * Move assets between accounts.
-//! * Remove an account's balance of an asset when requested by that account's owner and update
-//!   the asset's total supply.
+//! * Remove an account's balance of an asset when requested by that account's owner and update the
+//!   asset's total supply.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
-//! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
+//! * `issue` - Issues the total supply of a new fungible asset to the account of the caller of the
+//!   function.
 //! * `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of
 //! the function caller's account (`origin`) to a `target` account.
 //! * `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account
 //! that called the function.
 //!
-//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
+//! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for
+//! documentation on each function.
 //!
 //! ### Public Functions
 //! <!-- Original author of descriptions: @gavofyork -->
@@ -67,11 +69,13 @@
 //! * `balance` - Get the asset `id` balance of `who`.
 //! * `total_supply` - Get the total supply of an asset `id`.
 //!
-//! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
+//! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available
+//! functions.
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Assets module in your runtime by exposing public functions to:
+//! The following example shows how to use the Assets module in your runtime by exposing public
+//! functions to:
 //!
 //! * Issue a new fungible asset for a token distribution event (airdrop).
 //! * Query the fungible asset holding balance of an account.
@@ -79,7 +83,8 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the Assets module and types and derive your runtime's configuration traits from the Assets module trait.
+//! Import the Assets module and types and derive your runtime's configuration traits from the
+//! Assets module trait.
 //!
 //! ### Simple Code Snippet
 //!
@@ -119,8 +124,7 @@
 //! Below are assumptions that must be held when using this module.  If any of
 //! them are violated, the behavior of this module is undefined.
 //!
-//! * The total count of assets should be less than
-//!   `Trait::AssetId::max_value()`.
+//! * The total count of assets should be less than `Trait::AssetId::max_value()`.
 //!
 //! ## Related Modules
 //!
@@ -130,10 +134,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use support::{Parameter, decl_module, decl_event, decl_storage, ensure};
-use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
+use sp_runtime::traits::{Member, One, SimpleArithmetic, StaticLookup, Zero};
+use support::{decl_event, decl_module, decl_storage, ensure, Parameter};
 use system::ensure_signed;
-use sp_runtime::traits::One;
 
 /// The module configuration trait.
 pub trait Trait: system::Trait {
@@ -231,20 +234,22 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the total supply of an asset `id`.
-	pub fn total_supply(id: T::AssetId) -> T::Balance {
-		<TotalSupply<T>>::get(id)
-	}
+	pub fn total_supply(id: T::AssetId) -> T::Balance { <TotalSupply<T>>::get(id) }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use primitives::H256;
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -262,35 +267,38 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type Call = ();
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
+		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 	impl Trait for Test {
-		type Event = ();
-		type Balance = u64;
 		type AssetId = u32;
+		type Balance = u64;
+		type Event = ();
 	}
 	type Assets = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap()
+			.into()
 	}
 
 	#[test]
@@ -339,7 +347,10 @@ mod tests {
 			assert_eq!(Assets::balance(0, 2), 50);
 			assert_ok!(Assets::destroy(Origin::signed(1), 0));
 			assert_eq!(Assets::balance(0, 1), 0);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), "origin account balance must be greater than or equal to the transfer amount");
+			assert_noop!(
+				Assets::transfer(Origin::signed(1), 0, 1, 50),
+				"origin account balance must be greater than or equal to the transfer amount"
+			);
 		});
 	}
 
@@ -348,7 +359,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount should be non-zero");
+			assert_noop!(
+				Assets::transfer(Origin::signed(1), 0, 2, 0),
+				"transfer amount should be non-zero"
+			);
 		});
 	}
 
@@ -357,7 +371,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), "origin account balance must be greater than or equal to the transfer amount");
+			assert_noop!(
+				Assets::transfer(Origin::signed(1), 0, 2, 101),
+				"origin account balance must be greater than or equal to the transfer amount"
+			);
 		});
 	}
 
@@ -375,7 +392,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 2), 0);
-			assert_noop!(Assets::destroy(Origin::signed(2), 0), "origin balance should be non-zero");
+			assert_noop!(
+				Assets::destroy(Origin::signed(2), 0),
+				"origin balance should be non-zero"
+			);
 		});
 	}
 }

@@ -21,8 +21,8 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 
-mod impl_runtime_apis;
 mod decl_runtime_apis;
+mod impl_runtime_apis;
 mod utils;
 
 /// Tags given trait implementations as runtime apis.
@@ -79,32 +79,32 @@ mod utils;
 /// #       fn initialize_block(_header: &Header) {}
 /// #   }
 ///
-///     impl self::Balance<Block> for Runtime {
-///         fn get_balance() -> u64 {
-///             1
-///         }
-///         fn set_balance(_bal: u64) {
-///             // Store the balance
-///         }
-///     }
+/// 	impl self::Balance<Block> for Runtime {
+/// 		fn get_balance() -> u64 {
+/// 			1
+/// 			}
+/// 		fn set_balance(_bal: u64) {
+/// 			// Store the balance
+/// 			}
+/// 			}
 ///
-///     impl self::BlockBuilder<Block> for Runtime {
-///         fn build_block() -> Block {
-///              unimplemented!("Please implement me!")
-///         }
-///     }
-/// }
+/// 	impl self::BlockBuilder<Block> for Runtime {
+/// 		fn build_block() -> Block {
+/// 			 unimplemented!("Please implement me!")
+/// 			}
+/// 			}
+/// 			}
 ///
 /// /// Runtime version. This needs to be declared for each runtime.
 /// pub const VERSION: sp_version::RuntimeVersion = sp_version::RuntimeVersion {
-///     spec_name: create_runtime_str!("node"),
-///     impl_name: create_runtime_str!("test-node"),
-///     authoring_version: 1,
-///     spec_version: 1,
-///     impl_version: 0,
-///     // Here we are exposing the runtime api versions.
-///     apis: RUNTIME_API_VERSIONS,
-/// };
+/// 	spec_name: create_runtime_str!("node"),
+/// 	impl_name: create_runtime_str!("test-node"),
+/// 	authoring_version: 1,
+/// 	spec_version: 1,
+/// 	impl_version: 0,
+/// 	// Here we are exposing the runtime api versions.
+/// 	apis: RUNTIME_API_VERSIONS,
+/// 	};
 ///
 /// # fn main() {}
 /// ```
@@ -128,22 +128,22 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// ```rust
 /// sp_api::decl_runtime_apis! {
-///     /// Declare the api trait.
-///     pub trait Balance {
-///         /// Get the balance.
-///         fn get_balance() -> u64;
-///         /// Set the balance.
-///         fn set_balance(val: u64);
-///     }
+/// /// Declare the api trait.
+/// pub trait Balance {
+/// 	/// Get the balance.
+/// 	fn get_balance() -> u64;
+/// 	/// Set the balance.
+/// 	fn set_balance(val: u64);
+/// 			}
 ///
-///     /// You can declare multiple api traits in one macro call.
-///     /// In one module you can call the macro at maximum one time.
-///     pub trait BlockBuilder {
-///         /// The macro adds an explicit `Block: BlockT` generic parameter for you.
-///         /// You can use this generic parameter as you would defined it manually.
-///         fn build_block() -> Block;
-///     }
-/// }
+/// /// You can declare multiple api traits in one macro call.
+/// /// In one module you can call the macro at maximum one time.
+/// pub trait BlockBuilder {
+/// 	/// The macro adds an explicit `Block: BlockT` generic parameter for you.
+/// 	/// You can use this generic parameter as you would defined it manually.
+/// 	fn build_block() -> Block;
+/// 			}
+/// 			}
 ///
 /// # fn main() {}
 /// ```
@@ -160,22 +160,22 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// ```rust
 /// sp_api::decl_runtime_apis! {
-///     /// Declare the api trait.
-///     #[api_version(2)]
-///     pub trait Balance {
-///         /// Get the balance.
-///         fn get_balance() -> u64;
-///         /// Set balance.
-///         fn set_balance(val: u64);
-///         /// Set balance, old version.
-///         ///
-///         /// Is callable by `set_balance_before_version_2`.
-///         #[changed_in(2)]
-///         fn set_balance(val: u16);
-///         /// In version 2, we added this new function.
-///         fn increase_balance(val: u64);
-///     }
-/// }
+/// /// Declare the api trait.
+/// #[api_version(2)]
+/// pub trait Balance {
+/// 	/// Get the balance.
+/// 	fn get_balance() -> u64;
+/// 	/// Set balance.
+/// 	fn set_balance(val: u64);
+/// 	/// Set balance, old version.
+/// 	///
+/// 	/// Is callable by `set_balance_before_version_2`.
+/// 	#[changed_in(2)]
+/// 	fn set_balance(val: u16);
+/// 	/// In version 2, we added this new function.
+/// 	fn increase_balance(val: u64);
+/// 			}
+/// 			}
 ///
 /// # fn main() {}
 /// ```

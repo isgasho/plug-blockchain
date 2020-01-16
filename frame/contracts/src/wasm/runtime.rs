@@ -16,19 +16,17 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{
-	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
+use crate::{
+	exec::{ExecError, ExecResult, ExecReturnValue, Ext, StorageKey, TopicOf, STATUS_SUCCESS},
+	gas::{approx_gas_for_balance, Gas, GasMeter, GasMeterResult, Token},
+	BalanceOf, CodeHash, ComputeDispatchFee, Schedule, Trait,
 };
-use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use codec::{Decode, Encode};
+use rstd::{convert::TryInto, mem, prelude::*};
 use sandbox;
+use sp_runtime::traits::{Bounded, SaturatedConversion};
 use support::additional_traits::DelegatedDispatchVerifier;
 use system;
-use rstd::prelude::*;
-use rstd::convert::TryInto;
-use rstd::mem;
-use codec::{Decode, Encode};
-use sp_runtime::traits::{Bounded, SaturatedConversion};
 
 type DelegatedDispatchVerifierOf<E> = <<E as Ext>::T as system::Trait>::DelegatedDispatchVerifier;
 
@@ -81,7 +79,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> ExecResult {
 	// Special case. The trap was the result of the execution `return` host function.
 	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
-		return Ok(ExecReturnValue { status: STATUS_SUCCESS, data });
+		return Ok(ExecReturnValue {
+			status: STATUS_SUCCESS,
+			data,
+		})
 	}
 
 	// Check the exact type of the error.
@@ -90,29 +91,43 @@ pub(crate) fn to_execution_result<E: Ext>(
 		Ok(sandbox::ReturnValue::Unit) => {
 			let mut buffer = runtime.scratch_buf;
 			buffer.clear();
-			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
-		}
+			Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: buffer,
+			})
+		},
 		Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(exit_code))) => {
-			let status = (exit_code & 0xFF).try_into()
+			let status = (exit_code & 0xFF)
+				.try_into()
 				.expect("exit_code is masked into the range of a u8; qed");
-			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
-		}
+			Ok(ExecReturnValue {
+				status,
+				data: runtime.scratch_buf,
+			})
+		},
 		// This should never happen as the return type of exported functions should have been
 		// validated by the code preparation process. However, because panics are really
 		// undesirable in the runtime code, we treat this as a trap for now. Eventually, we might
 		// want to revisit this.
-		Ok(_) => Err(ExecError { reason: "return type error", buffer: runtime.scratch_buf }),
+		Ok(_) => Err(ExecError {
+			reason: "return type error",
+			buffer: runtime.scratch_buf,
+		}),
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
 		//
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
-		Err(sandbox::Error::Module) =>
-			Err(ExecError { reason: "validation error", buffer: runtime.scratch_buf }),
+		Err(sandbox::Error::Module) => Err(ExecError {
+			reason: "validation error",
+			buffer: runtime.scratch_buf,
+		}),
 		// Any other kind of a trap should result in a failure.
-		Err(sandbox::Error::Execution) | Err(sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "during execution", buffer: runtime.scratch_buf }),
+		Err(sandbox::Error::Execution) | Err(sandbox::Error::OutOfBounds) => Err(ExecError {
+			reason: "during execution",
+			buffer: runtime.scratch_buf,
+		}),
 	}
 }
 
@@ -131,8 +146,8 @@ pub enum RuntimeToken {
 	ReturnData(u32),
 	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
 	ComputedDispatchFee(Gas),
-	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
-	/// given number of topics.
+	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with
+	/// the given number of topics.
 	DepositEvent(u32, u32),
 }
 
@@ -163,13 +178,11 @@ impl<T: Trait> Token<T> for RuntimeToken {
 
 				data_cost
 					.and_then(|data_cost| {
-						topics_cost.and_then(|topics_cost| {
-							data_cost.checked_add(topics_cost)
-						})
+						topics_cost.and_then(|topics_cost| data_cost.checked_add(topics_cost))
 					})
-					.and_then(|data_and_topics_cost|
+					.and_then(|data_and_topics_cost| {
 						data_and_topics_cost.checked_add(metadata.event_base_cost)
-					)
+					})
 			},
 			ComputedDispatchFee(gas) => Some(gas),
 		};
@@ -208,7 +221,9 @@ fn read_sandbox_memory<E: Ext>(
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	ctx.memory
+		.get(ptr, buf.as_mut_slice())
+		.map_err(|_| sandbox::HostError)?;
 	Ok(buf)
 }
 
@@ -228,7 +243,9 @@ fn read_sandbox_memory_into_scratch<E: Ext>(
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	ctx.scratch_buf.resize(len as usize, 0);
-	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	ctx.memory
+		.get(ptr, ctx.scratch_buf.as_mut_slice())
+		.map_err(|_| sandbox::HostError)?;
 	Ok(())
 }
 
@@ -245,7 +262,11 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ptr: u32,
 	buf: &mut [u8],
 ) -> Result<(), sandbox::HostError> {
-	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		RuntimeToken::ReadMemory(buf.len() as u32),
+	)?;
 
 	ctx.memory.get(ptr, buf).map_err(Into::into)
 }
@@ -283,7 +304,11 @@ fn write_sandbox_memory<T: Trait>(
 	ptr: u32,
 	buf: &[u8],
 ) -> Result<(), sandbox::HostError> {
-	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
+	charge_gas(
+		gas_meter,
+		schedule,
+		RuntimeToken::WriteMemory(buf.len() as u32),
+	)?;
 
 	memory.set(ptr, buf)?;
 
@@ -887,14 +912,10 @@ define_env!(Env, <E: Ext>,
 /// the order of items is not preserved.
 fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 	// Sort the vector
-	items.sort_unstable_by(|a, b| {
-		Ord::cmp(a.as_ref(), b.as_ref())
-	});
+	items.sort_unstable_by(|a, b| Ord::cmp(a.as_ref(), b.as_ref()));
 	// And then find any two consecutive equal elements.
-	items.windows(2).any(|w| {
-		match w {
-			&[ref a, ref b] => a == b,
-			_ => false,
-		}
+	items.windows(2).any(|w| match w {
+		&[ref a, ref b] => a == b,
+		_ => false,
 	})
 }

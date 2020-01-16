@@ -22,34 +22,36 @@
 
 // This provides "unused" building blocks to other crates
 #![allow(dead_code)]
-
 // our error-chain could potentially blow up otherwise
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use sp_runtime::{traits::{Block as BlockT, DigestFor}, generic::BlockId};
 use futures::prelude::*;
 pub use inherents::InherentData;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, DigestFor},
+};
 
-pub mod block_validation;
-pub mod offline_tracker;
-pub mod error;
 pub mod block_import;
-mod select_chain;
-pub mod import_queue;
+pub mod block_validation;
+pub mod error;
 pub mod evaluation;
+pub mod import_queue;
+pub mod offline_tracker;
+mod select_chain;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::Error;
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, BlockCheckParams, ImportResult,
-	JustificationImport, FinalityProofImport,
+	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, FinalityProofImport,
+	ForkChoiceStrategy, ImportResult, ImportedAux, JustificationImport,
 };
 pub use select_chain::SelectChain;
 
@@ -68,7 +70,8 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-/// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
+/// Environment producer for a Consensus instance. Creates proposer instance and communication
+/// streams.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B>;
@@ -77,8 +80,7 @@ pub trait Environment<B: BlockT> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&mut self, parent_header: &B::Header)
-		-> Result<Self::Proposer, Self::Error>;
+	fn init(&mut self, parent_header: &B::Header) -> Result<Self::Proposer, Self::Error>;
 }
 
 /// Logic for a proposer.
@@ -120,17 +122,18 @@ pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
 	fn is_major_syncing(&mut self) -> bool { false }
+
 	fn is_offline(&mut self) -> bool { false }
 }
 
-impl<T> SyncOracle for Arc<T> where T: ?Sized, for<'r> &'r T: SyncOracle {
-	fn is_major_syncing(&mut self) -> bool {
-		<&T>::is_major_syncing(&mut &**self)
-	}
+impl<T> SyncOracle for Arc<T>
+where
+	T: ?Sized,
+	for<'r> &'r T: SyncOracle,
+{
+	fn is_major_syncing(&mut self) -> bool { <&T>::is_major_syncing(&mut &**self) }
 
-	fn is_offline(&mut self) -> bool {
-		<&T>::is_offline(&mut &**self)
-	}
+	fn is_offline(&mut self) -> bool { <&T>::is_offline(&mut &**self) }
 }
 
 /// Checks if the current active native block authoring implementation can author with the runtime
@@ -151,9 +154,7 @@ pub struct CanAuthorWithNativeVersion<T>(T);
 
 impl<T> CanAuthorWithNativeVersion<T> {
 	/// Creates a new instance of `Self`.
-	pub fn new(inner: T) -> Self {
-		Self(inner)
-	}
+	pub fn new(inner: T) -> Self { Self(inner) }
 }
 
 impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
@@ -162,13 +163,10 @@ impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {
 			Ok(version) => self.0.native_version().can_author_with(&version),
-			Err(e) => {
-				Err(format!(
-					"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
-					at,
-					e,
-				))
-			}
+			Err(e) => Err(format!(
+				"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
+				at, e,
+			)),
 		}
 	}
 }
@@ -177,9 +175,7 @@ impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<
 pub struct AlwaysCanAuthor;
 
 impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
-	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
-		Ok(())
-	}
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> { Ok(()) }
 }
 
 /// A type from which a slot duration can be obtained.
@@ -192,9 +188,7 @@ pub trait SlotData {
 }
 
 impl SlotData for u64 {
-	fn slot_duration(&self) -> u64 {
-		*self
-	}
-
 	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
+
+	fn slot_duration(&self) -> u64 { *self }
 }

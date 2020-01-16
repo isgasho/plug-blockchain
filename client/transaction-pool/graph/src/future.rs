@@ -16,16 +16,13 @@
 
 use std::{
 	collections::{HashMap, HashSet},
-	fmt,
-	hash,
+	fmt, hash,
 	sync::Arc,
 	time,
 };
 
 use primitives::hexdisplay::HexDisplay;
-use sp_runtime::transaction_validity::{
-	TransactionTag as Tag,
-};
+use sp_runtime::transaction_validity::TransactionTag as Tag;
 
 use crate::base_pool::Transaction;
 
@@ -76,12 +73,14 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		provided: &HashMap<Tag, Hash>,
 		recently_pruned: &[HashSet<Tag>],
 	) -> Self {
-		let missing_tags = transaction.requires
+		let missing_tags = transaction
+			.requires
 			.iter()
 			.filter(|tag| {
 				// is true if the tag is already satisfied either via transaction in the pool
 				// or one that was recently included.
-				let is_provided = provided.contains_key(&**tag) || recently_pruned.iter().any(|x| x.contains(&**tag));
+				let is_provided = provided.contains_key(&**tag)
+					|| recently_pruned.iter().any(|x| x.contains(&**tag));
 				!is_provided
 			})
 			.cloned()
@@ -95,14 +94,10 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 	}
 
 	/// Marks the tag as satisfied.
-	pub fn satisfy_tag(&mut self, tag: &Tag) {
-		self.missing_tags.remove(tag);
-	}
+	pub fn satisfy_tag(&mut self, tag: &Tag) { self.missing_tags.remove(tag); }
 
 	/// Returns true if transaction has all requirements satisfied.
-	pub fn is_ready(&self) -> bool {
-		self.missing_tags.is_empty()
-	}
+	pub fn is_ready(&self) -> bool { self.missing_tags.is_empty() }
 }
 
 /// A pool of transactions that are not yet ready to be included in the block.
@@ -142,11 +137,17 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// we should remove the transactions from here and move them to the Ready queue.
 	pub fn import(&mut self, tx: WaitingTransaction<Hash, Ex>) {
 		assert!(!tx.is_ready(), "Transaction is ready.");
-		assert!(!self.waiting.contains_key(&tx.transaction.hash), "Transaction is already imported.");
+		assert!(
+			!self.waiting.contains_key(&tx.transaction.hash),
+			"Transaction is already imported."
+		);
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
-			let entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
+			let entry = self
+				.wanted_tags
+				.entry(tag.clone())
+				.or_insert_with(HashSet::new);
 			entry.insert(tx.transaction.hash.clone());
 		}
 
@@ -155,20 +156,24 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Returns true if given hash is part of the queue.
-	pub fn contains(&self, hash: &Hash) -> bool {
-		self.waiting.contains_key(hash)
-	}
+	pub fn contains(&self, hash: &Hash) -> bool { self.waiting.contains_key(hash) }
 
 	/// Returns a list of known transactions
 	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
-		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
+		hashes
+			.iter()
+			.map(|h| self.waiting.get(h).map(|x| x.transaction.clone()))
+			.collect()
 	}
 
 	/// Satisfies provided tags in transactions that are waiting for them.
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
 	/// satisfied and now we can remove them from Future and move to Ready queue.
-	pub fn satisfy_tags<T: AsRef<Tag>>(&mut self, tags: impl IntoIterator<Item=T>) -> Vec<WaitingTransaction<Hash, Ex>> {
+	pub fn satisfy_tags<T: AsRef<Tag>>(
+		&mut self,
+		tags: impl IntoIterator<Item = T>,
+	) -> Vec<WaitingTransaction<Hash, Ex>> {
 		let mut became_ready = vec![];
 
 		for tag in tags {
@@ -203,7 +208,9 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 					let remove = if let Some(wanted) = self.wanted_tags.get_mut(&tag) {
 						wanted.remove(hash);
 						wanted.is_empty()
-					} else { false };
+					} else {
+						false
+					};
 					if remove {
 						self.wanted_tags.remove(&tag);
 					}
@@ -216,14 +223,15 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Fold a list of future transactions to compute a single value.
-	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
-		self.waiting
-			.values()
-			.fold(None, f)
+	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(
+		&mut self,
+		f: F,
+	) -> Option<R> {
+		self.waiting.values().fold(None, f)
 	}
 
 	/// Returns iterator over all future transactions
-	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
+	pub fn all(&self) -> impl Iterator<Item = &Transaction<Hash, Ex>> {
 		self.waiting.values().map(|waiting| &*waiting.transaction)
 	}
 
@@ -234,12 +242,12 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	}
 
 	/// Returns number of transactions in the Future queue.
-	pub fn len(&self) -> usize {
-		self.waiting.len()
-	}
+	pub fn len(&self) -> usize { self.waiting.len() }
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
+		self.waiting
+			.values()
+			.fold(0, |acc, tx| acc + tx.transaction.bytes)
 	}
 }

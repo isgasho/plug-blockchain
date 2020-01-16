@@ -23,16 +23,14 @@ use tempfile::tempdir;
 /// # Returns
 /// Returns `None` if everything was found and `Some(ERR_MSG)` if something could not be found.
 pub fn check() -> Option<&'static str> {
-	if !check_nightly_installed(){
+	if !check_nightly_installed() {
 		return Some("Rust nightly not installed, please install it!")
 	}
 
 	check_wasm_toolchain_installed()
 }
 
-fn check_nightly_installed() -> bool {
-	crate::get_nightly_cargo().is_nightly()
-}
+fn check_nightly_installed() -> bool { crate::get_nightly_cargo().is_nightly() }
 
 fn check_wasm_toolchain_installed() -> Option<&'static str> {
 	let temp = tempdir().expect("Creating temp dir does not fail; qed");
@@ -41,7 +39,8 @@ fn check_wasm_toolchain_installed() -> Option<&'static str> {
 	let test_file = temp.path().join("src/lib.rs");
 	let manifest_path = temp.path().join("Cargo.toml");
 
-	fs::write(&manifest_path,
+	fs::write(
+		&manifest_path,
 		r#"
 			[package]
 			name = "wasm-test"
@@ -54,18 +53,23 @@ fn check_wasm_toolchain_installed() -> Option<&'static str> {
 
 			[workspace]
 		"#,
-	).expect("Writing wasm-test manifest does not fail; qed");
-	fs::write(&test_file, "pub fn test() {}")
-		.expect("Writing to the test file does not fail; qed");
+	)
+	.expect("Writing wasm-test manifest does not fail; qed");
+	fs::write(&test_file, "pub fn test() {}").expect("Writing to the test file does not fail; qed");
 
 	let err_msg = "Rust WASM toolchain not installed, please install it!";
 	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
 		.command()
-		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
+		.args(&[
+			"build",
+			"--target=wasm32-unknown-unknown",
+			"--manifest-path",
+			&manifest_path,
+		])
 		.output()
 		.map_err(|_| err_msg)
-		.and_then(|s|
+		.and_then(|s| {
 			if s.status.success() {
 				Ok(())
 			} else {
@@ -73,9 +77,9 @@ fn check_wasm_toolchain_installed() -> Option<&'static str> {
 					Ok(ref err) if err.contains("linker `rust-lld` not found") => {
 						Err("`rust-lld` not found, please install it!")
 					},
-					_ => Err(err_msg)
+					_ => Err(err_msg),
 				}
 			}
-		)
+		})
 		.err()
 }

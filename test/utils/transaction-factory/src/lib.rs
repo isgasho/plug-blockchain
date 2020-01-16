@@ -19,32 +19,27 @@
 //!
 //! The factory currently only works on an empty database!
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::cmp::PartialOrd;
-use std::fmt::Display;
+use std::{cmp::PartialOrd, collections::HashMap, fmt::Display, sync::Arc};
 
 use log::info;
 
-use client::Client;
-use block_builder_api::BlockBuilder;
-use sp_api::ConstructRuntimeApi;
-use consensus_common::{
-	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
-	SelectChain
-};
-use consensus_common::block_import::BlockImport;
-use codec::{Decode, Encode};
-use primitives::{Blake2Hasher, Hasher};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
-	One, Zero,
-};
 pub use crate::modes::Mode;
+use block_builder_api::BlockBuilder;
+use client::Client;
+use codec::{Decode, Encode};
+use consensus_common::{
+	block_import::BlockImport, BlockImportParams, BlockOrigin, ForkChoiceStrategy, InherentData,
+	SelectChain,
+};
+use primitives::{Blake2Hasher, Hasher};
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, One, ProvideRuntimeApi, SimpleArithmetic, Zero},
+};
 
-pub mod modes;
 mod complex_mode;
+pub mod modes;
 mod simple_modes;
 
 pub trait RuntimeAdapter {
@@ -86,7 +81,11 @@ pub trait RuntimeAdapter {
 	fn minimum_balance() -> Self::Balance;
 	fn master_account_id() -> Self::AccountId;
 	fn master_account_secret() -> Self::Secret;
-	fn extract_index(&self, account_id: &Self::AccountId, block_hash: &<Self::Block as BlockT>::Hash) -> Self::Index;
+	fn extract_index(
+		&self,
+		account_id: &Self::AccountId,
+		block_hash: &<Self::Block as BlockT>::Hash,
+	) -> Self::Index;
 	fn extract_phase(&self, block_hash: <Self::Block as BlockT>::Hash) -> Self::Phase;
 	fn gen_random_account_id(seed: &Self::Number) -> Self::AccountId;
 	fn gen_random_account_secret(seed: &Self::Number) -> Self::Secret;
@@ -113,16 +112,19 @@ where
 {
 	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
 		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
-		return Err(cli::error::Error::Input(msg));
+		return Err(cli::error::Error::Input(msg))
 	}
 
-	let best_header: Result<<Block as BlockT>::Header, cli::error::Error> =
-		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
+	let best_header: Result<<Block as BlockT>::Header, cli::error::Error> = select_chain
+		.best_chain()
+		.map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let mut best_block_id = BlockId::<Block>::hash(best_hash);
 	let version = client.runtime_version_at(&best_block_id)?.spec_version;
-	let genesis_hash = client.block_hash(Zero::zero())?
-		.expect("Genesis block always exists; qed").into();
+	let genesis_hash = client
+		.block_hash(Zero::zero())?
+		.expect("Genesis block always exists; qed")
+		.into();
 
 	while let Some(block) = match factory_state.mode() {
 		Mode::MasterToNToM => complex_mode::next::<RA, _, _, _, _>(
@@ -168,11 +170,15 @@ where
 		BlockBuilder<Block, Error = sp_blockchain::Error>,
 	RA: RuntimeAdapter,
 {
-	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
-	block.push(
-		Decode::decode(&mut &transfer.encode()[..])
-			.expect("Failed to decode transfer extrinsic")
-	).expect("Failed to push transfer extrinsic into block");
+	let mut block = client
+		.new_block(Default::default())
+		.expect("Failed to create new block");
+	block
+		.push(
+			Decode::decode(&mut &transfer.encode()[..])
+				.expect("Failed to decode transfer extrinsic"),
+		)
+		.expect("Failed to push transfer extrinsic into block");
 
 	for inherent in inherent_extrinsics {
 		block.push(inherent).expect("Failed ...");
@@ -183,8 +189,9 @@ where
 
 fn import_block<Backend, Exec, Block, RtApi>(
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
-	block: Block
-) -> () where
+	block: Block,
+) -> ()
+where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
@@ -201,5 +208,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		allow_missing_state: false,
 		import_existing: false,
 	};
-	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
+	(&**client)
+		.import_block(import, HashMap::new())
+		.expect("Failed to import block");
 }

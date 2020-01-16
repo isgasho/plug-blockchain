@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use rstd::{ops, prelude::*, convert::TryInto};
-use codec::{Encode, Decode, CompactAs};
-use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
+use crate::traits::{SaturatedConversion, Saturating, UniqueSaturatedInto};
+use codec::{CompactAs, Decode, Encode};
+use rstd::{convert::TryInto, ops, prelude::*};
 use sp_debug_derive::RuntimeDebug;
 
 macro_rules! implement_per_thing {

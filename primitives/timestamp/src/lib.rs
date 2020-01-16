@@ -18,12 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
 #[cfg(feature = "std")]
 use codec::Decode;
+use codec::Encode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use inherents::{InherentIdentifier, IsFatalError, InherentData};
+use inherents::{InherentData, InherentIdentifier, IsFatalError};
 
 use sp_runtime::RuntimeString;
 
@@ -82,9 +82,7 @@ pub struct InherentDataProvider;
 
 #[cfg(feature = "std")]
 impl ProvideInherentData for InherentDataProvider {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
+	fn inherent_identifier(&self) -> &'static InherentIdentifier { &INHERENT_IDENTIFIER }
 
 	fn provide_inherent_data(
 		&self,
@@ -94,9 +92,8 @@ impl ProvideInherentData for InherentDataProvider {
 
 		let now = SystemTime::now();
 		now.duration_since(SystemTime::UNIX_EPOCH)
-			.map_err(|_| {
-				"Current time is before unix epoch".into()
-			}).and_then(|d| {
+			.map_err(|_| "Current time is before unix epoch".into())
+			.and_then(|d| {
 				let duration: InherentType = d.as_millis() as u64;
 				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
 			})
@@ -106,7 +103,6 @@ impl ProvideInherentData for InherentDataProvider {
 		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
 	}
 }
-
 
 /// A trait which is called when the timestamp is set.
 #[impl_trait_for_tuples::impl_for_tuples(30)]

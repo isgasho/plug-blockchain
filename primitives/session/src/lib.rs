@@ -21,7 +21,10 @@
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
-use sp_runtime::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, ProvideRuntimeApi},
+};
 
 sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.

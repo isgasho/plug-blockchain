@@ -24,11 +24,13 @@
 //! temporarily be disabled by using an [`AbortGuard`].
 
 use backtrace::Backtrace;
-use std::io::{self, Write};
-use std::marker::PhantomData;
-use std::panic::{self, PanicInfo};
-use std::cell::Cell;
-use std::thread;
+use std::{
+	cell::Cell,
+	io::{self, Write},
+	marker::PhantomData,
+	panic::{self, PanicInfo},
+	thread,
+};
 
 thread_local! {
 	static ON_PANIC: Cell<OnPanic> = Cell::new(OnPanic::Abort);
@@ -54,18 +56,19 @@ enum OnPanic {
 pub fn set(bug_url: &'static str, version: &str) {
 	panic::set_hook(Box::new({
 		let version = version.to_string();
-		move |c| {
-			panic_hook(c, bug_url, &version)
-		}
+		move |c| panic_hook(c, bug_url, &version)
 	}));
 }
 
 macro_rules! ABOUT_PANIC {
-	() => ("
+	() => {
+			"
 This is a bug. Please report it at:
 
 	{}
-")}
+"
+	};
+}
 
 /// Set aborting flag. Returns previous value of the flag.
 fn set_abort(on_panic: OnPanic) -> OnPanic {
@@ -90,7 +93,7 @@ pub struct AbortGuard {
 	/// Value that was in `ABORT` before we created this guard.
 	previous_val: OnPanic,
 	/// Marker so that `AbortGuard` doesn't implement `Send`.
-	_not_send: PhantomData<std::rc::Rc<()>>
+	_not_send: PhantomData<std::rc::Rc<()>>,
 }
 
 impl AbortGuard {
@@ -99,7 +102,7 @@ impl AbortGuard {
 	pub fn force_unwind() -> AbortGuard {
 		AbortGuard {
 			previous_val: set_abort(OnPanic::Unwind),
-			_not_send: PhantomData
+			_not_send: PhantomData,
 		}
 	}
 
@@ -108,24 +111,23 @@ impl AbortGuard {
 	pub fn force_abort() -> AbortGuard {
 		AbortGuard {
 			previous_val: set_abort(OnPanic::Abort),
-			_not_send: PhantomData
+			_not_send: PhantomData,
 		}
 	}
 
 	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
-	/// **never** abort the process (even if `AbortGuard::force_abort()` guard will be created afterwards).
+	/// **never** abort the process (even if `AbortGuard::force_abort()` guard will be created
+	/// afterwards).
 	pub fn never_abort() -> AbortGuard {
 		AbortGuard {
 			previous_val: set_abort(OnPanic::NeverAbort),
-			_not_send: PhantomData
+			_not_send: PhantomData,
 		}
 	}
 }
 
 impl Drop for AbortGuard {
-	fn drop(&mut self) {
-		set_abort(self.previous_val);
-	}
+	fn drop(&mut self) { set_abort(self.previous_val); }
 }
 
 /// Function being called when a panic happens.
@@ -139,7 +141,7 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str, version: &str) {
 		None => match info.payload().downcast_ref::<String>() {
 			Some(s) => &s[..],
 			None => "Box<Any>",
-		}
+		},
 	};
 
 	let thread = thread::current();

@@ -30,7 +30,8 @@
 //! will also deregister the global logger and replace it with a logger that discards messages.
 //! The `Stream` generates [`TelemetryEvent`]s.
 //!
-//! > **Note**: Cloning the [`Telemetry`] and polling from multiple clones has an unspecified behaviour.
+//! > **Note**: Cloning the [`Telemetry`] and polling from multiple clones has an unspecified
+//! behaviour.
 //!
 //! # Example
 //!
@@ -56,17 +57,21 @@
 //! 	"foo" => "bar",
 //! )
 //! ```
-//!
 
-use futures::{prelude::*, channel::mpsc};
-use libp2p::{Multiaddr, wasm_ext};
+use futures::{channel::mpsc, prelude::*};
+use libp2p::{wasm_ext, Multiaddr};
 use log::warn;
 use parking_lot::Mutex;
-use serde::{Serialize, Deserialize};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::{Duration, Instant}};
+use serde::{Deserialize, Serialize};
+use std::{
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+	time::{Duration, Instant},
+};
 
-pub use slog_scope::with_logger;
 pub use slog;
+pub use slog_scope::with_logger;
 
 mod async_record;
 mod worker;
@@ -97,9 +102,7 @@ pub struct TelemetryConfig {
 pub struct TelemetryEndpoints(Vec<(String, u8)>);
 
 impl TelemetryEndpoints {
-	pub fn new(endpoints: Vec<(String, u8)>) -> Self {
-		TelemetryEndpoints(endpoints)
-	}
+	pub fn new(endpoints: Vec<(String, u8)>) -> Self { TelemetryEndpoints(endpoints) }
 }
 
 /// Log levels.
@@ -157,7 +160,9 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 
 	let (sender, receiver) = mpsc::channel(16);
 	let guard = {
-		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
+		let logger = TelemetryDrain {
+			sender: std::panic::AssertUnwindSafe(sender),
+		};
 		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
 		slog_scope::set_global_logger(root)
 	};
@@ -200,8 +205,8 @@ impl Stream for Telemetry {
 				// Returning `Pending` here means that we may never get polled again, but this is
 				// ok because we're in a situation where something else is actually currently doing
 				// the polling.
-				return Poll::Pending;
-			}
+				return Poll::Pending
+			},
 		};
 
 		let mut has_connected = false;
@@ -216,10 +221,14 @@ impl Stream for Telemetry {
 				has_connected = true;
 			}
 
-			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
-				log_entry.as_record_values(|rec, val| { let _ = inner.worker.log(rec, val); });
+			if let Poll::Ready(Some(log_entry)) =
+				Stream::poll_next(Pin::new(&mut inner.receiver), cx)
+			{
+				log_entry.as_record_values(|rec, val| {
+					let _ = inner.worker.log(rec, val);
+				});
 			} else {
-				break;
+				break
 			}
 		}
 
@@ -236,15 +245,19 @@ impl Stream for Telemetry {
 }
 
 impl slog::Drain for TelemetryDrain {
-	type Ok = ();
 	type Err = ();
+	type Ok = ();
 
-	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
+	fn log(
+		&self,
+		record: &slog::Record,
+		values: &slog::OwnedKVList,
+	) -> Result<Self::Ok, Self::Err> {
 		let before = Instant::now();
 
 		let serialized = async_record::AsyncRecord::from(record, values);
-		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
-		// is lock-free.
+		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal
+		// value, while `clone()` is lock-free.
 		if let Err(err) = self.sender.clone().try_send(serialized) {
 			warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
 		}

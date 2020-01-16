@@ -17,23 +17,26 @@
 //! Traits and macros for constructing application specific strongly typed crypto wrappers.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[doc(hidden)]
-pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
+pub use primitives::crypto::{key_types, KeyTypeId};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
-pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use primitives::{crypto::{KeyTypeId, key_types}};
+pub use primitives::crypto::{DeriveJunction, Pair, SecretStringError, Ss58Codec};
+#[doc(hidden)]
+pub use primitives::{
+	self,
+	crypto::{CryptoType, Derive, IsWrappedBy, Public, Wraps},
+	RuntimeDebug,
+};
 
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
+pub use rstd::{ops::Deref, vec::Vec};
+#[doc(hidden)]
 #[cfg(feature = "std")]
 pub use serde;
-#[doc(hidden)]
-pub use rstd::{ops::Deref, vec::Vec};
 
 pub mod ed25519;
 pub mod sr25519;
@@ -45,7 +48,7 @@ pub use traits::*;
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+/// # use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
@@ -66,7 +69,7 @@ macro_rules! app_crypto {
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
-///# use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+/// # use sc_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
@@ -87,7 +90,7 @@ macro_rules! app_crypto {
 #[macro_export]
 macro_rules! app_crypto_pair {
 	($pair:ty, $key_type:expr) => {
-		$crate::wrap!{
+		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $pair crypto; this has no specific App.
 			#[derive(Clone)]
 			pub struct Pair($pair);
@@ -98,34 +101,41 @@ macro_rules! app_crypto_pair {
 		}
 
 		impl $crate::Pair for Pair {
+			type DeriveError = <$pair as $crate::Pair>::DeriveError;
 			type Public = Public;
 			type Seed = <$pair as $crate::Pair>::Seed;
 			type Signature = Signature;
-			type DeriveError = <$pair as $crate::Pair>::DeriveError;
-			
+
 			#[cfg(feature = "std")]
 			fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
 				let r = <$pair>::generate_with_phrase(password);
 				(Self(r.0), r.1, r.2)
 			}
+
 			#[cfg(feature = "std")]
-			fn from_phrase(phrase: &str, password: Option<&str>)
-				-> Result<(Self, Self::Seed), $crate::SecretStringError>
-			{
+			fn from_phrase(
+				phrase: &str,
+				password: Option<&str>,
+			) -> Result<(Self, Self::Seed), $crate::SecretStringError> {
 				<$pair>::from_phrase(phrase, password).map(|r| (Self(r.0), r.1))
 			}
-			fn derive<
-				Iter: Iterator<Item=$crate::DeriveJunction>
-			>(&self, path: Iter, seed: Option<Self::Seed>) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
+
+			fn derive<Iter: Iterator<Item = $crate::DeriveJunction>>(
+				&self,
+				path: Iter,
+				seed: Option<Self::Seed>,
+			) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
 				self.0.derive(path, seed).map(|x| (Self(x.0), x.1))
 			}
+
 			fn from_seed(seed: &Self::Seed) -> Self { Self(<$pair>::from_seed(seed)) }
+
 			fn from_seed_slice(seed: &[u8]) -> Result<Self, $crate::SecretStringError> {
 				<$pair>::from_seed_slice(seed).map(Self)
 			}
-			fn sign(&self, msg: &[u8]) -> Self::Signature {
-				Signature(self.0.sign(msg))
-			}
+
+			fn sign(&self, msg: &[u8]) -> Self::Signature { Signature(self.0.sign(msg)) }
+
 			fn verify<M: AsRef<[u8]>>(
 				sig: &Self::Signature,
 				message: M,
@@ -133,6 +143,7 @@ macro_rules! app_crypto_pair {
 			) -> bool {
 				<$pair>::verify(&sig.0, message, pubkey.as_ref())
 			}
+
 			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 				sig: &[u8],
 				message: M,
@@ -140,15 +151,18 @@ macro_rules! app_crypto_pair {
 			) -> bool {
 				<$pair>::verify_weak(sig, message, pubkey)
 			}
+
 			fn public(&self) -> Self::Public { Public(self.0.public()) }
+
 			fn to_raw_vec(&self) -> $crate::Vec<u8> { self.0.to_raw_vec() }
 		}
 
 		impl $crate::AppKey for Pair {
-			type UntypedGeneric = $pair;
-			type Public = Public;
 			type Pair = Pair;
+			type Public = Public;
 			type Signature = Signature;
+			type UntypedGeneric = $pair;
+
 			const ID: $crate::KeyTypeId = $key_type;
 		}
 
@@ -165,7 +179,7 @@ macro_rules! app_crypto_pair {
 #[macro_export]
 macro_rules! app_crypto_public_full_crypto {
 	($public:ty, $key_type:expr) => {
-		$crate::wrap!{
+		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
@@ -182,13 +196,14 @@ macro_rules! app_crypto_public_full_crypto {
 		}
 
 		impl $crate::AppKey for Public {
-			type UntypedGeneric = $public;
-			type Public = Public;
 			type Pair = Pair;
+			type Public = Public;
 			type Signature = Signature;
+			type UntypedGeneric = $public;
+
 			const ID: $crate::KeyTypeId = $key_type;
 		}
-	}
+	};
 }
 
 /// Declares Public type which is functionally equivalent to `$public`, but is new
@@ -198,7 +213,7 @@ macro_rules! app_crypto_public_full_crypto {
 #[macro_export]
 macro_rules! app_crypto_public_not_full_crypto {
 	($public:ty, $key_type:expr) => {
-		$crate::wrap!{
+		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
@@ -212,12 +227,13 @@ macro_rules! app_crypto_public_not_full_crypto {
 		impl $crate::CryptoType for Public {}
 
 		impl $crate::AppKey for Public {
-			type UntypedGeneric = $public;
 			type Public = Public;
 			type Signature = Signature;
+			type UntypedGeneric = $public;
+
 			const ID: $crate::KeyTypeId = $key_type;
 		}
-	}
+	};
 }
 
 /// Declares Public type which is functionally equivalent to `$public`, but is new
@@ -228,8 +244,9 @@ macro_rules! app_crypto_public_common {
 	($public:ty, $sig:ty, $key_type:expr) => {
 		impl $crate::Derive for Public {
 			#[cfg(feature = "std")]
-			fn derive<Iter: Iterator<Item=$crate::DeriveJunction>>(&self,
-				path: Iter
+			fn derive<Iter: Iterator<Item = $crate::DeriveJunction>>(
+				&self,
+				path: Iter,
 			) -> Option<Self> {
 				self.0.derive(path).map(Self)
 			}
@@ -244,8 +261,9 @@ macro_rules! app_crypto_public_common {
 		}
 		#[cfg(feature = "std")]
 		impl $crate::serde::Serialize for Public {
-			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
-				S: $crate::serde::Serializer
+			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+			where
+				S: $crate::serde::Serializer,
 			{
 				use $crate::Ss58Codec;
 				serializer.serialize_str(&self.to_ss58check())
@@ -253,8 +271,9 @@ macro_rules! app_crypto_public_common {
 		}
 		#[cfg(feature = "std")]
 		impl<'de> $crate::serde::Deserialize<'de> for Public {
-			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
-				D: $crate::serde::Deserializer<'de>
+			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+			where
+				D: $crate::serde::Deserializer<'de>,
 			{
 				use $crate::Ss58Codec;
 				Public::from_ss58check(&String::deserialize(deserializer)?)
@@ -278,31 +297,37 @@ macro_rules! app_crypto_public_common {
 			type Generic = $public;
 		}
 
-		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
-			const ID: $crate::KeyTypeId = $key_type;
+		impl $crate::RuntimeAppPublic for Public
+		where
+			$public: $crate::RuntimePublic<Signature = $sig>,
+		{
 			type Signature = Signature;
 
+			const ID: $crate::KeyTypeId = $key_type;
+
 			fn all() -> $crate::Vec<Self> {
-				<$public as $crate::RuntimePublic>::all($key_type).into_iter().map(Self).collect()
+				<$public as $crate::RuntimePublic>::all($key_type)
+					.into_iter()
+					.map(Self)
+					.collect()
 			}
 
 			fn generate_pair(seed: Option<$crate::Vec<u8>>) -> Self {
-				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
+				Self(<$public as $crate::RuntimePublic>::generate_pair(
+					$key_type, seed,
+				))
 			}
 
 			fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
-				<$public as $crate::RuntimePublic>::sign(
-					self.as_ref(),
-					$key_type,
-					msg,
-				).map(Signature)
+				<$public as $crate::RuntimePublic>::sign(self.as_ref(), $key_type, msg)
+					.map(Signature)
 			}
 
 			fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
 			}
 		}
-	}
+	};
 }
 
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
@@ -328,13 +353,14 @@ macro_rules! app_crypto_signature_full_crypto {
 		}
 
 		impl $crate::AppKey for Signature {
-			type UntypedGeneric = $sig;
-			type Public = Public;
 			type Pair = Pair;
+			type Public = Public;
 			type Signature = Signature;
+			type UntypedGeneric = $sig;
+
 			const ID: $crate::KeyTypeId = $key_type;
 		}
-	}
+	};
 }
 
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
@@ -353,16 +379,17 @@ macro_rules! app_crypto_signature_not_full_crypto {
 			)]
 			pub struct Signature($sig);
 		}
-		
+
 		impl $crate::CryptoType for Signature {}
 
 		impl $crate::AppKey for Signature {
-			type UntypedGeneric = $sig;
 			type Public = Public;
 			type Signature = Signature;
+			type UntypedGeneric = $sig;
+
 			const ID: $crate::KeyTypeId = $key_type;
 		}
-	}
+	};
 }
 
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
@@ -384,15 +411,15 @@ macro_rules! app_crypto_signature_common {
 		impl $crate::AppSignature for Signature {
 			type Generic = $sig;
 		}
-	}
+	};
 }
 
 /// Implement bidirectional `From` and on-way `AsRef`/`AsMut` for two types, `$inner` and `$outer`.
 ///
 /// ```rust
 /// sc_application_crypto::wrap! {
-///     pub struct Wrapper(u32);
-/// }
+/// pub struct Wrapper(u32);
+/// 			}
 /// ```
 #[macro_export]
 macro_rules! wrap {

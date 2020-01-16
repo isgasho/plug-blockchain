@@ -20,8 +20,9 @@
 use crate::utils::{generate_crate_access, get_function_argument_types_without_ref};
 
 use syn::{
-	ItemTrait, TraitItemMethod, Result, TraitItem, Error, fold::{self, Fold}, spanned::Spanned,
-	Visibility, Receiver, Type, Generics,
+	fold::{self, Fold},
+	spanned::Spanned,
+	Error, Generics, ItemTrait, Receiver, Result, TraitItem, TraitItemMethod, Type, Visibility,
 };
 
 use proc_macro2::TokenStream;
@@ -34,13 +35,11 @@ pub fn process(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream>
 	let impl_trait = impl_trait_for_externalities(trait_def, is_wasm_only)?;
 	let essential_trait_def = ToEssentialTraitDef::convert(trait_def.clone())?;
 
-	Ok(
-		quote! {
-			#impl_trait
+	Ok(quote! {
+		#impl_trait
 
-			#essential_trait_def
-		}
-	)
+		#essential_trait_def
+	})
 }
 
 /// Converts the given trait definition into the essential trait definition without method
@@ -53,19 +52,15 @@ struct ToEssentialTraitDef {
 impl ToEssentialTraitDef {
 	/// Convert the given trait definition to the essential trait definition.
 	fn convert(trait_def: ItemTrait) -> Result<ItemTrait> {
-		let mut folder = ToEssentialTraitDef {
-			errors: Vec::new(),
-		};
+		let mut folder = ToEssentialTraitDef { errors: Vec::new() };
 
 		let res = folder.fold_item_trait(trait_def);
 
 		if let Some(first_error) = folder.errors.pop() {
-			Err(
-				folder.errors.into_iter().fold(first_error, |mut o, n| {
-					o.combine(n);
-					o
-				})
-			)
+			Err(folder.errors.into_iter().fold(first_error, |mut o, n| {
+				o.combine(n);
+				o
+			}))
 		} else {
 			Ok(res)
 		}
@@ -89,12 +84,12 @@ impl Fold for ToEssentialTraitDef {
 		}
 
 		let arg_types = get_function_argument_types_without_ref(&method.sig);
-		arg_types.filter_map(|ty|
-			match *ty {
+		arg_types
+			.filter_map(|ty| match *ty {
 				Type::ImplTrait(impl_trait) => Some(impl_trait),
-				_ => None
-			}
-		).for_each(|invalid| self.push_error(&invalid, "`impl Trait` syntax not supported."));
+				_ => None,
+			})
+			.for_each(|invalid| self.push_error(&invalid, "`impl Trait` syntax not supported."));
 
 		self.error_on_generic_parameters(&method.sig.generics);
 
@@ -121,13 +116,10 @@ impl Fold for ToEssentialTraitDef {
 fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_ = &trait_def.ident;
 	let crate_ = generate_crate_access();
-	let methods = trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		});
+	let methods = trait_def.items.iter().filter_map(|i| match i {
+		TraitItem::Method(ref method) => Some(method),
+		_ => None,
+	});
 
 	let impl_type = if is_wasm_only {
 		quote!( &mut dyn #crate_::wasm_interface::FunctionContext )
@@ -135,12 +127,10 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 		quote!( &mut dyn #crate_::Externalities )
 	};
 
-	Ok(
-		quote! {
-			#[cfg(feature = "std")]
-			impl #trait_ for #impl_type {
-				#( #methods )*
-			}
+	Ok(quote! {
+		#[cfg(feature = "std")]
+		impl #trait_ for #impl_type {
+			#( #methods )*
 		}
-	)
+	})
 }

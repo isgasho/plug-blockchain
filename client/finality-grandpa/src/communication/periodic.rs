@@ -16,38 +16,34 @@
 
 //! Periodic rebroadcast of neighbor packets.
 
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use codec::Encode;
-use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::{prelude::*, sync::mpsc};
 use log::{debug, warn};
 use tokio_timer::Delay;
 
+use super::{
+	gossip::{GossipMessage, NeighborPacket},
+	Network,
+};
 use network::PeerId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
-use super::{gossip::{NeighborPacket, GossipMessage}, Network};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 // how often to rebroadcast, if no other
 const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 
-fn rebroadcast_instant() -> Instant {
-	Instant::now() + REBROADCAST_AFTER
-}
+fn rebroadcast_instant() -> Instant { Instant::now() + REBROADCAST_AFTER }
 
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
-	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 );
 
 impl<B: BlockT> NeighborPacketSender<B> {
 	/// Send a neighbor packet for the background worker to gossip to peers.
-	pub fn send(
-		&self,
-		who: Vec<network::PeerId>,
-		neighbor_packet: NeighborPacket<NumberFor<B>>,
-	) {
+	pub fn send(&self, who: Vec<network::PeerId>, neighbor_packet: NeighborPacket<NumberFor<B>>) {
 		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
 			debug!(target: "afg", "Failed to send neighbor packet: {:?}", err);
 		}
@@ -58,10 +54,13 @@ impl<B: BlockT> NeighborPacketSender<B> {
 ///
 /// It may rebroadcast the last neighbor packet periodically when no
 /// progress is made.
-pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
+pub(super) fn neighbor_packet_worker<B, N>(
+	net: N,
+) -> (
 	impl Future<Item = (), Error = ()> + Send + 'static,
 	NeighborPacketSender<B>,
-) where
+)
+where
 	B: BlockT,
 	N: Network<B>,
 {
@@ -75,12 +74,15 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 				Async::Ready(None) => return Ok(Async::Ready(())),
 				Async::Ready(Some((to, packet))) => {
 					// send to peers.
-					net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
+					net.send_message(
+						to.clone(),
+						GossipMessage::<B>::from(packet.clone()).encode(),
+					);
 
 					// rebroadcasting network.
 					delay.reset(rebroadcast_instant());
 					last = Some((to, packet));
-				}
+				},
 				Async::NotReady => break,
 			}
 		}
@@ -92,15 +94,18 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 				Err(e) => {
 					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
 					delay.reset(rebroadcast_instant());
-				}
+				},
 				Ok(Async::Ready(())) => {
 					delay.reset(rebroadcast_instant());
 
 					if let Some((ref to, ref packet)) = last {
 						// send to peers.
-						net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
+						net.send_message(
+							to.clone(),
+							GossipMessage::<B>::from(packet.clone()).encode(),
+						);
 					}
-				}
+				},
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 			}
 		}

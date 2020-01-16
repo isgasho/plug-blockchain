@@ -18,27 +18,27 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::{vec::Vec, hash::Hash};
 #[cfg(feature = "std")]
-use rstd::convert::TryInto;
-use rstd::convert::TryFrom;
+use base58::{FromBase58, ToBase58};
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
-use rand::{RngCore, rngs::OsRng};
-use codec::{Encode, Decode};
+use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
+use rstd::convert::TryInto;
+use rstd::{convert::TryFrom, hash::Hash, vec::Vec};
 
-use zeroize::Zeroize;
 #[doc(hidden)]
 pub use rstd::ops::Deref;
 use runtime_interface::pass_by::PassByInner;
+use zeroize::Zeroize;
 
 /// The root phrase for our publicly known keys.
-pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+pub const DEV_PHRASE: &str =
+	"bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// The address of the associated root phrase for our publicly known keys.
 pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
@@ -69,9 +69,7 @@ pub trait UncheckedInto<T> {
 }
 
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
-	fn unchecked_into(self) -> T {
-		T::unchecked_from(self)
-	}
+	fn unchecked_into(self) -> T { T::unchecked_from(self) }
 }
 
 /// A store for sensitive data.
@@ -81,42 +79,30 @@ impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 pub struct Protected<T: Zeroize>(T);
 
 impl<T: Zeroize> AsRef<T> for Protected<T> {
-	fn as_ref(&self) -> &T {
-		&self.0
-	}
+	fn as_ref(&self) -> &T { &self.0 }
 }
 
 impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
 	type Target = T;
 
-	fn deref(&self) -> &T {
-		&self.0
-	}
+	fn deref(&self) -> &T { &self.0 }
 }
 
 #[cfg(feature = "std")]
 impl<T: Zeroize> std::fmt::Debug for Protected<T> {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(fmt, "<protected>")
-	}
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result { write!(fmt, "<protected>") }
 }
 
 impl<T: Zeroize> From<T> for Protected<T> {
-	fn from(t: T) -> Self {
-		Protected(t)
-	}
+	fn from(t: T) -> Self { Protected(t) }
 }
 
 impl<T: Zeroize> Zeroize for Protected<T> {
-	fn zeroize(&mut self) {
-		self.0.zeroize()
-	}
+	fn zeroize(&mut self) { self.0.zeroize() }
 }
 
 impl<T: Zeroize> Drop for Protected<T> {
-	fn drop(&mut self) {
-		self.zeroize()
-	}
+	fn drop(&mut self) { self.zeroize() }
 }
 
 /// An error with the interpretation of a secret.
@@ -162,12 +148,14 @@ impl DeriveJunction {
 	/// If you need a hard junction, use `hard()`.
 	pub fn soft<T: Encode>(index: T) -> Self {
 		let mut cc: [u8; JUNCTION_ID_LEN] = Default::default();
-		index.using_encoded(|data| if data.len() > JUNCTION_ID_LEN {
-			let hash_result = blake2_rfc::blake2b::blake2b(JUNCTION_ID_LEN, &[], data);
-			let hash = hash_result.as_bytes();
-			cc.copy_from_slice(hash);
-		} else {
-			cc[0..data.len()].copy_from_slice(data);
+		index.using_encoded(|data| {
+			if data.len() > JUNCTION_ID_LEN {
+				let hash_result = blake2_rfc::blake2b::blake2b(JUNCTION_ID_LEN, &[], data);
+				let hash = hash_result.as_bytes();
+				cc.copy_from_slice(hash);
+			} else {
+				cc[0..data.len()].copy_from_slice(data);
+			}
 		});
 		DeriveJunction::Soft(cc)
 	}
@@ -175,9 +163,7 @@ impl DeriveJunction {
 	/// Create a new hard (hardened) DeriveJunction from a given, encodable, value.
 	///
 	/// If you need a soft junction, use `soft()`.
-	pub fn hard<T: Encode>(index: T) -> Self {
-		Self::soft(index).harden()
-	}
+	pub fn hard<T: Encode>(index: T) -> Self { Self::soft(index).harden() }
 
 	/// Consume self to return the chain code.
 	pub fn unwrap_inner(self) -> [u8; JUNCTION_ID_LEN] {
@@ -260,15 +246,14 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
-		Self::from_ss58check_with_version(s)
-			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				v if v == *DEFAULT_VERSION.lock() => Ok(r),
-				_ => Err(PublicError::UnknownVersion),
-			})
+		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
+			Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+			Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
+			Ss58AddressFormat::KusamaAccountDirect => Ok(r),
+			Ss58AddressFormat::DothereumAccountDirect => Ok(r),
+			v if v == *DEFAULT_VERSION.lock() => Ok(r),
+			_ => Err(PublicError::UnknownVersion),
+		})
 	}
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
@@ -278,13 +263,15 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
 		if d.len() != len + 3 {
 			// Invalid length.
-			return Err(PublicError::BadLength);
+			return Err(PublicError::BadLength)
 		}
-		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		let ver = d[0]
+			.try_into()
+			.map_err(|_: ()| PublicError::UnknownVersion)?;
 
 		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
 			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
+			return Err(PublicError::InvalidChecksum)
 		}
 		res.as_mut().copy_from_slice(&d[1..len + 1]);
 		Ok((res, ver))
@@ -293,15 +280,14 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// a derivation path following.
 	#[cfg(feature = "std")]
 	fn from_string(s: &str) -> Result<Self, PublicError> {
-		Self::from_string_with_version(s)
-			.and_then(|(r, v)| match v {
-				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
-				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
-				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
-				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
-				v if v == *DEFAULT_VERSION.lock() => Ok(r),
-				_ => Err(PublicError::UnknownVersion),
-			})
+		Self::from_string_with_version(s).and_then(|(r, v)| match v {
+			Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+			Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
+			Ss58AddressFormat::KusamaAccountDirect => Ok(r),
+			Ss58AddressFormat::DothereumAccountDirect => Ok(r),
+			v if v == *DEFAULT_VERSION.lock() => Ok(r),
+			_ => Err(PublicError::UnknownVersion),
+		})
 	}
 
 	/// Return the ss58-check string for this key.
@@ -331,9 +317,7 @@ pub trait Derive: Sized {
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
 	#[cfg(feature = "std")]
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
-		None
-	}
+	fn derive<Iter: Iterator<Item = DeriveJunction>>(&self, _path: Iter) -> Option<Self> { None }
 }
 
 #[cfg(feature = "std")]
@@ -385,6 +369,7 @@ impl From<Ss58AddressFormat> for u8 {
 #[cfg(feature = "full_crypto")]
 impl TryFrom<u8> for Ss58AddressFormat {
 	type Error = ();
+
 	fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
 		match x {
 			42 => Ok(Ss58AddressFormat::SubstrateAccountDirect),
@@ -399,13 +384,17 @@ impl TryFrom<u8> for Ss58AddressFormat {
 #[cfg(feature = "full_crypto")]
 impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
 		match x {
 			"substrate" => Ok(Ss58AddressFormat::SubstrateAccountDirect),
 			"polkadot" => Ok(Ss58AddressFormat::PolkadotAccountDirect),
 			"kusama" => Ok(Ss58AddressFormat::KusamaAccountDirect),
 			"dothereum" => Ok(Ss58AddressFormat::DothereumAccountDirect),
-			a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+			a => a
+				.parse::<u8>()
+				.map(Ss58AddressFormat::Custom)
+				.map_err(|_| ()),
 		}
 	}
 }
@@ -433,9 +422,7 @@ impl From<Ss58AddressFormat> for String {
 /// - 20 direct (payload) checksum for 32-byte *25519 Dothereum addresses.
 /// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
 #[cfg(feature = "std")]
-pub fn set_default_ss58_version(version: Ss58AddressFormat) {
-	*DEFAULT_VERSION.lock() = version
-}
+pub fn set_default_ss58_version(version: Ss58AddressFormat) { *DEFAULT_VERSION.lock() = version }
 
 #[cfg(feature = "std")]
 impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
@@ -443,11 +430,9 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
-		let s = cap.name("ss58")
-			.map(|r| r.as_str())
-			.unwrap_or(DEV_ADDRESS);
+		let re_junction =
+			Regex::new(r"/(/?[^/]+)").expect("constructed from known-good static value; qed");
+		let s = cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS);
 		let addr = if s.starts_with("0x") {
 			let d = hex::decode(&s[2..]).map_err(|_| PublicError::InvalidFormat)?;
 			let mut r = Self::default();
@@ -463,10 +448,10 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		if cap["path"].is_empty() {
 			Ok(addr)
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = re_junction
+				.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
-			addr.derive(path)
-				.ok_or(PublicError::InvalidPath)
+			addr.derive(path).ok_or(PublicError::InvalidPath)
 		}
 	}
 
@@ -474,17 +459,16 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
+		let re_junction =
+			Regex::new(r"/(/?[^/]+)").expect("constructed from known-good static value; qed");
 		let (addr, v) = Self::from_ss58check_with_version(
-			cap.name("ss58")
-				.map(|r| r.as_str())
-				.unwrap_or(DEV_ADDRESS)
+			cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS),
 		)?;
 		if cap["path"].is_empty() {
 			Ok((addr, v))
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = re_junction
+				.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
@@ -494,7 +478,9 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public:
+	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+{
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -514,46 +500,35 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 pub struct AccountId32([u8; 32]);
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
-	fn unchecked_from(h: crate::hash::H256) -> Self {
-		AccountId32(h.into())
-	}
+	fn unchecked_from(h: crate::hash::H256) -> Self { AccountId32(h.into()) }
 }
 
 #[cfg(feature = "std")]
 impl Ss58Codec for AccountId32 {}
 
 impl AsRef<[u8]> for AccountId32 {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
+	fn as_ref(&self) -> &[u8] { &self.0[..] }
 }
 
 impl AsMut<[u8]> for AccountId32 {
-	fn as_mut(&mut self) -> &mut [u8] {
-		&mut self.0[..]
-	}
+	fn as_mut(&mut self) -> &mut [u8] { &mut self.0[..] }
 }
 
 impl AsRef<[u8; 32]> for AccountId32 {
-	fn as_ref(&self) -> &[u8; 32] {
-		&self.0
-	}
+	fn as_ref(&self) -> &[u8; 32] { &self.0 }
 }
 
 impl AsMut<[u8; 32]> for AccountId32 {
-	fn as_mut(&mut self) -> &mut [u8; 32] {
-		&mut self.0
-	}
+	fn as_mut(&mut self) -> &mut [u8; 32] { &mut self.0 }
 }
 
 impl From<[u8; 32]> for AccountId32 {
-	fn from(x: [u8; 32]) -> AccountId32 {
-		AccountId32(x)
-	}
+	fn from(x: [u8; 32]) -> AccountId32 { AccountId32(x) }
 }
 
 impl<'a> rstd::convert::TryFrom<&'a [u8]> for AccountId32 {
 	type Error = ();
+
 	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
 		if x.len() == 32 {
 			let mut r = AccountId32::default();
@@ -566,9 +541,7 @@ impl<'a> rstd::convert::TryFrom<&'a [u8]> for AccountId32 {
 }
 
 impl From<AccountId32> for [u8; 32] {
-	fn from(x: AccountId32) -> [u8; 32] {
-		x.0
-	}
+	fn from(x: AccountId32) -> [u8; 32] { x.0 }
 }
 
 #[cfg(feature = "std")]
@@ -582,25 +555,34 @@ impl rstd::fmt::Debug for AccountId32 {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(
+			f,
+			"{} ({}...)",
+			crate::hexdisplay::HexDisplay::from(&self.0),
+			&s[0..8]
+		)
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 #[cfg(feature = "std")]
 impl serde::Serialize for AccountId32 {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> serde::Deserialize<'de> for AccountId32 {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
 		Ss58Codec::from_ss58check(&String::deserialize(deserializer)?)
 			.map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
 	}
@@ -622,7 +604,7 @@ mod dummy {
 	}
 
 	impl AsMut<[u8]> for Dummy {
-		fn as_mut(&mut self) -> &mut[u8] {
+		fn as_mut(&mut self) -> &mut [u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]
 				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
@@ -638,33 +620,49 @@ mod dummy {
 
 	impl Public for Dummy {
 		fn from_slice(_: &[u8]) -> Self { Self }
+
 		#[cfg(feature = "std")]
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+
 		fn as_slice(&self) -> &[u8] { b"" }
 	}
 
 	impl Pair for Dummy {
+		type DeriveError = ();
 		type Public = Dummy;
 		type Seed = Dummy;
 		type Signature = Dummy;
-		type DeriveError = ();
+
 		#[cfg(feature = "std")]
-		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
+		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) {
+			Default::default()
+		}
+
 		#[cfg(feature = "std")]
-		fn from_phrase(_: &str, _: Option<&str>)
-			-> Result<(Self, Self::Seed), SecretStringError>
-		{
+		fn from_phrase(_: &str, _: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError> {
 			Ok(Default::default())
 		}
-		fn derive<
-			Iter: Iterator<Item=DeriveJunction>,
-		>(&self, _: Iter, _: Option<Dummy>) -> Result<(Self, Option<Dummy>), Self::DeriveError> { Ok((Self, None)) }
+
+		fn derive<Iter: Iterator<Item = DeriveJunction>>(
+			&self,
+			_: Iter,
+			_: Option<Dummy>,
+		) -> Result<(Self, Option<Dummy>), Self::DeriveError> {
+			Ok((Self, None))
+		}
+
 		fn from_seed(_: &Self::Seed) -> Self { Self }
+
 		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
+
 		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
+
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
+
 		fn public(&self) -> Self::Public { Self }
+
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	}
 }
@@ -710,10 +708,14 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
 	#[cfg(feature = "std")]
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError>;
+	fn from_phrase(
+		phrase: &str,
+		password: Option<&str>,
+	) -> Result<(Self, Self::Seed), SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+	fn derive<Iter: Iterator<Item = DeriveJunction>>(
+		&self,
 		path: Iter,
 		seed: Option<Self::Seed>,
 	) -> Result<(Self, Option<Self::Seed>), Self::DeriveError>;
@@ -743,9 +745,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
-	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an optional seed, in the
-	/// case that the pair can be expressed as a direct derivation from a seed (some cases, such as Sr25519 derivations
-	/// with path components, cannot).
+	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an
+	/// optional seed, in the case that the pair can be expressed as a direct derivation from a seed
+	/// (some cases, such as Sr25519 derivations with path components, cannot).
 	///
 	/// This takes a helper function to do the key generation from a phrase, password and
 	/// junction iterator.
@@ -757,7 +759,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///   - the phrase may be followed by one or more items delimited by `/` characters.
 	///   - the path may be followed by `///`, in which case everything after the `///` is treated
 	/// as a password.
-	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE` and
+	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE`
+	///   and
 	/// interpreted as above.
 	///
 	/// In this case they are interpreted as HDKD junctions; purely numeric items are interpreted as
@@ -767,28 +770,31 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// There is no correspondence mapping between SURI strings and the keys they represent.
 	/// Two different non-identical strings can actually lead to the same secret being derived.
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
-	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will generally
-	/// be equivalent to no password at all.
+	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
+	/// generally be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
-	fn from_string_with_seed(s: &str, password_override: Option<&str>) 
-		-> Result<(Self, Option<Self::Seed>), SecretStringError> 
-	{
+	fn from_string_with_seed(
+		s: &str,
+		password_override: Option<&str>,
+	) -> Result<(Self, Option<Self::Seed>), SecretStringError> {
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
 
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
-		let path = re_junction.captures_iter(&cap["path"])
+		let re_junction =
+			Regex::new(r"/(/?[^/]+)").expect("constructed from known-good static value; qed");
+		let path = re_junction
+			.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
 
 		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);
 		let password = password_override.or_else(|| cap.name("password").map(|m| m.as_str()));
 
 		let (root, seed) = if phrase.starts_with("0x") {
-			hex::decode(&phrase[2..]).ok()
+			hex::decode(&phrase[2..])
+				.ok()
 				.and_then(|seed_vec| {
 					let mut seed = Self::Seed::default();
 					if seed.as_ref().len() == seed_vec.len() {
@@ -800,10 +806,10 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 				})
 				.ok_or(SecretStringError::InvalidSeed)?
 		} else {
-			Self::from_phrase(phrase, password)
-				.map_err(|_| SecretStringError::InvalidPhrase)?
+			Self::from_phrase(phrase, password).map_err(|_| SecretStringError::InvalidPhrase)?
 		};
-		root.derive(path, Some(seed)).map_err(|_| SecretStringError::InvalidPath)
+		root.derive(path, Some(seed))
+			.map_err(|_| SecretStringError::InvalidPath)
 	}
 
 	/// Interprets the string `s` in order to generate a key pair.
@@ -832,7 +838,8 @@ pub trait Wraps: Sized {
 	type Inner: IsWrappedBy<Self>;
 }
 
-impl<T, Outer> IsWrappedBy<Outer> for T where
+impl<T, Outer> IsWrappedBy<Outer> for T
+where
 	Outer: AsRef<Self> + AsMut<Self> + From<Self>,
 	T: From<Outer>,
 {
@@ -843,8 +850,9 @@ impl<T, Outer> IsWrappedBy<Outer> for T where
 	fn from_mut(outer: &mut Outer) -> &mut Self { outer.as_mut() }
 }
 
-impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
-	Outer: Wraps<Inner=Inner>,
+impl<Inner, Outer, T> UncheckedFrom<T> for Outer
+where
+	Outer: Wraps<Inner = Inner>,
 	Inner: IsWrappedBy<Outer> + UncheckedFrom<T>,
 {
 	fn unchecked_from(t: T) -> Self {
@@ -868,29 +876,36 @@ pub trait CryptoType {
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
 /// public modules.
 #[derive(
-	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
-	crate::RuntimeDebug
+	Copy,
+	Clone,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Hash,
+	Encode,
+	Decode,
+	PassByInner,
+	crate::RuntimeDebug,
 )]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
-	fn from(x: u32) -> Self {
-		Self(x.to_le_bytes())
-	}
+	fn from(x: u32) -> Self { Self(x.to_le_bytes()) }
 }
 
 impl From<KeyTypeId> for u32 {
-	fn from(x: KeyTypeId) -> Self {
-		u32::from_le_bytes(x.0)
-	}
+	fn from(x: KeyTypeId) -> Self { u32::from_le_bytes(x.0) }
 }
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {
-			return Err(());
+			return Err(())
 		}
 		let mut res = KeyTypeId::default();
 		res.0.copy_from_slice(&b[0..4]);
@@ -924,22 +939,27 @@ pub mod key_types {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use crate::DeriveJunction;
 	use hex_literal::hex;
-	use super::*;
 
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
 		Generated,
 		GeneratedWithPhrase,
-		GeneratedFromPhrase{phrase: String, password: Option<String>},
-		Standard{phrase: String, password: Option<String>, path: Vec<DeriveJunction>},
+		GeneratedFromPhrase {
+			phrase: String,
+			password: Option<String>,
+		},
+		Standard {
+			phrase: String,
+			password: Option<String>,
+			path: Vec<DeriveJunction>,
+		},
 		Seed(Vec<u8>),
 	}
 	impl Default for TestPair {
-		fn default() -> Self {
-			TestPair::Generated
-		}
+		fn default() -> Self { TestPair::Generated }
 	}
 	impl CryptoType for TestPair {
 		type Pair = Self;
@@ -948,76 +968,103 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Hash, Default)]
 	struct TestPublic;
 	impl AsRef<[u8]> for TestPublic {
-		fn as_ref(&self) -> &[u8] {
-			&[]
-		}
+		fn as_ref(&self) -> &[u8] { &[] }
 	}
 	impl AsMut<[u8]> for TestPublic {
-		fn as_mut(&mut self) -> &mut [u8] {
-			&mut []
-		}
+		fn as_mut(&mut self) -> &mut [u8] { &mut [] }
 	}
 	impl CryptoType for TestPublic {
 		type Pair = TestPair;
 	}
 	impl Derive for TestPublic {}
 	impl Public for TestPublic {
-		fn from_slice(_bytes: &[u8]) -> Self {
-			Self
-		}
-		fn as_slice(&self) -> &[u8] {
-			&[]
-		}
-		fn to_raw_vec(&self) -> Vec<u8> {
-			vec![]
-		}
+		fn from_slice(_bytes: &[u8]) -> Self { Self }
+
+		fn as_slice(&self) -> &[u8] { &[] }
+
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	}
 	impl Pair for TestPair {
+		type DeriveError = ();
 		type Public = TestPublic;
 		type Seed = [u8; 8];
 		type Signature = [u8; 0];
-		type DeriveError = ();
 
 		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, [0u8; 8]) }
+
 		fn generate_with_phrase(_password: Option<&str>) -> (Self, String, <Self as Pair>::Seed) {
 			(TestPair::GeneratedWithPhrase, "".into(), [0u8; 8])
 		}
-		fn from_phrase(phrase: &str, password: Option<&str>)
-			-> Result<(Self, <Self as Pair>::Seed), SecretStringError>
-		{
-			Ok((TestPair::GeneratedFromPhrase {
-				phrase: phrase.to_owned(),
-				password: password.map(Into::into)
-			}, [0u8; 8]))
+
+		fn from_phrase(
+			phrase: &str,
+			password: Option<&str>,
+		) -> Result<(Self, <Self as Pair>::Seed), SecretStringError> {
+			Ok((
+				TestPair::GeneratedFromPhrase {
+					phrase: phrase.to_owned(),
+					password: password.map(Into::into),
+				},
+				[0u8; 8],
+			))
 		}
-		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path_iter: Iter, _: Option<[u8; 8]>)
-			-> Result<(Self, Option<[u8; 8]>), Self::DeriveError>
-		{
-			Ok((match self.clone() {
-				TestPair::Standard {phrase, password, path} =>
-					TestPair::Standard { phrase, password, path: path.into_iter().chain(path_iter).collect() },
-				TestPair::GeneratedFromPhrase {phrase, password} =>
-					TestPair::Standard { phrase, password, path: path_iter.collect() },
-				x => if path_iter.count() == 0 { x } else { return Err(()) },
-			}, None))
+
+		fn derive<Iter: Iterator<Item = DeriveJunction>>(
+			&self,
+			path_iter: Iter,
+			_: Option<[u8; 8]>,
+		) -> Result<(Self, Option<[u8; 8]>), Self::DeriveError> {
+			Ok((
+				match self.clone() {
+					TestPair::Standard {
+						phrase,
+						password,
+						path,
+					} => TestPair::Standard {
+						phrase,
+						password,
+						path: path.into_iter().chain(path_iter).collect(),
+					},
+					TestPair::GeneratedFromPhrase { phrase, password } => TestPair::Standard {
+						phrase,
+						password,
+						path: path_iter.collect(),
+					},
+					x => {
+						if path_iter.count() == 0 {
+							x
+						} else {
+							return Err(())
+						}
+					},
+				},
+				None,
+			))
 		}
-		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(_seed.as_ref().to_owned()) }
+
+		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self {
+			TestPair::Seed(_seed.as_ref().to_owned())
+		}
+
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
+
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 			_sig: &[u8],
 			_message: M,
-			_pubkey: P
-		) -> bool { true }
+			_pubkey: P,
+		) -> bool {
+			true
+		}
+
 		fn public(&self) -> Self::Public { TestPublic }
-		fn from_seed_slice(seed: &[u8])
-			-> Result<Self, SecretStringError>
-		{
+
+		fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError> {
 			Ok(TestPair::Seed(seed.to_owned()))
 		}
-		fn to_raw_vec(&self) -> Vec<u8> {
-			vec![]
-		}
+
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	}
 
 	#[test]
@@ -1044,43 +1091,83 @@ mod tests {
 	fn interpret_std_secret_string_should_work() {
 		assert_eq!(
 			TestPair::from_string("hello world", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/1", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft(1)]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::soft(1)]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/DOT", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::soft("DOT")]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1)]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard(1)]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//DOT", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT")]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard("DOT")]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1/DOT", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//DOT/1", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT"), DeriveJunction::soft(1)]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard("DOT"), DeriveJunction::soft(1)]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world///password", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: Some("password".to_owned()),
+				path: vec![]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1/DOT///password", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: Some("password".to_owned()),
+				path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]
+			})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/1//DOT///password", None),
-			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: Some("password".to_owned()),
+				path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]
+			})
 		);
 	}
 }

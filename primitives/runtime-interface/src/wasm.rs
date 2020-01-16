@@ -64,15 +64,11 @@ impl<T: Copy, O> WrappedFFIValue<T, O> {
 }
 
 impl<T, O> From<T> for WrappedFFIValue<T, O> {
-	fn from(val: T) -> Self {
-		WrappedFFIValue::Wrapped(val)
-	}
+	fn from(val: T) -> Self { WrappedFFIValue::Wrapped(val) }
 }
 
 impl<T, O> From<(T, O)> for WrappedFFIValue<T, O> {
-	fn from(val: (T, O)) -> Self {
-		WrappedFFIValue::WrappedAndOwned(val.0, val.1)
-	}
+	fn from(val: (T, O)) -> Self { WrappedFFIValue::WrappedAndOwned(val.0, val.1) }
 }
 
 /// The state of an exchangeable function.
@@ -106,12 +102,14 @@ impl<T: Copy> ExchangeableFunction<T> {
 	/// # Returns
 	///
 	/// Returns the original implementation wrapped in [`RestoreImplementation`].
-	pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
+	pub fn replace_implementation(&'static self, new_impl: T) -> RestoreImplementation<T> {
 		if let ExchangeableFunctionState::Replaced = self.0.get().1 {
 			panic!("Trying to replace an already replaced implementation!")
 		}
 
-		let old = self.0.replace((new_impl, ExchangeableFunctionState::Replaced));
+		let old = self
+			.0
+			.replace((new_impl, ExchangeableFunctionState::Replaced));
 
 		RestoreImplementation(self, Some(old.0))
 	}
@@ -122,9 +120,7 @@ impl<T: Copy> ExchangeableFunction<T> {
 	}
 
 	/// Returns the internal function pointer.
-	pub fn get(&self) -> T {
-		self.0.get().0
-	}
+	pub fn get(&self) -> T { self.0.get().0 }
 }
 
 // Wasm does not support threads, so this is safe; qed.
@@ -137,6 +133,7 @@ pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunctio
 
 impl<T: Copy> Drop for RestoreImplementation<T> {
 	fn drop(&mut self) {
-		self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+		self.0
+			.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
 	}
 }

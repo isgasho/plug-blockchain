@@ -2,43 +2,41 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use rstd::prelude::*;
-use primitives::OpaqueMetadata;
-use sp_runtime::{
-	ApplyExtrinsicResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	impl_opaque_keys, MultiSignature
-};
-use sp_runtime::traits::{
-	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
-};
-use sp_api::impl_runtime_apis;
 use aura_primitives::sr25519::AuthorityId as AuraId;
-use grandpa::AuthorityList as GrandpaAuthorityList;
-use grandpa::fg_primitives;
-use version::RuntimeVersion;
+use grandpa::{fg_primitives, AuthorityList as GrandpaAuthorityList};
+use primitives::OpaqueMetadata;
+use rstd::prelude::*;
+use sp_api::impl_runtime_apis;
+use sp_runtime::{
+	create_runtime_str, generic, impl_opaque_keys,
+	traits::{
+		BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, StaticLookup, Verify,
+	},
+	transaction_validity::TransactionValidity,
+	ApplyExtrinsicResult, MultiSignature,
+};
 #[cfg(feature = "std")]
 use version::NativeVersion;
+use version::RuntimeVersion;
 
 use prml_doughnut::{DoughnutRuntime, PlugDoughnut};
 
 // A few exports that help ease life for downstream crates.
+pub use balances::Call as BalancesCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use timestamp::Call as TimestampCall;
-pub use balances::Call as BalancesCall;
-pub use sp_runtime::{Permill, Perbill, Doughnut};
+pub use sp_runtime::{Doughnut, Perbill, Permill};
 pub use support::{
-	StorageValue, construct_runtime, parameter_types,
-	traits::Randomness,
-	weights::Weight,
-	additional_traits::DummyDispatchVerifier,
+	additional_traits::DummyDispatchVerifier, construct_runtime, parameter_types,
+	traits::Randomness, weights::Weight, StorageValue,
 };
+pub use timestamp::Call as TimestampCall;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -132,36 +130,36 @@ parameter_types! {
 impl system::Trait for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
-	/// The aggregated dispatch type that is available for extrinsics.
-	type Call = Call;
-	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-	type Lookup = Indices;
-	/// The index type for storing how many extrinsics an account has signed.
-	type Index = Index;
+	/// Portion of the block weight that is available to all normal transactions.
+	type AvailableBlockRatio = AvailableBlockRatio;
+	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+	type BlockHashCount = BlockHashCount;
 	/// The index type for blocks.
 	type BlockNumber = BlockNumber;
+	/// The aggregated dispatch type that is available for extrinsics.
+	type Call = Call;
+	/// The runtime delegated dispatch verifier
+	type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
+	/// The runtime proof of delegation type (Doughnut)
+	type Doughnut = PlugDoughnut<Runtime>;
+	/// The ubiquitous event type.
+	type Event = Event;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
 	/// The header type.
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	/// The ubiquitous event type.
-	type Event = Event;
-	/// The ubiquitous origin type.
-	type Origin = Origin;
-	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
-	type BlockHashCount = BlockHashCount;
-	/// The runtime proof of delegation type (Doughnut)
-	type Doughnut = PlugDoughnut<Runtime>;
-	/// The runtime delegated dispatch verifier
-	type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
-	/// Maximum weight of each block.
-	type MaximumBlockWeight = MaximumBlockWeight;
+	/// The index type for storing how many extrinsics an account has signed.
+	type Index = Index;
+	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
+	type Lookup = Indices;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
-	/// Portion of the block weight that is available to all normal transactions.
-	type AvailableBlockRatio = AvailableBlockRatio;
+	/// Maximum weight of each block.
+	type MaximumBlockWeight = MaximumBlockWeight;
+	/// The ubiquitous origin type.
+	type Origin = Origin;
 	/// Version of the runtime.
 	type Version = Version;
 }
@@ -185,12 +183,12 @@ impl indices::Trait for Runtime {
 	/// The type for recording indexing into the account enumeration. If this ever overflows, there
 	/// will be problems!
 	type AccountIndex = AccountIndex;
-	/// Use the standard means of resolving an index hint from an id.
-	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
-	/// Determine whether an account is dead.
-	type IsDeadAccount = Balances;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// Determine whether an account is dead.
+	type IsDeadAccount = Balances;
+	/// Use the standard means of resolving an index hint from an id.
+	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
 }
 
 parameter_types! {
@@ -198,10 +196,10 @@ parameter_types! {
 }
 
 impl timestamp::Trait for Runtime {
+	type MinimumPeriod = MinimumPeriod;
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -213,17 +211,17 @@ parameter_types! {
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
 	type Balance = Balance;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	/// The ubiquitous event type.
+	type Event = Event;
+	type ExistentialDeposit = ExistentialDeposit;
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
-	/// The ubiquitous event type.
-	type Event = Event;
-	type DustRemoval = ();
-	type TransferPayment = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 
 parameter_types! {
@@ -233,11 +231,11 @@ parameter_types! {
 
 impl transaction_payment::Trait for Runtime {
 	type Currency = balances::Module<Runtime>;
+	type FeeMultiplierUpdate = ();
 	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
-	type FeeMultiplierUpdate = ();
 }
 
 impl sudo::Trait for Runtime {
@@ -288,14 +286,15 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	transaction_payment::ChargeTransactionPayment<Runtime>
+	transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
+pub type Executive =
+	executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {

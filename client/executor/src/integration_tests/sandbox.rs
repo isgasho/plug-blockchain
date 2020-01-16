@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{TestExternalities, call_in_wasm};
+use super::{call_in_wasm, TestExternalities};
 use crate::WasmExecutionMethod;
 
 use codec::Encode;
@@ -29,7 +29,8 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -48,7 +49,10 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -58,7 +62,8 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		true.encode(),
 	);
 }
@@ -70,7 +75,8 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(func (export "call")
@@ -78,7 +84,9 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#,
+	)
+	.unwrap();
 
 	assert_eq!(
 		call_in_wasm(
@@ -88,7 +96,8 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		vec![0],
 	);
 }
@@ -101,7 +110,8 @@ fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(func (export "call")
@@ -109,7 +119,10 @@ fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	call_in_wasm(
 		"test_exhaust_heap",
@@ -118,7 +131,8 @@ fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		&mut ext,
 		&test_code[..],
 		8,
-	).unwrap();
+	)
+	.unwrap();
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
@@ -128,7 +142,8 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -153,7 +168,10 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -163,7 +181,8 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		true.encode(),
 	);
 }
@@ -175,7 +194,8 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -196,7 +216,10 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 				)
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -206,7 +229,8 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		true.encode(),
 	);
 }
@@ -218,7 +242,8 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -227,7 +252,10 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 				)
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -237,7 +265,8 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		true.encode(),
 	);
 }
@@ -249,14 +278,18 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(import "env" "non-existent" (func))
 
 			(func (export "call")
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -266,7 +299,8 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		1u8.encode(),
 	);
 }
@@ -289,7 +323,8 @@ fn corrupted_module(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		1u8.encode(),
 	);
 }
@@ -301,7 +336,8 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(func (export "call")
 			)
@@ -311,7 +347,10 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 
 			(start $start)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -321,7 +360,8 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		0u8.encode(),
 	);
 }
@@ -333,7 +373,8 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
 
-	let code = wabt::wat2wasm(r#"
+	let code = wabt::wat2wasm(
+		r#"
 		(module
 			(func (export "call")
 			)
@@ -344,7 +385,10 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 
 			(start $start)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
@@ -354,7 +398,8 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 			&mut ext,
 			&test_code[..],
 			8,
-		).unwrap(),
+		)
+		.unwrap(),
 		2u8.encode(),
 	);
 }

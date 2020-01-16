@@ -19,17 +19,22 @@
 //! This module is a currently only a variant of unhashed with additional `storage_key`.
 //! Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 //! avoid collision from a resistant hash function (which unique implies)).
-// NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
+// NOTE: could replace unhashed by having only one kind of storage (root being null storage key
+// (storage_key can become Option<&[u8]>).
 
 use crate::rstd::prelude::*;
-use codec::{Codec, Encode, Decode};
+use codec::{Codec, Decode, Encode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
 	runtime_io::storage::child_get(storage_key, key).and_then(|v| {
 		Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
-			runtime_print!("ERROR: Corrupted state in child trie at {:?}/{:?}", storage_key, key);
+			runtime_print!(
+				"ERROR: Corrupted state in child trie at {:?}/{:?}",
+				storage_key,
+				key
+			);
 			None
 		})
 	})
@@ -79,7 +84,7 @@ pub fn take_or_default<T: Codec + Sized + Default>(storage_key: &[u8], key: &[u8
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T: Codec + Sized>(storage_key: &[u8],key: &[u8], default_value: T) -> T {
+pub fn take_or<T: Codec + Sized>(storage_key: &[u8], key: &[u8], default_value: T) -> T {
 	take(storage_key, key).unwrap_or(default_value)
 }
 
@@ -95,18 +100,14 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(storage_key: &[u8], key: &[u8]) -> bool {
-	runtime_io::storage::child_read(storage_key, key, &mut [0;0][..], 0).is_some()
+	runtime_io::storage::child_read(storage_key, key, &mut [0; 0][..], 0).is_some()
 }
 
 /// Remove all `storage_key` key/values
-pub fn kill_storage(storage_key: &[u8]) {
-	runtime_io::storage::child_storage_kill(storage_key)
-}
+pub fn kill_storage(storage_key: &[u8]) { runtime_io::storage::child_storage_kill(storage_key) }
 
 /// Ensure `key` has no explicit entry in storage.
-pub fn kill(storage_key: &[u8], key: &[u8]) {
-	runtime_io::storage::child_clear(storage_key, key);
-}
+pub fn kill(storage_key: &[u8], key: &[u8]) { runtime_io::storage::child_clear(storage_key, key); }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {

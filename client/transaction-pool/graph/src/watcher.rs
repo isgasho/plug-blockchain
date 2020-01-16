@@ -16,10 +16,7 @@
 
 //! Extrinsics status updates.
 
-use futures::{
-	Stream,
-	channel::mpsc,
-};
+use futures::{channel::mpsc, Stream};
 use txpool_api::TransactionStatus;
 
 /// Extrinsic watcher.
@@ -33,16 +30,12 @@ pub struct Watcher<H, H2> {
 
 impl<H, H2> Watcher<H, H2> {
 	/// Returns the transaction hash.
-	pub fn hash(&self) -> &H {
-		&self.hash
-	}
+	pub fn hash(&self) -> &H { &self.hash }
 
 	/// Pipe the notifications to given sink.
 	///
 	/// Make sure to drive the future to completion.
-	pub fn into_stream(self) -> impl Stream<Item=TransactionStatus<H, H2>> {
-		self.receiver
-	}
+	pub fn into_stream(self) -> impl Stream<Item = TransactionStatus<H, H2>> { self.receiver }
 }
 
 /// Sender part of the watcher. Exposed only for testing purposes.
@@ -66,26 +59,17 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, H2> {
 		let (tx, receiver) = mpsc::unbounded();
 		self.receivers.push(tx);
-		Watcher {
-			receiver,
-			hash,
-		}
+		Watcher { receiver, hash }
 	}
 
 	/// Transaction became ready.
-	pub fn ready(&mut self) {
-		self.send(TransactionStatus::Ready)
-	}
+	pub fn ready(&mut self) { self.send(TransactionStatus::Ready) }
 
 	/// Transaction was moved to future.
-	pub fn future(&mut self) {
-		self.send(TransactionStatus::Future)
-	}
+	pub fn future(&mut self) { self.send(TransactionStatus::Future) }
 
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
-	pub fn usurped(&mut self, hash: H) {
-		self.send(TransactionStatus::Usurped(hash))
-	}
+	pub fn usurped(&mut self, hash: H) { self.send(TransactionStatus::Usurped(hash)) }
 
 	/// Extrinsic has been finalized in block with given hash.
 	pub fn finalized(&mut self, hash: H2) {
@@ -101,9 +85,7 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	}
 
 	/// Transaction has been dropped from the pool because of the limit.
-	pub fn dropped(&mut self) {
-		self.send(TransactionStatus::Dropped);
-	}
+	pub fn dropped(&mut self) { self.send(TransactionStatus::Dropped); }
 
 	/// The extrinsic has been broadcast to the given peers.
 	pub fn broadcast(&mut self, peers: Vec<String>) {
@@ -111,11 +93,10 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	}
 
 	/// Returns true if the are no more listeners for this extrinsic or it was finalized.
-	pub fn is_done(&self) -> bool {
-		self.finalized || self.receivers.is_empty()
-	}
+	pub fn is_done(&self) -> bool { self.finalized || self.receivers.is_empty() }
 
 	fn send(&mut self, status: TransactionStatus<H, H2>) {
-		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
+		self.receivers
+			.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
 	}
 }

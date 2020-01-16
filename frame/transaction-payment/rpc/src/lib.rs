@@ -16,28 +16,24 @@
 
 //! RPC interface for the transaction payment module.
 
-use std::sync::Arc;
+pub use self::gen_client::Client as TransactionPaymentClient;
 use codec::{Codec, Decode};
-use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
+use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
+pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+use primitives::Bytes;
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi, UniqueSaturatedInto},
 };
-use primitives::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::CappedDispatchInfo;
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
-pub use self::gen_client::Client as TransactionPaymentClient;
+use std::sync::Arc;
 
 #[rpc]
 pub trait TransactionPaymentApi<BlockHash, Balance> {
 	#[rpc(name = "payment_queryInfo")]
-	fn query_info(
-		&self,
-		encoded_xt: Bytes,
-		at: Option<BlockHash>
-	) -> Result<CappedDispatchInfo>;
+	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> Result<CappedDispatchInfo>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -49,7 +45,10 @@ pub struct TransactionPayment<C, P> {
 impl<C, P> TransactionPayment<C, P> {
 	/// Create new `TransactionPayment` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		TransactionPayment { client, _marker: Default::default() }
+		TransactionPayment {
+			client,
+			_marker: Default::default(),
+		}
 	}
 }
 
@@ -84,13 +83,12 @@ where
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<<Block as BlockT>::Hash>
+		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<CappedDispatchInfo> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		));
+			self.client.info().best_hash));
 
 		let encoded_len = encoded_xt.len() as u32;
 
@@ -99,10 +97,12 @@ where
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})?;
-		api.query_info(&at, uxt, encoded_len).map_err(|e| RpcError {
-			code: ErrorCode::ServerError(Error::RuntimeError.into()),
-			message: "Unable to query dispatch info.".into(),
-			data: Some(format!("{:?}", e).into()),
-		}).map(CappedDispatchInfo::new)
+		api.query_info(&at, uxt, encoded_len)
+			.map_err(|e| RpcError {
+				code: ErrorCode::ServerError(Error::RuntimeError.into()),
+				message: "Unable to query dispatch info.".into(),
+				data: Some(format!("{:?}", e).into()),
+			})
+			.map(CappedDispatchInfo::new)
 	}
 }

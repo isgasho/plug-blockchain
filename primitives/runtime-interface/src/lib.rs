@@ -61,10 +61,8 @@
 //! ```
 //! #[sp_runtime_interface::runtime_interface]
 //! trait RuntimeInterface {
-//!     fn some_function(value: &[u8]) -> bool {
-//!         value.iter().all(|v| *v > 125)
-//!     }
-//! }
+//! 	fn some_function(value: &[u8]) -> bool { value.iter().all(|v| *v > 125) }
+//! 	}
 //! ```
 //!
 //! For more information on declaring a runtime interface, see
@@ -84,18 +82,19 @@ pub use sp_runtime_interface_proc_macro::runtime_interface;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use externalities::{
-	set_and_run_with_externalities, with_externalities, Externalities, ExternalitiesExt, ExtensionStore,
+	set_and_run_with_externalities, with_externalities, ExtensionStore, Externalities,
+	ExternalitiesExt,
 };
 
 #[doc(hidden)]
 pub use codec;
 
-pub(crate) mod impls;
 #[cfg(feature = "std")]
 pub mod host;
+pub(crate) mod impls;
+pub mod pass_by;
 #[cfg(not(feature = "std"))]
 pub mod wasm;
-pub mod pass_by;
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.
@@ -121,7 +120,7 @@ pub type Pointer<T> = wasm_interface::Pointer<T>;
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_wasm::{WASM_BINARY, test_api::HostFunctions};
+	use test_wasm::{test_api::HostFunctions, WASM_BINARY};
 	use wasm_interface::HostFunctions as HostFunctionsT;
 
 	type TestExternalities = state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
@@ -135,8 +134,8 @@ mod tests {
 			(
 				HF,
 				runtime_io::SubstrateHostFunctions,
-				executor::deprecated_host_interface::SubstrateExternals
-			)
+				executor::deprecated_host_interface::SubstrateExternals,
+			),
 		>(
 			method,
 			&[],
@@ -144,27 +143,27 @@ mod tests {
 			&mut ext_ext,
 			&WASM_BINARY[..],
 			8,
-		).expect(&format!("Executes `{}`", method));
+		)
+		.expect(&format!("Executes `{}`", method));
 
 		ext
 	}
 
 	#[test]
-	fn test_return_data() {
-		call_wasm_method::<HostFunctions>("test_return_data");
-	}
+	fn test_return_data() { call_wasm_method::<HostFunctions>("test_return_data"); }
 
 	#[test]
-	fn test_return_option_data() {
-		call_wasm_method::<HostFunctions>("test_return_option_data");
-	}
+	fn test_return_option_data() { call_wasm_method::<HostFunctions>("test_return_option_data"); }
 
 	#[test]
 	fn test_set_storage() {
 		let mut ext = call_wasm_method::<HostFunctions>("test_set_storage");
 
 		let expected = "world";
-		assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes()).unwrap()[..]);
+		assert_eq!(
+			expected.as_bytes(),
+			&ext.ext().storage("hello".as_bytes()).unwrap()[..]
+		);
 	}
 
 	#[test]
@@ -191,15 +190,12 @@ mod tests {
 	#[should_panic(
 		expected = "Other(\"Instantiation: Export ext_test_api_return_input_version_1 not found\")"
 	)]
-	fn host_function_not_found() {
-		call_wasm_method::<()>("test_return_data");
-	}
+	fn host_function_not_found() { call_wasm_method::<()>("test_return_data"); }
 
 	#[test]
 	#[should_panic(
-		expected =
-			"FunctionExecution(\"ext_test_api_invalid_utf8_data_version_1\", \
-			\"Invalid utf8 data provided\")"
+		expected = "FunctionExecution(\"ext_test_api_invalid_utf8_data_version_1\", \"Invalid \
+		            utf8 data provided\")"
 	)]
 	fn test_invalid_utf8_data_should_return_an_error() {
 		call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");

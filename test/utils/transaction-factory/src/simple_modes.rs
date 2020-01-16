@@ -32,18 +32,19 @@
 ///   A -> B
 ///   A -> B
 ///   ... x `num`
-
 use std::sync::Arc;
 
-use log::info;
-use client::Client;
 use block_builder_api::BlockBuilder;
-use sp_api::ConstructRuntimeApi;
+use client::Client;
+use log::info;
 use primitives::{Blake2Hasher, Hasher};
-use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi, One};
-use sp_runtime::generic::BlockId;
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, One, ProvideRuntimeApi},
+};
 
-use crate::{Mode, RuntimeAdapter, create_block};
+use crate::{create_block, Mode, RuntimeAdapter};
 
 pub fn next<RA, Backend, Exec, Block, RtApi>(
 	factory_state: &mut RA,
@@ -64,7 +65,7 @@ where
 	RA: RuntimeAdapter,
 {
 	if factory_state.block_no() >= factory_state.num() {
-		return None;
+		return None
 	}
 
 	let from = (RA::master_account_id(), RA::master_account_secret());
@@ -92,7 +93,9 @@ where
 	);
 
 	let inherents = RA::inherent_extrinsics(&factory_state);
-	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+	let inherents = client
+		.runtime_api()
+		.inherent_extrinsics(&prior_block_id, inherents)
 		.expect("Failed to create inherent extrinsics");
 
 	let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);

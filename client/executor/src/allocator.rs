@@ -22,7 +22,7 @@
 //! to 16,777,216 bytes (2^3 - 2^24 inclusive), resulting in `N = 22`:
 //!
 //! ```ignore
-//!	let mut heads [u64; N] = [0; N];
+//! 	let mut heads [u64; N] = [0; N];
 //! fn size(n: u64) -> u64 { 8 << n }
 //! let mut bumper = 0;
 //! fn bump(n: u64) -> u64 { let res = bumper; bumper += n; res }
@@ -48,8 +48,10 @@
 
 use crate::error::{Error, Result};
 use log::trace;
-use std::convert::{TryFrom, TryInto};
-use std::ops::Range;
+use std::{
+	convert::{TryFrom, TryInto},
+	ops::Range,
+};
 use wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes. This is because the
@@ -77,9 +79,7 @@ pub struct FreeingBumpHeapAllocator {
 }
 
 /// Create an allocator error.
-fn error(msg: &'static str) -> Error {
-	Error::Allocator(msg)
-}
+fn error(msg: &'static str) -> Error { Error::Allocator(msg) }
 
 impl FreeingBumpHeapAllocator {
 	/// Creates a new allocation heap which follows a freeing-bump strategy.
@@ -111,18 +111,17 @@ impl FreeingBumpHeapAllocator {
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `size` - size in bytes of the allocation request
 	pub fn allocate(&mut self, mem: &mut [u8], size: WordSize) -> Result<Pointer<u8>> {
-		let mem_size = u32::try_from(mem.len())
-			.expect("size of Wasm linear memory is <2^32");
+		let mem_size = u32::try_from(mem.len()).expect("size of Wasm linear memory is <2^32");
 		let max_heap_size = mem_size - self.ptr_offset;
 
 		if size > MAX_POSSIBLE_ALLOCATION {
-			return Err(Error::RequestedAllocationTooLarge);
+			return Err(Error::RequestedAllocationTooLarge)
 		}
 
 		let size = size.max(MIN_POSSIBLE_ALLOCATION);
 		let item_size = size.next_power_of_two();
 		if item_size + PREFIX_SIZE + self.total_size > max_heap_size {
-			return Err(Error::AllocatorOutOfSpace);
+			return Err(Error::AllocatorOutOfSpace)
 		}
 
 		let list_index = (item_size.trailing_zeros() - 3) as usize;
@@ -136,7 +135,8 @@ impl FreeingBumpHeapAllocator {
 				only valid values are inserted; qed"
 			);
 
-			self.heads[list_index] = self.get_heap_u64(mem, item)?
+			self.heads[list_index] = self
+				.get_heap_u64(mem, item)?
 				.try_into()
 				.map_err(|_| error("read invalid free list pointer"))?;
 			ptr
@@ -162,20 +162,23 @@ impl FreeingBumpHeapAllocator {
 	pub fn deallocate(&mut self, mem: &mut [u8], ptr: Pointer<u8>) -> Result<()> {
 		let ptr = u32::from(ptr) - self.ptr_offset;
 		if ptr < PREFIX_SIZE {
-			return Err(error("Invalid pointer for deallocation"));
+			return Err(error("Invalid pointer for deallocation"))
 		}
 
-		let list_index: usize = self.get_heap_u64(mem, ptr - PREFIX_SIZE)?
+		let list_index: usize = self
+			.get_heap_u64(mem, ptr - PREFIX_SIZE)?
 			.try_into()
 			.map_err(|_| error("read invalid list index"))?;
 		if list_index > self.heads.len() {
-			return Err(error("read invalid list index"));
+			return Err(error("read invalid list index"))
 		}
 		self.set_heap_u64(mem, ptr - PREFIX_SIZE, self.heads[list_index] as u64)?;
 		self.heads[list_index] = ptr - PREFIX_SIZE;
 
 		let item_size = Self::get_item_size_from_index(list_index);
-		self.total_size = self.total_size.checked_sub(item_size as u32 + PREFIX_SIZE)
+		self.total_size = self
+			.total_size
+			.checked_sub(item_size as u32 + PREFIX_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after deallocation", self.total_size);
 
@@ -189,7 +192,7 @@ impl FreeingBumpHeapAllocator {
 	/// would exhaust the heap.
 	fn bump(&mut self, item_size: u32, max_heap_size: u32) -> Result<u32> {
 		if self.bumper + PREFIX_SIZE + item_size > max_heap_size {
-			return Err(Error::AllocatorOutOfSpace);
+			return Err(Error::AllocatorOutOfSpace)
 		}
 
 		let res = self.bumper;
@@ -204,16 +207,19 @@ impl FreeingBumpHeapAllocator {
 
 	// Read a u64 from the heap in LE form. Used to read heap allocation prefixes.
 	fn get_heap_u64(&self, heap: &[u8], offset: u32) -> Result<u64> {
-		let range = self.heap_range(offset, 8, heap.len())
+		let range = self
+			.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("read out of heap bounds"))?;
-		let bytes = heap[range].try_into()
+		let bytes = heap[range]
+			.try_into()
 			.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
 		Ok(u64::from_le_bytes(bytes))
 	}
 
 	// Write a u64 to the heap in LE form. Used to write heap allocation prefixes.
 	fn set_heap_u64(&self, heap: &mut [u8], offset: u32, val: u64) -> Result<()> {
-		let range = self.heap_range(offset, 8, heap.len())
+		let range = self
+			.heap_range(offset, 8, heap.len())
 			.ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
 		&mut heap[range].copy_from_slice(&bytes[..]);
@@ -221,13 +227,8 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	fn heap_range(&self, offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>> {
-		let start = offset
-			.checked_add(self.ptr_offset)?
-			as usize;
-		let end = offset
-			.checked_add(self.ptr_offset)?
-			.checked_add(length)?
-			as usize;
+		let start = offset.checked_add(self.ptr_offset)? as usize;
+		let end = offset.checked_add(self.ptr_offset)?.checked_add(length)? as usize;
 		if end <= heap_len {
 			Some(start..end)
 		} else {
@@ -243,9 +244,7 @@ mod tests {
 	const PAGE_SIZE: u32 = 65536;
 
 	/// Makes a pointer out of the given address.
-	fn to_pointer(address: u32) -> Pointer<u8> {
-		Pointer::new(address)
-	}
+	fn to_pointer(address: u32) -> Pointer<u8> { Pointer::new(address) }
 
 	#[test]
 	fn should_allocate_properly() {
@@ -393,7 +392,9 @@ mod tests {
 		// given
 		let mut mem = [0u8; PAGE_SIZE as usize];
 		let mut heap = FreeingBumpHeapAllocator::new(0);
-		let ptr1 = heap.allocate(&mut mem[..], (PAGE_SIZE / 2) - PREFIX_SIZE).unwrap();
+		let ptr1 = heap
+			.allocate(&mut mem[..], (PAGE_SIZE / 2) - PREFIX_SIZE)
+			.unwrap();
 		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
 
 		// when
@@ -414,7 +415,9 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// when
-		let ptr = heap.allocate(&mut mem[..], MAX_POSSIBLE_ALLOCATION).unwrap();
+		let ptr = heap
+			.allocate(&mut mem[..], MAX_POSSIBLE_ALLOCATION)
+			.unwrap();
 
 		// then
 		assert_eq!(ptr, to_pointer(PREFIX_SIZE));
@@ -444,13 +447,15 @@ mod tests {
 
 		let ptr1 = heap.allocate(&mut mem[..], 32).unwrap();
 		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
-		heap.deallocate(&mut mem[..], ptr1).expect("failed freeing ptr1");
+		heap.deallocate(&mut mem[..], ptr1)
+			.expect("failed freeing ptr1");
 		assert_eq!(heap.total_size, 0);
 		assert_eq!(heap.bumper, 40);
 
 		let ptr2 = heap.allocate(&mut mem[..], 16).unwrap();
 		assert_eq!(ptr2, to_pointer(48));
-		heap.deallocate(&mut mem[..], ptr2).expect("failed freeing ptr2");
+		heap.deallocate(&mut mem[..], ptr2)
+			.expect("failed freeing ptr2");
 		assert_eq!(heap.total_size, 0);
 		assert_eq!(heap.bumper, 64);
 
@@ -550,5 +555,4 @@ mod tests {
 		// then
 		assert_eq!(item_size as u32, MAX_POSSIBLE_ALLOCATION);
 	}
-
 }

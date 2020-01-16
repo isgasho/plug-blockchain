@@ -20,33 +20,28 @@
 
 pub mod client_ext;
 
-pub use client::{blockchain, self};
-pub use client_api::execution_extensions::{ExecutionStrategies, ExecutionExtensions};
-pub use client_db::{Backend, self};
+pub use client::{self, blockchain};
+pub use client_api::execution_extensions::{ExecutionExtensions, ExecutionStrategies};
+pub use client_db::{self, Backend};
 pub use client_ext::ClientExt;
 pub use consensus;
-pub use executor::{NativeExecutor, WasmExecutionMethod, self};
+pub use executor::{self, NativeExecutor, WasmExecutionMethod};
 pub use keyring::{
-	AccountKeyring,
-	ed25519::Keyring as Ed25519Keyring,
-	sr25519::Keyring as Sr25519Keyring,
+	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
-pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
-pub use sp_runtime::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::{traits::BareCryptoStorePtr, Blake2Hasher};
+pub use sp_runtime::{ChildrenStorageOverlay, StorageOverlay};
 pub use state_machine::ExecutionStrategy;
 
-use std::sync::Arc;
-use std::collections::HashMap;
+use client::LocalCallExecutor;
 use hash_db::Hasher;
 use primitives::storage::well_known_keys;
 use sp_runtime::traits::Block as BlockT;
-use client::LocalCallExecutor;
+use std::{collections::HashMap, sync::Arc};
 
 /// Test client light database backend.
-pub type LightBackend<Block> = client::light::backend::Backend<
-	client_db::light::LightStorage<Block>,
-	Blake2Hasher,
->;
+pub type LightBackend<Block> =
+	client::light::backend::Backend<client_db::light::LightStorage<Block>, Blake2Hasher>;
 
 /// A genesis storage initialisation trait.
 pub trait GenesisInit: Default {
@@ -55,9 +50,7 @@ pub trait GenesisInit: Default {
 }
 
 impl GenesisInit for () {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		Default::default()
-	}
+	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) { Default::default() }
 }
 
 /// A builder for creating a test client instance.
@@ -70,24 +63,16 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	keystore: Option<BareCryptoStorePtr>,
 }
 
-impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<Executor, Backend<Block>, G>
+where
+	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 {
-	fn default() -> Self {
-		Self::with_default_backend()
-	}
+	fn default() -> Self { Self::with_default_backend() }
 }
 
-impl<Block, Executor, G: GenesisInit> TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+impl<Block, Executor, G: GenesisInit> TestClientBuilder<Executor, Backend<Block>, G>
+where
+	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
@@ -96,9 +81,7 @@ impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 	}
 
 	/// Give access to the underlying backend of these clients
-	pub fn backend(&self) -> Arc<Backend<Block>> {
-		self.backend.clone()
-	}
+	pub fn backend(&self) -> Arc<Backend<Block>> { self.backend.clone() }
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
 	pub fn with_pruning_window(keep_blocks: u32) -> Self {
@@ -127,9 +110,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	}
 
 	/// Alter the genesis storage parameters.
-	pub fn genesis_init_mut(&mut self) -> &mut G {
-		&mut self.genesis_init
-	}
+	pub fn genesis_init_mut(&mut self) -> &mut G { &mut self.genesis_init }
 
 	/// Extend child storage
 	pub fn add_child_storage(
@@ -138,16 +119,16 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		child_key: impl AsRef<[u8]>,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_insert_with(Vec::new);
+		let entry = self
+			.child_storage_extension
+			.entry(key.as_ref().to_vec())
+			.or_insert_with(Vec::new);
 		entry.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
 		self
 	}
 
 	/// Set the execution strategy that should be used by all contexts.
-	pub fn set_execution_strategy(
-		mut self,
-		execution_strategy: ExecutionStrategy
-	) -> Self {
+	pub fn set_execution_strategy(mut self, execution_strategy: ExecutionStrategy) -> Self {
 		self.execution_strategies = ExecutionStrategies {
 			syncing: execution_strategy,
 			importing: execution_strategy,
@@ -163,26 +144,25 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		self,
 		executor: Executor,
 	) -> (
-		client::Client<
-			Backend,
-			Executor,
-			Block,
-			RuntimeApi,
-		>,
+		client::Client<Backend, Executor, Block, RuntimeApi>,
 		client::LongestChain<Backend, Block>,
-	) where
+	)
+	where
 		Executor: client::CallExecutor<Block, Blake2Hasher>,
 		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	{
-
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 
 			// Add some child storage keys.
 			for (key, value) in self.child_storage_extension {
 				storage.1.insert(
-					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+					well_known_keys::CHILD_STORAGE_KEY_PREFIX
+						.iter()
+						.cloned()
+						.chain(key)
+						.collect(),
 					value.into_iter().collect(),
 				);
 			}
@@ -195,11 +175,9 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			executor,
 			storage,
 			Default::default(),
-			ExecutionExtensions::new(
-				self.execution_strategies,
-				self.keystore.clone(),
-			)
-		).expect("Creates new client");
+			ExecutionExtensions::new(self.execution_strategies, self.keystore.clone()),
+		)
+		.expect("Creates new client");
 
 		let longest_chain = client::LongestChain::new(self.backend);
 
@@ -207,11 +185,9 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	}
 }
 
-impl<E, Backend, G: GenesisInit> TestClientBuilder<
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
-	Backend,
-	G,
-> {
+impl<E, Backend, G: GenesisInit>
+	TestClientBuilder<client::LocalCallExecutor<Backend, NativeExecutor<E>>, Backend, G>
+{
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<Block, RuntimeApi, I>(
 		self,
@@ -221,18 +197,19 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 			Backend,
 			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
-			RuntimeApi
+			RuntimeApi,
 		>,
 		client::LongestChain<Backend, Block>,
-	) where
+	)
+	where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: executor::NativeExecutionDispatch,
 		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	{
-		let executor = executor.into().unwrap_or_else(||
-			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
-		);
+		let executor = executor
+			.into()
+			.unwrap_or_else(|| NativeExecutor::new(WasmExecutionMethod::Interpreted, None));
 		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
 		self.build_with_executor(executor)

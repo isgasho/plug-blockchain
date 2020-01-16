@@ -27,45 +27,53 @@ pub mod error;
 mod builder;
 mod status_sinks;
 
-use std::io;
-use std::marker::PhantomData;
-use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
+use std::{
+	collections::HashMap,
+	io,
+	marker::PhantomData,
+	net::SocketAddr,
+	time::{Duration, Instant},
+};
 
 use client::Client;
+use codec::{Decode, Encode};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::{
 	future::{ready, FutureExt as _, TryFutureExt as _},
 	stream::{StreamExt as _, TryStreamExt as _},
 };
+use log::{debug, error, log, warn, Level};
 use network::{
-	NetworkService, NetworkState, specialization::NetworkSpecialization,
-	Event, DhtEvent, PeerId, ReportHandle,
+	specialization::NetworkSpecialization, DhtEvent, Event, NetworkService, NetworkState, PeerId,
+	ReportHandle,
 };
-use log::{log, warn, debug, error, Level};
-use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
 
-pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
-pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, error::IntoPoolError};
-pub use txpool::txpool::Options as TransactionPoolOptions;
+pub use self::{
+	builder::{ServiceBuilder, ServiceBuilderCommand},
+	error::Error,
+};
+pub use chain_spec::{ChainSpec, Extension as ChainSpecExtension, Properties, RuntimeGenesis};
 pub use client::FinalityNotifications;
-pub use rpc::Metadata as RpcMetadata;
-#[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
-#[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
+pub use config::{Configuration, PruningMode, Roles};
 #[doc(hidden)]
 pub use futures::future::Executor;
+#[doc(hidden)]
+pub use network::{config::BoxFinalityProofRequestBuilder, FinalityProofProvider, OnDemand};
+pub use rpc::Metadata as RpcMetadata;
+pub use sp_transaction_pool::{
+	error::IntoPoolError, InPoolTransaction, TransactionPool, TransactionPoolMaintainer,
+};
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
+pub use txpool::txpool::Options as TransactionPoolOptions;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -106,7 +114,8 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 }
 
 /// Alias for a an implementation of `futures::future::Executor`.
-pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+pub type TaskExecutor =
+	Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -132,14 +141,22 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 }
 
 /// Abstraction over a Substrate service.
-pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
-	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
+pub trait AbstractService:
+	'static
+	+ Future<Item = (), Error = Error>
+	+ Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	+ Send
+{
 	/// Type of block of this chain.
 	type Block: BlockT<Hash = H256>;
 	/// Backend storage for the client.
 	type Backend: 'static + client_api::backend::Backend<Self::Block, Blake2Hasher>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static
+		+ client::CallExecutor<Self::Block, Blake2Hasher>
+		+ Send
+		+ Sync
+		+ Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
@@ -179,10 +196,16 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
+	fn rpc_query(
+		&self,
+		mem: &RpcSession,
+		request: &str,
+	) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(
+		&self,
+	) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -191,7 +214,10 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+	fn network_status(
+		&self,
+		interval: Duration,
+	) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
@@ -200,27 +226,32 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
-	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
-where
+impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService
+	for Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, TNetSpec, H256>,
+		TExPool,
+		TOc,
+	> where
 	TBl: BlockT<Hash = H256>,
 	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
-	TExPool: 'static + TransactionPool<Block = TBl>
-		+ TransactionPoolMaintainer<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl> + TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
-	type Block = TBl;
 	type Backend = TBackend;
+	type Block = TBl;
 	type CallExecutor = TExec;
+	type NetworkSpecialization = TNetSpec;
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
-	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
 		let (sink, stream) = mpsc::unbounded();
@@ -228,13 +259,9 @@ where
 		stream
 	}
 
-	fn telemetry(&self) -> Option<tel::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
-	}
+	fn telemetry(&self) -> Option<tel::Telemetry> { self._telemetry.as_ref().map(|t| t.clone()) }
 
-	fn keystore(&self) -> keystore::KeyStorePtr {
-		self.keystore.clone()
-	}
+	fn keystore(&self) -> keystore::KeyStorePtr { self.keystore.clone() }
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let exit = self.on_exit().map(Ok).compat();
@@ -264,42 +291,48 @@ where
 		}
 	}
 
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
-		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
+	fn rpc_query(
+		&self,
+		mem: &RpcSession,
+		request: &str,
+	) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
+		Box::new(
+			self.rpc_handlers
+				.handle_request(request, mem.metadata.clone()),
+		)
 	}
 
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(
+		&self,
+	) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
-	fn select_chain(&self) -> Option<Self::SelectChain> {
-		self.select_chain.clone()
-	}
+	fn select_chain(&self) -> Option<Self::SelectChain> { self.select_chain.clone() }
 
 	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>> {
 		self.network.clone()
 	}
 
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
+	fn network_status(
+		&self,
+		interval: Duration,
+	) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
 		self.network_status_sinks.lock().push(interval, sink);
 		stream
 	}
 
-	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
-		self.transaction_pool.clone()
-	}
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool> { self.transaction_pool.clone() }
 
-	fn on_exit(&self) -> exit_future::Exit {
-		self.exit.clone()
-	}
+	fn on_exit(&self) -> exit_future::Exit { self.exit.clone() }
 }
 
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future
+	for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
-	type Item = ();
 	type Error = Error;
+	type Item = ();
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		match self.essential_failed_rx.poll() {
@@ -307,8 +340,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 			Ok(Async::Ready(_)) | Err(_) => {
 				// Ready(None) should not be possible since we hold a live
 				// sender.
-				return Err(Error::Other("Essential task failed.".into()));
-			}
+				return Err(Error::Other("Essential task failed.".into()))
+			},
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
@@ -324,7 +357,11 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 		}
 
 		// Polling all the `to_poll` futures.
-		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
+		while let Some(pos) = self
+			.to_poll
+			.iter_mut()
+			.position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true))
+		{
 			let _ = self.to_poll.remove(pos);
 		}
 
@@ -333,12 +370,13 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	}
 }
 
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+	for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn execute(
 		&self,
-		future: Box<dyn Future<Item = (), Error = ()> + Send>
+		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
 		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
@@ -356,8 +394,8 @@ fn build_network_future<
 	B: BlockT,
 	C: client::BlockchainEvents<B>,
 	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT
-> (
+	H: network::ExHashT,
+>(
 	roles: Roles,
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
@@ -370,17 +408,28 @@ fn build_network_future<
 	// See https://github.com/paritytech/substrate/issues/3099
 	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
 
-	let mut imported_blocks_stream = client.import_notification_stream().fuse()
-		.map(|v| Ok::<_, ()>(v)).compat();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse()
-		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut imported_blocks_stream = client
+		.import_notification_stream()
+		.fuse()
+		.map(|v| Ok::<_, ()>(v))
+		.compat();
+	let mut finality_notification_stream = client
+		.finality_notification_stream()
+		.fuse()
+		.map(|v| Ok::<_, ()>(v))
+		.compat();
 
 	futures::future::poll_fn(move || {
 		let before_polling = Instant::now();
 
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
-			network.on_block_imported(notification.hash, notification.header, Vec::new(), notification.is_new_best);
+			network.on_block_imported(
+				notification.hash,
+				notification.header,
+				Vec::new(),
+				notification.is_new_best,
+			);
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.
@@ -403,25 +452,30 @@ fn build_network_future<
 					});
 				},
 				rpc::system::Request::Peers(sender) => {
-					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::system::PeerInfo {
-							peer_id: peer_id.to_base58(),
-							roles: format!("{:?}", p.roles),
-							protocol_version: p.protocol_version,
-							best_hash: p.best_hash,
-							best_number: p.best_number,
-						}
-					).collect());
-				}
+					let _ = sender.send(
+						network
+							.peers_debug_info()
+							.into_iter()
+							.map(|(peer_id, p)| rpc::system::PeerInfo {
+								peer_id: peer_id.to_base58(),
+								roles: format!("{:?}", p.roles),
+								protocol_version: p.protocol_version,
+								best_hash: p.best_hash,
+								best_number: p.best_number,
+							})
+							.collect(),
+					);
+				},
 				rpc::system::Request::NetworkState(sender) => {
-					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok()
+					{
 						let _ = sender.send(network_state);
 					}
-				}
+				},
 				rpc::system::Request::NodeRoles(sender) => {
 					use rpc::system::NodeRole;
 
-					let node_roles = (0 .. 8)
+					let node_roles = (0..8)
 						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
 						.map(|bit_number| match Roles::from_bits(1 << bit_number) {
 							Some(Roles::AUTHORITY) => NodeRole::Authority,
@@ -432,7 +486,7 @@ fn build_network_future<
 						.collect();
 
 					let _ = sender.send(node_roles);
-				}
+				},
 			};
 		}
 
@@ -455,10 +509,11 @@ fn build_network_future<
 		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
-			// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
-			// events are being passed on to the authority-discovery module. In the future there might be multiple
-			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
-			// e.g. via a subscriber model.
+			// Given that client/authority-discovery is the only upper stack consumer of Dht events
+			// at the moment, all Dht events are being passed on to the authority-discovery module.
+			// In the future there might be multiple consumers of these events. In that case this
+			// would need to be refactored to properly dispatch the events, e.g. via a subscriber
+			// model.
 			if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
 				if e.is_full() {
 					warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
@@ -466,7 +521,7 @@ fn build_network_future<
 					warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
 				}
 			}
-		};
+		}
 
 		// Now some diagnostic for performances.
 		let polling_dur = before_polling.elapsed();
@@ -500,8 +555,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub average_upload_per_sec: u64,
 }
 
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop
+	for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
@@ -511,52 +566,58 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 	}
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
 	config: &Configuration<C, G, E>,
-	mut gen_handler: H
+	mut gen_handler: H,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
+	fn maybe_start_server<T, F>(
+		address: Option<SocketAddr>,
+		mut start: F,
+	) -> Result<Option<T>, io::Error>
+	where
+		F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 	{
 		Ok(match address {
-			Some(mut address) => Some(start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
-					},
-					_ => Err(e),
-				})?),
+			Some(mut address) => Some(start(&address).or_else(|e| match e.kind() {
+				io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
+					warn!(
+						"Unable to bind RPC server to {}. Trying random port.",
+						address
+					);
+					address.set_port(0);
+					start(&address)
+				},
+				_ => Err(e),
+			})?),
 			None => None,
 		})
 	}
 
 	Ok(Box::new((
-		maybe_start_server(
-			config.rpc_http,
-			|address| rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
-		)?,
-		maybe_start_server(
-			config.rpc_ws,
-			|address| rpc_servers::start_ws(
+		maybe_start_server(config.rpc_http, |address| {
+			rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler())
+		})?,
+		maybe_start_server(config.rpc_ws, |address| {
+			rpc_servers::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
 				gen_handler(),
-			),
-		)?.map(Mutex::new),
+			)
+		})?
+		.map(Mutex::new),
 	)))
 }
 
-/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them
+/// alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
 	_: &Configuration<C, G, E>,
-	_: H
+	_: H,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
@@ -593,10 +654,9 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
-	-> Vec<(H, B::Extrinsic)>
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool) -> Vec<(H, B::Extrinsic)>
 where
-	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
@@ -611,11 +671,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> network::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> network::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
 where
 	C: network::ClientHandle<B> + Send + Sync,
-	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
+	Pool: 'static + TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
@@ -624,9 +683,7 @@ where
 		transactions_to_propagate(&*self.pool)
 	}
 
-	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
-		self.pool.hash_of(transaction)
-	}
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H { self.pool.hash_of(transaction) }
 
 	fn import(
 		&self,
@@ -634,11 +691,11 @@ where
 		who: PeerId,
 		reputation_change_good: network::ReputationChange,
 		reputation_change_bad: network::ReputationChange,
-		transaction: B::Extrinsic
+		transaction: B::Extrinsic,
 	) {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return;
+			return
 		}
 
 		let encoded = transaction.encode();
@@ -655,9 +712,9 @@ where
 								Ok(e) => {
 									report_handle.report_peer(who, reputation_change_bad);
 									debug!("Error adding transaction to the pool: {:?}", e)
-								}
+								},
 								Err(e) => debug!("Error converting pool error: {:?}", e),
-							}
+							},
 						}
 						ready(Ok(()))
 					})
@@ -666,7 +723,7 @@ where
 				if let Err(e) = self.executor.execute(Box::new(import_future)) {
 					warn!("Error scheduling extrinsic import: {:?}", e);
 				}
-			}
+			},
 			Err(e) => debug!("Error decoding transaction {}", e),
 		}
 	}
@@ -679,10 +736,13 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures03::executor::block_on;
 	use consensus_common::SelectChain;
+	use futures03::executor::block_on;
 	use sp_runtime::traits::BlindCheckable;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+	use substrate_test_runtime_client::{
+		prelude::*,
+		runtime::{Extrinsic, Transfer},
+	};
 	use txpool::{BasicPool, FullChainApi};
 
 	#[test]
@@ -690,16 +750,21 @@ mod tests {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let pool = Arc::new(BasicPool::new(
+			Default::default(),
+			FullChainApi::new(client.clone()),
+		));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
-		}.into_signed_tx();
+		}
+		.into_signed_tx();
 		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])))
+			.unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

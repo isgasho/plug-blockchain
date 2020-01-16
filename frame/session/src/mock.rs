@@ -17,14 +17,16 @@
 //! Mock helpers for Session.
 
 use super::*;
-use std::cell::RefCell;
-use support::{impl_outer_origin, parameter_types, weights::Weight};
 use primitives::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
-	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
-	testing::{Header, UintAuthorityId}
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill,
 };
 use sp_staking::SessionIndex;
+use std::cell::RefCell;
+use support::{impl_outer_origin, parameter_types, weights::Weight};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -33,9 +35,7 @@ impl_opaque_keys! {
 }
 
 impl From<UintAuthorityId> for MockSessionKeys {
-	fn from(dummy: UintAuthorityId) -> Self {
-		Self { dummy }
-	}
+	fn from(dummy: UintAuthorityId) -> Self { Self { dummy } }
 }
 
 impl_outer_origin! {
@@ -60,32 +60,38 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SESSION_LENGTH.with(|l| *l.borrow());
-		now % l == 0 || FORCE_SESSION_END.with(|l| { let r = *l.borrow(); *l.borrow_mut() = false; r })
+		now % l == 0
+			|| FORCE_SESSION_END.with(|l| {
+				let r = *l.borrow();
+				*l.borrow_mut() = false;
+				r
+			})
 	}
 }
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
+
 	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
+
 	fn on_new_session<T: OpaqueKeys>(
 		changed: bool,
 		validators: &[(u64, T)],
 		_queued_validators: &[(u64, T)],
 	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter()
+		AUTHORITIES.with(|l| {
+			*l.borrow_mut() = validators
+				.iter()
 				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
 				.collect()
-		);
+		});
 	}
-	fn on_disabled(_validator_index: usize) {
-		DISABLED.with(|l| *l.borrow_mut() = true)
-	}
-	fn on_before_session_ending() {
-		BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
-	}
+
+	fn on_disabled(_validator_index: usize) { DISABLED.with(|l| *l.borrow_mut() = true) }
+
+	fn on_before_session_ending() { BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true); }
 }
 
 pub struct TestOnSessionEnding;
@@ -109,9 +115,10 @@ impl OnSessionEnding<u64> for TestOnSessionEnding {
 
 #[cfg(feature = "historical")]
 impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(ending_index: SessionIndex, will_apply_at: SessionIndex)
-		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
-	{
+	fn on_session_ending(
+		ending_index: SessionIndex,
+		will_apply_at: SessionIndex,
+	) -> Option<(Vec<u64>, Vec<(u64, u64)>)> {
 		let pair_with_ids = |vals: &[u64]| vals.iter().map(|&v| (v, v)).collect::<Vec<_>>();
 		<Self as OnSessionEnding<_>>::on_session_ending(ending_index, will_apply_at)
 			.map(|vals| (pair_with_ids(&vals), vals))
@@ -119,29 +126,17 @@ impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 	}
 }
 
-pub fn authorities() -> Vec<UintAuthorityId> {
-	AUTHORITIES.with(|l| l.borrow().to_vec())
-}
+pub fn authorities() -> Vec<UintAuthorityId> { AUTHORITIES.with(|l| l.borrow().to_vec()) }
 
-pub fn force_new_session() {
-	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true )
-}
+pub fn force_new_session() { FORCE_SESSION_END.with(|l| *l.borrow_mut() = true) }
 
-pub fn set_session_length(x: u64) {
-	SESSION_LENGTH.with(|l| *l.borrow_mut() = x )
-}
+pub fn set_session_length(x: u64) { SESSION_LENGTH.with(|l| *l.borrow_mut() = x) }
 
-pub fn session_changed() -> bool {
-	SESSION_CHANGED.with(|l| *l.borrow())
-}
+pub fn session_changed() -> bool { SESSION_CHANGED.with(|l| *l.borrow()) }
 
-pub fn set_next_validators(next: Vec<u64>) {
-	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
-}
+pub fn set_next_validators(next: Vec<u64>) { NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next); }
 
-pub fn before_session_end_called() -> bool {
-	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow())
-}
+pub fn before_session_end_called() -> bool { BEFORE_SESSION_END_CALLED.with(|b| *b.borrow()) }
 
 pub fn reset_before_session_end_called() {
 	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = false);
@@ -159,29 +154,29 @@ parameter_types! {
 }
 
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
-	type Version = ();
 	type DelegatedDispatchVerifier = ();
 	type Doughnut = ();
+	type Event = ();
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type Header = Header;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
+	type Version = ();
 }
 
 impl timestamp::Trait for Test {
+	type MinimumPeriod = MinimumPeriod;
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -189,18 +184,18 @@ parameter_types! {
 }
 
 impl Trait for Test {
-	type ShouldEndSession = TestShouldEndSession;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type Event = ();
+	type Keys = MockSessionKeys;
 	#[cfg(feature = "historical")]
 	type OnSessionEnding = crate::historical::NoteHistoricalRoot<Test, TestOnSessionEnding>;
 	#[cfg(not(feature = "historical"))]
 	type OnSessionEnding = TestOnSessionEnding;
+	type SelectInitialValidators = ();
 	type SessionHandler = TestSessionHandler;
+	type ShouldEndSession = TestShouldEndSession;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type Keys = MockSessionKeys;
-	type Event = ();
-	type SelectInitialValidators = ();
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 #[cfg(feature = "historical")]

@@ -1,4 +1,3 @@
-
 // Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -15,19 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{
-	collections::HashMap,
-	fmt,
-	hash,
-};
-use serde::Serialize;
 use crate::watcher;
-use sp_runtime::traits;
 use log::{debug, trace, warn};
+use serde::Serialize;
+use sp_runtime::traits;
+use std::{collections::HashMap, fmt, hash};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, H2> {
-	watchers: HashMap<H, watcher::Sender<H, H2>>
+	watchers: HashMap<H, watcher::Sender<H, H2>>,
 }
 
 impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
@@ -39,7 +34,10 @@ impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
 }
 
 impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listener<H, H2> {
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, H2>) {
+	fn fire<F>(&mut self, hash: &H, fun: F)
+	where
+		F: FnOnce(&mut watcher::Sender<H, H2>),
+	{
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -56,7 +54,10 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
 	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, H2> {
-		let sender = self.watchers.entry(hash.clone()).or_insert_with(watcher::Sender::default);
+		let sender = self
+			.watchers
+			.entry(hash.clone())
+			.or_insert_with(watcher::Sender::default);
 		sender.new_watcher(hash)
 	}
 

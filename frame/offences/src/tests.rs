@@ -20,8 +20,8 @@
 
 use super::*;
 use crate::mock::{
-	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
-	offence_reports,
+	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences, System, TestEvent,
+	KIND,
 };
 use sp_runtime::Perbill;
 use system::{EventRecord, Phase};
@@ -78,7 +78,6 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 	});
 }
 
-
 #[test]
 fn should_report_in_different_time_slot() {
 	new_test_ext().execute_with(|| {
@@ -126,14 +125,11 @@ fn should_deposit_event() {
 		Offences::report_offence(vec![], offence);
 
 		// then
-		assert_eq!(
-			System::events(),
-			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
-				topics: vec![],
-			}]
-		);
+		assert_eq!(System::events(), vec![EventRecord {
+			phase: Phase::ApplyExtrinsic(0),
+			event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
+			topics: vec![],
+		}]);
 	});
 }
 
@@ -161,14 +157,11 @@ fn doesnt_deposit_event_for_dups() {
 
 		// then
 		// there is only one event.
-		assert_eq!(
-			System::events(),
-			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
-				topics: vec![],
-			}]
-		);
+		assert_eq!(System::events(), vec![EventRecord {
+			phase: Phase::ApplyExtrinsic(0),
+			event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
+			topics: vec![],
+		}]);
 	});
 }
 
@@ -203,12 +196,15 @@ fn should_properly_count_offences() {
 
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.
-		assert_eq!(
-			offence_reports(KIND, time_slot),
-			vec![
-				OffenceDetails { offender: 5, reporters: vec![] },
-				OffenceDetails { offender: 4, reporters: vec![] },
-			]
-		);
+		assert_eq!(offence_reports(KIND, time_slot), vec![
+			OffenceDetails {
+				offender: 5,
+				reporters: vec![]
+			},
+			OffenceDetails {
+				offender: 4,
+				reporters: vec![]
+			},
+		]);
 	});
 }

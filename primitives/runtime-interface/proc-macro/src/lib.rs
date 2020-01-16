@@ -21,13 +21,14 @@
 //!
 //! 1. The [`#[runtime_interface]`](attr.runtime_interface.html) attribute macro for generating the
 //!    runtime interfaces.
-//! 2. The [`PassByCodec`](derive.PassByCodec.html) derive macro for implementing `PassBy` with `Codec`.
-//! 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Enum`.
-//! 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Inner`.
+//! 2. The [`PassByCodec`](derive.PassByCodec.html) derive macro for implementing `PassBy` with
+//! `Codec`. 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy`
+//! with `Enum`. 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing
+//! `PassBy` with `Inner`.
 
 extern crate proc_macro;
 
-use syn::{parse_macro_input, ItemTrait, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, ItemTrait};
 
 mod pass_by;
 mod runtime_interface;
@@ -47,25 +48,25 @@ mod utils;
 ///
 /// #[runtime_interface]
 /// trait Interface {
-///     /// A function that can be called from native/wasm.
-///     ///
-///     /// The implementation given to this function is only compiled on native.
-///     fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         // Here you could call some rather complex code that only compiles on native or
-///         // is way faster in native than executing it in wasm.
-///         Vec::new()
-///     }
+/// 	/// A function that can be called from native/wasm.
+/// 	///
+/// 	/// The implementation given to this function is only compiled on native.
+/// 	fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
+/// 		// Here you could call some rather complex code that only compiles on native or
+/// 		// is way faster in native than executing it in wasm.
+/// 		Vec::new()
+/// 		}
 ///
-///     /// A function can take a `&self` or `&mut self` argument to get access to the
-///     /// `Externalities`. (The generated method does not require
-///     /// this argument, so the function can be called just with the `optional` argument)
-///     fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
-///         match optional {
-///             Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
-///             None => self.clear_storage(&[1, 2, 3, 4]),
-///         }
-///     }
-/// }
+/// 	/// A function can take a `&self` or `&mut self` argument to get access to the
+/// 	/// `Externalities`. (The generated method does not require
+/// 	/// this argument, so the function can be called just with the `optional` argument)
+/// 	fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
+/// 		match optional {
+/// 			Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
+/// 			None => self.clear_storage(&[1, 2, 3, 4]),
+/// 			}
+/// 		}
+/// 	}
 /// ```
 ///
 ///
@@ -73,42 +74,43 @@ mod utils;
 ///
 /// ```
 /// // The name of the trait is converted to snake case and used as mod name.
-/// //
+/// 	//
 /// // Be aware that this module is not `public`, the visibility of the module is determined based
 /// // on the visibility of the trait declaration.
 /// mod interface {
-///     trait Interface {
-///         fn call_some_complex_code(data: &[u8]) -> Vec<u8>;
-///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>);
-///     }
+/// 	trait Interface {
+/// 		fn call_some_complex_code(data: &[u8]) -> Vec<u8>;
+/// 		fn set_or_clear(&mut self, optional: Option<Vec<u8>>);
+/// 		}
 ///
-///     impl Interface for &mut dyn externalities::Externalities {
-///         fn call_some_complex_code(data: &[u8]) -> Vec<u8> { Vec::new() }
-///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
-///             match optional {
-///                 Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
-///                 None => self.clear_storage(&[1, 2, 3, 4]),
-///             }
-///         }
-///     }
+/// 	impl Interface for &mut dyn externalities::Externalities {
+/// 		fn call_some_complex_code(data: &[u8]) -> Vec<u8> { Vec::new() }
 ///
-///     pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         <&mut dyn externalities::Externalities as Interface>::call_some_complex_code(data)
-///     }
+/// 		fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
+/// 			match optional {
+/// 				Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
+/// 				None => self.clear_storage(&[1, 2, 3, 4]),
+/// 			}
+/// 			}
+/// 		}
 ///
-///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
-///         externalities::with_externalities(|mut ext| Interface::set_or_clear(&mut ext, optional))
-///             .expect("`set_or_clear` called outside of an Externalities-provided environment.")
-///     }
+/// 	pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
+/// 		<&mut dyn externalities::Externalities as Interface>::call_some_complex_code(data)
+/// 		}
 ///
-///     /// This type implements the `HostFunctions` trait (from `sp-wasm-interface`) and
-///     /// provides the host implementation for the wasm side. The host implementation converts the
-///     /// arguments from wasm to native and calls the corresponding native function.
-///     ///
-///     /// This type needs to be passed to the wasm executor, so that the host functions will be
-///     /// registered in the executor.
-///     pub struct HostFunctions;
-/// }
+/// 	pub fn set_or_clear(optional: Option<Vec<u8>>) {
+/// 		externalities::with_externalities(|mut ext| Interface::set_or_clear(&mut ext, optional))
+/// 			.expect("`set_or_clear` called outside of an Externalities-provided environment.")
+/// 		}
+///
+/// 	/// This type implements the `HostFunctions` trait (from `sp-wasm-interface`) and
+/// 	/// provides the host implementation for the wasm side. The host implementation converts the
+/// 	/// arguments from wasm to native and calls the corresponding native function.
+/// 	///
+/// 	/// This type needs to be passed to the wasm executor, so that the host functions will be
+/// 	/// registered in the executor.
+/// 	pub struct HostFunctions;
+/// 	}
 /// ```
 ///
 ///
@@ -116,46 +118,46 @@ mod utils;
 ///
 /// ```
 /// mod interface {
-///     mod extern_host_functions_impls {
-///         extern "C" {
-///             /// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME_version_VERSION`.
-///             ///
-///             /// `TRAIT_NAME` is converted into snake case.
-///             ///
-///             /// The type for each argument of the exported function depends on
-///             /// `<ARGUMENT_TYPE as RIType>::FFIType`.
-///             ///
-///             /// `data` holds the pointer and the length to the `[u8]` slice.
-///             pub fn ext_Interface_call_some_complex_code_version_1(data: u64) -> u64;
-///             /// `optional` holds the pointer and the length of the encoded value.
-///             pub fn ext_Interface_set_or_clear_version_1(optional: u64);
-///         }
-///     }
+/// 	mod extern_host_functions_impls {
+/// 		extern "C" {
+/// 			/// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME_version_VERSION`.
+/// 			///
+/// 			/// `TRAIT_NAME` is converted into snake case.
+/// 			///
+/// 			/// The type for each argument of the exported function depends on
+/// 			/// `<ARGUMENT_TYPE as RIType>::FFIType`.
+/// 			///
+/// 			/// `data` holds the pointer and the length to the `[u8]` slice.
+/// 			pub fn ext_Interface_call_some_complex_code_version_1(data: u64) -> u64;
+/// 			/// `optional` holds the pointer and the length of the encoded value.
+/// 			pub fn ext_Interface_set_or_clear_version_1(optional: u64);
+/// 			}
+/// 		}
 ///
-///     /// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`).
-///     ///
-///     /// This can be used to replace the implementation of the `call_some_complex_code` function.
-///     /// Instead of calling into the host, the callee will automatically call the other
-///     /// implementation.
-///     ///
-///     /// To replace the implementation:
-///     ///
-///     /// `host_call_some_complex_code.replace_implementation(some_other_impl)`
-///     pub static host_call_some_complex_code: () = ();
-///     pub static host_set_or_clear: () = ();
+/// 	/// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`).
+/// 	///
+/// 	/// This can be used to replace the implementation of the `call_some_complex_code` function.
+/// 	/// Instead of calling into the host, the callee will automatically call the other
+/// 	/// implementation.
+/// 	///
+/// 	/// To replace the implementation:
+/// 	///
+/// 	/// `host_call_some_complex_code.replace_implementation(some_other_impl)`
+/// 	pub static host_call_some_complex_code: () = ();
+/// 	pub static host_set_or_clear: () = ();
 ///
-///     pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         // This is the actual call: `host_call_some_complex_code.get()(data)`
-///         //
-///         // But that does not work for several reasons in this example, so we just return an
-///         // empty vector.
-///         Vec::new()
-///     }
+/// 	pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
+/// 		// This is the actual call: `host_call_some_complex_code.get()(data)`
+/// 		//
+/// 		// But that does not work for several reasons in this example, so we just return an
+/// 		// empty vector.
+/// 		Vec::new()
+/// 		}
 ///
-///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
-///         // Same as above
-///     }
-/// }
+/// 	pub fn set_or_clear(optional: Option<Vec<u8>>) {
+/// 		// Same as above
+/// 		}
+/// 	}
 /// ```
 ///
 /// # Argument types
@@ -199,14 +201,16 @@ pub fn runtime_interface(
 /// # use codec::{Encode, Decode};
 /// #[derive(PassByCodec, Encode, Decode)]
 /// struct EncodableType {
-///     name: Vec<u8>,
-///     param: u32,
-/// }
+/// 	name: Vec<u8>,
+/// 	param: u32,
+/// 	}
 /// ```
 #[proc_macro_derive(PassByCodec)]
 pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::codec_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pass_by::codec_derive_impl(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 /// Derive macro for implementing `PassBy` with the `Inner` strategy.
@@ -229,13 +233,15 @@ pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # use runtime_interface::pass_by::PassByInner;
 /// #[derive(PassByInner)]
 /// struct Data {
-///     data: [u8; 32],
-/// }
+/// 	data: [u8; 32],
+/// 	}
 /// ```
 #[proc_macro_derive(PassByInner)]
 pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::inner_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pass_by::inner_derive_impl(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 /// Derive macro for implementing `PassBy` with the `Enum` strategy.
@@ -252,14 +258,16 @@ pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # use runtime_interface::pass_by::PassByEnum;
 /// #[derive(PassByEnum, Copy, Clone)]
 /// enum Data {
-///     Okay,
-///     NotOkay,
-///     // This will not work with the derive.
-///     //Why(u32),
-/// }
+/// 	Okay,
+/// 	NotOkay,
+/// 	/* This will not work with the derive.
+/// 	 * Why(u32), */
+/// 	}
 /// ```
 #[proc_macro_derive(PassByEnum)]
 pub fn pass_by_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::enum_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pass_by::enum_derive_impl(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }

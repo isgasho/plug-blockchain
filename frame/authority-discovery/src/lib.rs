@@ -22,9 +22,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use authority_discovery_primitives::AuthorityId;
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
-use authority_discovery_primitives::AuthorityId;
 
 /// The module's config trait.
 pub trait Trait: system::Trait + session::Trait {}
@@ -47,9 +47,7 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Retrieve authority identifiers of the current authority set.
-	pub fn authorities() -> Vec<AuthorityId> {
-		Keys::get()
-	}
+	pub fn authorities() -> Vec<AuthorityId> { Keys::get() }
 
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
@@ -92,15 +90,19 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use authority_discovery_primitives::{AuthorityPair};
 	use app_crypto::Pair;
+	use authority_discovery_primitives::AuthorityPair;
 	use primitives::{crypto::key_types, H256};
 	use runtime_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, KeyTypeId,
+		testing::{Header, UintAuthorityId},
+		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
+		KeyTypeId, Perbill,
 	};
-	use support::{impl_outer_origin, parameter_types, weights::Weight, additional_traits::DummyDispatchVerifier};
+	use support::{
+		additional_traits::DummyDispatchVerifier, impl_outer_origin, parameter_types,
+		weights::Weight,
+	};
 
 	type AuthorityDiscovery = Module<Test>;
 	type SessionIndex = u32;
@@ -111,9 +113,7 @@ mod tests {
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
-			None
-		}
+		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> { None }
 	}
 
 	parameter_types! {
@@ -121,15 +121,15 @@ mod tests {
 	}
 
 	impl session::Trait for Test {
-		type OnSessionEnding = TestOnSessionEnding;
-		type Keys = UintAuthorityId;
-		type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
-		type SessionHandler = TestSessionHandler;
+		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type Event = ();
+		type Keys = UintAuthorityId;
+		type OnSessionEnding = TestOnSessionEnding;
+		type SelectInitialValidators = ();
+		type SessionHandler = TestSessionHandler;
+		type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
-		type SelectInitialValidators = ();
-		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 
 	impl session::historical::Trait for Test {
@@ -150,22 +150,22 @@ mod tests {
 	}
 
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = AuthorityId;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = BlockNumber;
 		type Call = ();
+		type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
-		type AccountId = AuthorityId;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
 	}
 
@@ -192,35 +192,48 @@ mod tests {
 	#[test]
 	fn authorities_returns_current_authority_set() {
 		// The whole authority discovery module ignores account ids, but we still need it for
-		// `session::OneSessionHandler::on_new_session`, thus its safe to use the same value everywhere.
-		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
+		// `session::OneSessionHandler::on_new_session`, thus its safe to use the same value
+		// everywhere.
+		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref())
+			.unwrap()
+			.public();
 
-		let first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
-			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
+		let first_authorities: Vec<AuthorityId> = vec![0, 1]
+			.into_iter()
+			.map(|i| {
+				AuthorityPair::from_seed_slice(vec![i; 32].as_ref())
+					.unwrap()
+					.public()
+			})
 			.map(AuthorityId::from)
 			.collect();
 
-		let second_authorities: Vec<AuthorityId> = vec![2, 3].into_iter()
-			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
+		let second_authorities: Vec<AuthorityId> = vec![2, 3]
+			.into_iter()
+			.map(|i| {
+				AuthorityPair::from_seed_slice(vec![i; 32].as_ref())
+					.unwrap()
+					.public()
+			})
 			.map(AuthorityId::from)
 			.collect();
 
 		// Needed for `session::OneSessionHandler::on_new_session`.
-		let second_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> = second_authorities.clone()
-			.into_iter()
-			.map(|id| (&account_id, id))
-			.collect();
+		let second_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> =
+			second_authorities
+				.clone()
+				.into_iter()
+				.map(|id| (&account_id, id))
+				.collect();
 
 		// Build genesis.
 		let mut t = system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig {
-			keys: vec![],
-		}
-		.assimilate_storage::<Test>(&mut t)
-		.unwrap();
+		GenesisConfig { keys: vec![] }
+			.assimilate_storage::<Test>(&mut t)
+			.unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
@@ -229,7 +242,7 @@ mod tests {
 			use session::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
-				first_authorities.iter().map(|id| (id, id.clone()))
+				first_authorities.iter().map(|id| (id, id.clone())),
 			);
 			assert_eq!(first_authorities, AuthorityDiscovery::authorities());
 

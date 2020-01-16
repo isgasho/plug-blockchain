@@ -14,24 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
-};
-use state_machine::{
-	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction, StorageProof,
-};
-use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use client_api::{backend, call_executor::CallExecutor};
+use codec::{Decode, Encode};
+use executor::{NativeVersion, RuntimeInfo, RuntimeVersion};
 use externalities::Extensions;
 use hash_db::Hasher;
-use primitives::{
-	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor,
+use primitives::{traits::CodeExecutor, Blake2Hasher, NativeOrEncoded, NeverNativeValue, H256};
+use sp_api::{InitializeBlock, ProofRecorder};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
 };
-use sp_api::{ProofRecorder, InitializeBlock};
-use client_api::{backend, call_executor::CallExecutor};
+use state_machine::{
+	self, backend::Backend as _, ChangesTrieTransaction, ExecutionManager, ExecutionStrategy, Ext,
+	OverlayedChanges, StateMachine, StorageProof,
+};
+use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -42,18 +40,13 @@ pub struct LocalCallExecutor<B, E> {
 
 impl<B, E> LocalCallExecutor<B, E> {
 	/// Creates new instance of local call executor.
-	pub fn new(
-		backend: Arc<B>,
-		executor: E,
-	) -> Self {
-		LocalCallExecutor {
-			backend,
-			executor,
-		}
-	}
+	pub fn new(backend: Arc<B>, executor: E) -> Self { LocalCallExecutor { backend, executor } }
 }
 
-impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
+impl<B, E> Clone for LocalCallExecutor<B, E>
+where
+	E: Clone,
+{
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
@@ -63,10 +56,10 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 }
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT<Hash=H256>,
+where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CodeExecutor + RuntimeInfo,
+	Block: BlockT<Hash = H256>,
 {
 	type Error = E::Error;
 
@@ -88,7 +81,8 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 			method,
 			call_data,
 			extensions.unwrap_or_default(),
-		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+		)
+		.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
 			None,
@@ -106,7 +100,7 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
@@ -122,12 +116,20 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
+	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error>
+	where
+		ExecutionManager<EM>: Clone,
+	{
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
-				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
+				if init_block
+					.borrow()
+					.as_ref()
+					.map(|id| id != at)
+					.unwrap_or(true) =>
+			{
 				initialize_block_fn()?;
-			},
+			}
 			// We don't need to initialize the runtime at a block.
 			_ => {},
 		}
@@ -136,16 +138,13 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 
 		let result = match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend()
-					.ok_or_else(||
-						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-							as Box<dyn state_machine::Error>
-					)?;
+				let trie_state = state.as_trie_backend().ok_or_else(|| {
+					Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+						as Box<dyn state_machine::Error>
+				})?;
 
-				let backend = state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone()
-				);
+				let backend =
+					state_machine::ProvingBackend::new_with_recorder(trie_state, recorder.clone());
 
 				StateMachine::new(
 					&backend,
@@ -156,14 +155,10 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 					call_data,
 					extensions.unwrap_or_default(),
 				)
-				.execute_using_consensus_failure_handler(
-					execution_manager,
-					false,
-					native_call,
-				)
+				.execute_using_consensus_failure_handler(execution_manager, false, native_call)
 				.map(|(result, _, _)| result)
 				.map_err(Into::into)
-			}
+			},
 			None => StateMachine::new(
 				&state,
 				self.backend.changes_trie_storage(),
@@ -173,12 +168,8 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 				call_data,
 				extensions.unwrap_or_default(),
 			)
-			.execute_using_consensus_failure_handler(
-				execution_manager,
-				false,
-				native_call,
-			)
-			.map(|(result, _, _)| result)
+			.execute_using_consensus_failure_handler(execution_manager, false, native_call)
+			.map(|(result, _, _)| result),
 		}?;
 		{
 			let _lock = self.backend.get_import_lock().read();
@@ -213,7 +204,8 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
+	>(
+		&self,
 		state: &S,
 		changes: &mut OverlayedChanges,
 		method: &str,
@@ -234,16 +226,15 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 			method,
 			call_data,
 			extensions.unwrap_or_default(),
-		).execute_using_consensus_failure_handler(
-			manager,
-			true,
-			native_call,
 		)
-		.map(|(result, storage_tx, changes_tx)| (
-			result,
-			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
-			changes_tx,
-		))
+		.execute_using_consensus_failure_handler(manager, true, native_call)
+		.map(|(result, storage_tx, changes_tx)| {
+			(
+				result,
+				storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+				changes_tx,
+			)
+		})
 		.map_err(Into::into)
 	}
 
@@ -252,7 +243,7 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 		trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
@@ -270,14 +261,12 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 }
 
 impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT<Hash=H256>,
+where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CodeExecutor + RuntimeInfo,
+	Block: BlockT<Hash = H256>,
 {
-	fn native_version(&self) -> &runtime_version::NativeVersion {
-		self.executor.native_version()
-	}
+	fn native_version(&self) -> &runtime_version::NativeVersion { self.executor.native_version() }
 
 	fn runtime_version(
 		&self,

@@ -17,7 +17,7 @@
 //! Extrinsic helpers for author RPC module.
 
 use primitives::Bytes;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// RPC Extrinsic or hash
 ///

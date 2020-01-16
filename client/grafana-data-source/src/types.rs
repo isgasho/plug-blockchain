@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Target {
@@ -46,5 +46,5 @@ fn date_to_timestamp_ms<'de, D: serde::Deserializer<'de>>(timestamp: D) -> Resul
 #[derive(Serialize, Deserialize)]
 pub struct TimeseriesData {
 	pub target: String,
-	pub datapoints: Vec<(f32, i64)>
+	pub datapoints: Vec<(f32, i64)>,
 }

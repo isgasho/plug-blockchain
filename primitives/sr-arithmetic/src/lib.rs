@@ -33,12 +33,12 @@ macro_rules! assert_eq_error_rate {
 }
 
 pub mod biguint;
-pub mod helpers_128bit;
-pub mod traits;
-mod per_things;
 mod fixed64;
+pub mod helpers_128bit;
+mod per_things;
 mod rational128;
+pub mod traits;
 
 pub use fixed64::Fixed64;
-pub use per_things::{Percent, Permill, Perbill, Perquintill};
+pub use per_things::{Perbill, Percent, Permill, Perquintill};
 pub use rational128::Rational128;

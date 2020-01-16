@@ -14,19 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
-use std::sync::{Arc, atomic::{self, AtomicUsize}};
+use std::{
+	collections::HashMap,
+	sync::{
+		atomic::{self, AtomicUsize},
+		Arc,
+	},
+};
 
+use jsonrpc_core::futures::{future, sync::oneshot, Future};
+use jsonrpc_pubsub::{
+	typed::{Sink, Subscriber},
+	SubscriptionId,
+};
 use log::{error, warn};
-use jsonrpc_pubsub::{SubscriptionId, typed::{Sink, Subscriber}};
 use parking_lot::Mutex;
-use jsonrpc_core::futures::sync::oneshot;
-use jsonrpc_core::futures::{Future, future};
 
 type Id = u64;
 
 /// Alias for a an implementation of `futures::future::Executor`.
-pub type TaskExecutor = Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+pub type TaskExecutor =
+	Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
 
 /// Generate unique ids for subscriptions.
 #[derive(Clone, Debug)]
@@ -43,9 +51,7 @@ impl Default for IdProvider {
 
 impl IdProvider {
 	/// Returns next id for the subscription.
-	pub fn next_id(&self) -> Id {
-		self.next_id.fetch_add(1, atomic::Ordering::AcqRel) as u64
-	}
+	pub fn next_id(&self) -> Id { self.next_id.fetch_add(1, atomic::Ordering::AcqRel) as u64 }
 }
 
 /// Subscriptions manager.
@@ -72,19 +78,18 @@ impl Subscriptions {
 	/// Borrows the internal task executor.
 	///
 	/// This can be used to spawn additional tasks on the underyling event loop.
-	pub fn executor(&self) -> &TaskExecutor {
-		&self.executor
-	}
+	pub fn executor(&self) -> &TaskExecutor { &self.executor }
 
 	/// Creates new subscription for given subscriber.
 	///
 	/// Second parameter is a function that converts Subscriber sink into a future.
 	/// This future will be driven to completion by the underlying event loop
 	/// or will be cancelled in case #cancel is invoked.
-	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) -> SubscriptionId where
+	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) -> SubscriptionId
+	where
 		G: FnOnce(Sink<T, E>) -> R,
-		R: future::IntoFuture<Future=F, Item=(), Error=()>,
-		F: future::Future<Item=(), Error=()> + Send + 'static,
+		R: future::IntoFuture<Future = F, Item = (), Error = ()>,
+		F: future::Future<Item = (), Error = ()> + Send + 'static,
 	{
 		let id = self.next_id.next_id();
 		let subscription_id: SubscriptionId = id.into();
@@ -111,7 +116,7 @@ impl Subscriptions {
 		if let SubscriptionId::Number(id) = id {
 			if let Some(tx) = self.active_subscriptions.lock().remove(&id) {
 				let _ = tx.send(());
-				return true;
+				return true
 			}
 		}
 		false

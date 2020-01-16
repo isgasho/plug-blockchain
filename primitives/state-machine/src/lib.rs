@@ -18,53 +18,52 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
-use log::{warn, trace};
-use hash_db::Hasher;
-use codec::{Decode, Encode, Codec};
-use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
-};
-use overlayed_changes::OverlayedChangeSet;
+use codec::{Codec, Decode, Encode};
 use externalities::Extensions;
+use hash_db::Hasher;
+use log::{trace, warn};
+use overlayed_changes::OverlayedChangeSet;
+use primitives::{
+	hash::H256, hexdisplay::HexDisplay, storage::well_known_keys, traits::CodeExecutor,
+	NativeOrEncoded, NeverNativeValue,
+};
+use std::{collections::HashMap, fmt, marker::PhantomData, panic::UnwindSafe, result};
 
 pub mod backend;
+mod basic;
 mod changes_trie;
 mod error;
 mod ext;
-mod testing;
-mod basic;
 mod overlayed_changes;
 mod proving_backend;
+mod testing;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
-pub use testing::TestExternalities;
-pub use basic::BasicExternalities;
-pub use ext::Ext;
 pub use backend::Backend;
+pub use basic::BasicExternalities;
 pub use changes_trie::{
-	AnchorBlockId as ChangesTrieAnchorBlockId,
-	Storage as ChangesTrieStorage,
-	RootsStorage as ChangesTrieRootsStorage,
-	InMemoryStorage as InMemoryChangesTrieStorage,
-	BuildCache as ChangesTrieBuildCache,
-	CacheAction as ChangesTrieCacheAction,
-	ConfigurationRange as ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, key_changes_proof_check,
-	prune as prune_changes_tries,
-	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie, prune as prune_changes_tries,
+	AnchorBlockId as ChangesTrieAnchorBlockId, BuildCache as ChangesTrieBuildCache,
+	CacheAction as ChangesTrieCacheAction, ConfigurationRange as ChangesTrieConfigurationRange,
+	InMemoryStorage as InMemoryChangesTrieStorage, RootsStorage as ChangesTrieRootsStorage,
+	Storage as ChangesTrieStorage,
 };
+pub use error::{Error, ExecutionError};
+pub use ext::Ext;
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
 	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,
 };
-pub use trie_backend_essence::{TrieBackendStorage, Storage};
+pub use testing::TestExternalities;
+pub use trie::{
+	trie_types::{Layout, TrieDBMut},
+	DBValue, MemoryDB, TrieMut,
+};
 pub use trie_backend::TrieBackend;
-pub use error::{Error, ExecutionError};
+pub use trie_backend_essence::{Storage, TrieBackendStorage};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -72,19 +71,19 @@ type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
 
 /// Type of changes trie transaction.
-pub type ChangesTrieTransaction<H, N> = (
-	MemoryDB<H>,
-	ChangesTrieCacheAction<<H as Hasher>::Out, N>,
-);
+pub type ChangesTrieTransaction<H, N> =
+	(MemoryDB<H>, ChangesTrieCacheAction<<H as Hasher>::Out, N>);
 
 /// Strategy for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ExecutionStrategy {
-	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	/// Execute with the native equivalent if it is compatible with the given wasm module;
+	/// otherwise fall back to the wasm.
 	NativeWhenPossible,
 	/// Use the given wasm module.
 	AlwaysWasm,
-	/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an error.
+	/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an
+	/// error.
 	Both,
 	/// First native, then if that fails or is not possible, wasm.
 	NativeElseWasm,
@@ -104,13 +103,15 @@ pub enum BackendTrustLevel {
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
 pub enum ExecutionManager<F> {
-	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	/// Execute with the native equivalent if it is compatible with the given wasm module;
+	/// otherwise fall back to the wasm.
 	NativeWhenPossible,
 	/// Use the given wasm module. The backend on which code is executed code could be
 	/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
 	/// for all storage queries since the storage entries it has come from an external node).
 	AlwaysWasm(BackendTrustLevel),
-	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepancy.
+	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any
+	/// discrepancy.
 	Both(F),
 	/// First native, then if that fails or is not possible, wasm.
 	NativeElseWasm,
@@ -133,14 +134,15 @@ impl ExecutionStrategy {
 		self,
 	) -> ExecutionManager<DefaultHandler<R, E>> {
 		match self {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
+			ExecutionStrategy::AlwaysWasm => {
+				ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
+			},
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 				warn!(
 					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
-					wasm_result,
-					native_result
+					wasm_result, native_result
 				);
 				wasm_result
 			}),
@@ -153,18 +155,24 @@ pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>
 	ExecutionManager::NativeElseWasm
 }
 
-/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
+/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the
+/// type.
 fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 	ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 }
 
-/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the
+/// type.
 fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 	ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Backend<H> {
+pub struct StateMachine<'a, B, H, N, T, Exec>
+where
+	H: Hasher<Out = H256>,
+	B: Backend<H>,
+{
 	backend: &'a B,
 	exec: &'a Exec,
 	method: &'a str,
@@ -175,8 +183,9 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 	_marker: PhantomData<(H, N)>,
 }
 
-impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
-	H: Hasher<Out=H256>,
+impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec>
+where
+	H: Hasher<Out = H256>,
 	Exec: CodeExecutor,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
@@ -212,22 +221,31 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
-	pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<
-		(Vec<u8>, (B::Transaction, H::Out), Option<ChangesTrieTransaction<H, N>>),
+	pub fn execute(
+		&mut self,
+		strategy: ExecutionStrategy,
+	) -> Result<
+		(
+			Vec<u8>,
+			(B::Transaction, H::Out),
+			Option<ChangesTrieTransaction<H, N>>,
+		),
 		Box<dyn Error>,
 	> {
-		// We are not giving a native call and thus we are sure that the result can never be a native
-		// value.
+		// We are not giving a native call and thus we are sure that the result can never be a
+		// native value.
 		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			true,
 			None,
 		)
-		.map(|(result, storage_tx, changes_tx)| (
-			result.into_encoded(),
-			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
-			changes_tx,
-		))
+		.map(|(result, storage_tx, changes_tx)| {
+			(
+				result.into_encoded(),
+				storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+				changes_tx,
+			)
+		})
 	}
 
 	fn execute_aux<R, NC>(
@@ -240,7 +258,8 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		bool,
 		Option<(B::Transaction, H::Out)>,
 		Option<ChangesTrieTransaction<H, N>>,
-	) where
+	)
+	where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
@@ -295,35 +314,35 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		CallResult<R, Exec::Error>,
 		Option<(B::Transaction, H::Out)>,
 		Option<ChangesTrieTransaction<H, N>>,
-	) where
+	)
+	where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
 			CallResult<R, Exec::Error>,
-		) -> CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>,
 	{
-		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
-			compute_tx,
-			true,
-			native_call.take(),
-		);
+		let (result, was_native, storage_delta, changes_delta) =
+			self.execute_aux(compute_tx, true, native_call.take());
 
 		if was_native {
 			self.overlay.prospective = orig_prospective.clone();
-			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
-				compute_tx,
-				false,
-				native_call,
-			);
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) =
+				self.execute_aux(compute_tx, false, native_call);
 
-			if (result.is_ok() && wasm_result.is_ok()
+			if (result.is_ok()
+				&& wasm_result.is_ok()
 				&& result.as_ref().ok() == wasm_result.as_ref().ok())
 				|| result.is_err() && wasm_result.is_err()
 			{
 				(result, storage_delta, changes_delta)
 			} else {
-				(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
+				(
+					on_consensus_failure(wasm_result, result),
+					wasm_storage_delta,
+					wasm_changes_delta,
+				)
 			}
 		} else {
 			(result, storage_delta, changes_delta)
@@ -339,25 +358,20 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		CallResult<R, Exec::Error>,
 		Option<(B::Transaction, H::Out)>,
 		Option<ChangesTrieTransaction<H, N>>,
-	) where
+	)
+	where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
-			compute_tx,
-			true,
-			native_call.take(),
-		);
+		let (result, was_native, storage_delta, changes_delta) =
+			self.execute_aux(compute_tx, true, native_call.take());
 
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
 			self.overlay.prospective = orig_prospective.clone();
-			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
-				compute_tx,
-				false,
-				native_call,
-			);
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) =
+				self.execute_aux(compute_tx, false, native_call);
 			(wasm_result, wasm_storage_delta, wasm_changes_delta)
 		}
 	}
@@ -375,17 +389,21 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		manager: ExecutionManager<Handler>,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
-	) -> Result<(
-		NativeOrEncoded<R>,
-		Option<(B::Transaction, H::Out)>,
-		Option<ChangesTrieTransaction<H, N>>,
-	), Box<dyn Error>> where
+	) -> Result<
+		(
+			NativeOrEncoded<R>,
+			Option<(B::Transaction, H::Out)>,
+			Option<ChangesTrieTransaction<H, N>>,
+		),
+		Box<dyn Error>,
+	>
+	where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
 			CallResult<R, Exec::Error>,
-		) -> CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>,
 	{
 		// read changes trie configuration. The reason why we're doing it here instead of the
 		// `OverlayedChanges` constructor is that we need proofs for this read as a part of
@@ -393,11 +411,8 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		// is created after OverlayedChanges
 
 		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool, backend: &B| {
-			let changes_trie_config = try_read_overlay_value(
-				overlay,
-				backend,
-				well_known_keys::CHANGES_TRIE_CONFIG
-			)?;
+			let changes_trie_config =
+				try_read_overlay_value(overlay, backend, well_known_keys::CHANGES_TRIE_CONFIG)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
 		init_overlay(self.overlay, false, &self.backend)?;
@@ -406,25 +421,25 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			let orig_prospective = self.overlay.prospective.clone();
 
 			let (result, storage_delta, changes_delta) = match manager {
-				ExecutionManager::Both(on_consensus_failure) => {
-					self.execute_call_with_both_strategy(
+				ExecutionManager::Both(on_consensus_failure) => self
+					.execute_call_with_both_strategy(
 						compute_tx,
 						native_call.take(),
 						orig_prospective,
 						on_consensus_failure,
-					)
-				},
-				ExecutionManager::NativeElseWasm => {
-					self.execute_call_with_native_else_wasm_strategy(
+					),
+				ExecutionManager::NativeElseWasm => self
+					.execute_call_with_native_else_wasm_strategy(
 						compute_tx,
 						native_call.take(),
 						orig_prospective,
-					)
-				},
+					),
 				ExecutionManager::AlwaysWasm(trust_level) => {
 					let _abort_guard = match trust_level {
 						BackendTrustLevel::Trusted => None,
-						BackendTrustLevel::Untrusted => Some(panic_handler::AbortGuard::never_abort()),
+						BackendTrustLevel::Untrusted => {
+							Some(panic_handler::AbortGuard::never_abort())
+						},
 					};
 					let res = self.execute_aux(compute_tx, false, native_call);
 					(res.0, res.2, res.3)
@@ -455,10 +470,11 @@ pub fn prove_execution<B, H, Exec>(
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher<Out = H256>,
 	Exec: CodeExecutor,
 {
-	let trie_backend = backend.as_trie_backend()
+	let trie_backend = backend
+		.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_execution_on_trie_backend(trie_backend, overlay, exec, method, call_data)
 }
@@ -481,19 +497,26 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher<Out = H256>,
 	Exec: CodeExecutor,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
-		&proving_backend, None, overlay, exec, method, call_data, Extensions::default(),
+		&proving_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		Extensions::default(),
 	);
 
-	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		always_wasm(),
-		false,
-		None,
-	)?;
+	let (result, _, _) = sm
+		.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+			always_wasm(),
+			false,
+			None,
+		)?;
 	let proof = sm.backend.extract_proof();
 	Ok((result.into_encoded(), proof))
 }
@@ -508,7 +531,7 @@ pub fn execution_proof_check<H, Exec>(
 	call_data: &[u8],
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher<Out = H256>,
 	Exec: CodeExecutor,
 	H::Out: Ord + 'static,
 {
@@ -525,36 +548,39 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	call_data: &[u8],
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher<Out = H256>,
 	Exec: CodeExecutor,
 {
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
-		trie_backend, None, overlay, exec, method, call_data, Extensions::default(),
+		trie_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		Extensions::default(),
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 		always_untrusted_wasm(),
 		false,
 		None,
-	).map(|(result, _, _)| result.into_encoded())
+	)
+	.map(|(result, _, _)| result.into_encoded())
 }
 
 /// Generate storage read proof.
-pub fn prove_read<B, H, I>(
-	mut backend: B,
-	keys: I,
-) -> Result<StorageProof, Box<dyn Error>>
+pub fn prove_read<B, H, I>(mut backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher<Out = H256>,
 	H::Out: Ord,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let trie_backend = backend.as_trie_backend()
-		.ok_or_else(
-			|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>
-		)?;
+	let trie_backend = backend
+		.as_trie_backend()
+		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_read_on_trie_backend(trie_backend, keys)
 }
 
@@ -571,7 +597,8 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let trie_backend = backend.as_trie_backend()
+	let trie_backend = backend
+		.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_child_read_on_trie_backend(trie_backend, storage_key, keys)
 }
@@ -656,11 +683,8 @@ where
 	let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 	let mut result = HashMap::new();
 	for key in keys.into_iter() {
-		let value = read_child_proof_check_on_proving_backend(
-			&proving_backend,
-			storage_key,
-			key.as_ref(),
-		)?;
+		let value =
+			read_child_proof_check_on_proving_backend(&proving_backend, storage_key, key.as_ref())?;
 		result.insert(key.as_ref().to_vec(), value);
 	}
 	Ok(result)
@@ -675,7 +699,9 @@ where
 	H: Hasher,
 	H::Out: Ord + Codec,
 {
-	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
+	proving_backend
+		.storage(key)
+		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Check child storage read proof on pre-created proving backend.
@@ -688,7 +714,9 @@ where
 	H: Hasher,
 	H::Out: Ord + Codec,
 {
-	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
+	proving_backend
+		.child_storage(storage_key, key)
+		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
@@ -699,18 +727,23 @@ fn set_changes_trie_config(
 	final_check: bool,
 ) -> Result<(), Box<dyn Error>> {
 	let config = match config {
-		Some(v) => Some(Decode::decode(&mut &v[..])
-			.map_err(|_| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
+		Some(v) => Some(Decode::decode(&mut &v[..]).map_err(|_| {
+			Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>
+		})?),
 		None => None,
 	};
 
 	if final_check && overlay.changes_trie_config.is_some() != config.is_some() {
-		return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
+		return Err(Box::new(
+			"Changes trie configuration change is not supported".to_owned(),
+		))
 	}
 
 	if let Some(config) = config {
 		if !overlay.set_changes_trie_config(config) {
-			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
+			return Err(Box::new(
+				"Changes trie configuration change is not supported".to_owned(),
+			))
 		}
 	}
 	Ok(())
@@ -719,8 +752,13 @@ fn set_changes_trie_config(
 /// Reads storage value from overlay or from the backend.
 fn try_read_overlay_value<H, B>(
 	overlay: &OverlayedChanges,
-	backend: &B, key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<dyn Error>> where H: Hasher, B: Backend<H> {
+	backend: &B,
+	key: &[u8],
+) -> Result<Option<Vec<u8>>, Box<dyn Error>>
+where
+	H: Hasher,
+	B: Backend<H>,
+{
 	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
 		Some(value) => Ok(value),
 		None => backend
@@ -731,17 +769,18 @@ fn try_read_overlay_value<H, B>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::BTreeMap;
+	use super::{
+		backend::InMemory,
+		changes_trie::{
+			Configuration as ChangesTrieConfig, InMemoryStorage as InMemoryChangesTrieStorage,
+		},
+		ext::Ext,
+		*,
+	};
 	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
-	use super::*;
-	use super::backend::InMemory;
-	use super::ext::Ext;
-	use super::changes_trie::{
-		InMemoryStorage as InMemoryChangesTrieStorage,
-		Configuration as ChangesTrieConfig,
-	};
-	use primitives::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
+	use primitives::{map, storage::ChildStorageKey, traits::Externalities, Blake2Hasher};
+	use std::collections::BTreeMap;
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -772,26 +811,20 @@ mod tests {
 						ChangesTrieConfig {
 							digest_interval: 777,
 							digest_levels: 333,
-						}.encode()
-					)
+						}
+						.encode(),
+					),
 				);
 			}
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) => {
-					(
-						Ok(
-							NativeOrEncoded::Encoded(
-								vec![
-									ext.storage(b"value1").unwrap()[0] +
-									ext.storage(b"value2").unwrap()[0]
-								]
-							)
-						),
-						using_native
-					)
-				},
+				(true, true, _) | (false, _, true) => (
+					Ok(NativeOrEncoded::Encoded(vec![
+						ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0],
+					])),
+					using_native,
+				),
 				_ => (Err(0), using_native),
 			}
 		}
@@ -819,11 +852,13 @@ mod tests {
 		);
 
 		assert_eq!(
-			state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap().0,
+			state_machine
+				.execute(ExecutionStrategy::NativeWhenPossible)
+				.unwrap()
+				.0,
 			vec![66],
 		);
 	}
-
 
 	#[test]
 	fn execute_works_with_native_else_wasm() {
@@ -846,7 +881,13 @@ mod tests {
 			Default::default(),
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap().0, vec![66]);
+		assert_eq!(
+			state_machine
+				.execute(ExecutionStrategy::NativeElseWasm)
+				.unwrap()
+				.0,
+			vec![66]
+		);
 	}
 
 	#[test]
@@ -871,16 +912,16 @@ mod tests {
 			Default::default(),
 		);
 
-		assert!(
-			state_machine.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+		assert!(state_machine
+			.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 				ExecutionManager::Both(|we, _ne| {
 					consensus_failed = true;
 					we
 				}),
 				true,
 				None,
-			).is_err()
-		);
+			)
+			.is_err());
 		assert!(consensus_failed);
 	}
 
@@ -902,7 +943,8 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-		).unwrap();
+		)
+		.unwrap();
 
 		// check proof locally
 		let local_result = execution_proof_check::<Blake2Hasher, _>(
@@ -912,7 +954,8 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-		).unwrap();
+		)
+		.unwrap();
 
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
@@ -943,28 +986,20 @@ mod tests {
 
 		{
 			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
-			let mut ext = Ext::new(
-				&mut overlay,
-				backend,
-				Some(&changes_trie_storage),
-				None,
-			);
+			let mut ext = Ext::new(&mut overlay, backend, Some(&changes_trie_storage), None);
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
 
-		assert_eq!(
-			overlay.committed,
-			map![
-				b"abc".to_vec() => None.into(),
-				b"abb".to_vec() => None.into(),
-				b"aba".to_vec() => None.into(),
-				b"abd".to_vec() => None.into(),
+		assert_eq!(overlay.committed, map![
+			b"abc".to_vec() => None.into(),
+			b"abb".to_vec() => None.into(),
+			b"aba".to_vec() => None.into(),
+			b"abd".to_vec() => None.into(),
 
-				b"bab".to_vec() => Some(b"228".to_vec()).into(),
-				b"bbd".to_vec() => Some(b"42".to_vec()).into()
-			],
-		);
+			b"bab".to_vec() => Some(b"228".to_vec()).into(),
+			b"bbd".to_vec() => Some(b"42".to_vec()).into()
+		],);
 	}
 
 	#[test]
@@ -973,17 +1008,12 @@ mod tests {
 		let backend = state.as_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			backend,
-			Some(&changes_trie_storage),
-			None,
-		);
+		let mut ext = Ext::new(&mut overlay, backend, Some(&changes_trie_storage), None);
 
 		ext.set_child_storage(
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 			b"abc".to_vec(),
-			b"def".to_vec()
+			b"def".to_vec(),
 		);
 		assert_eq!(
 			ext.child_storage(
@@ -993,7 +1023,7 @@ mod tests {
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
 		);
 		assert_eq!(
 			ext.child_storage(
@@ -1010,51 +1040,46 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
- 		// check proof locally
-		let local_result1 = read_proof_check::<Blake2Hasher, _>(
-			remote_root,
-			remote_proof.clone(),
-			&[b"value2"],
-		).unwrap();
-		let local_result2 = read_proof_check::<Blake2Hasher, _>(
-			remote_root,
-			remote_proof.clone(),
-			&[&[0xff]],
-		).is_ok();
- 		// check that results are correct
-		assert_eq!(
-			local_result1.into_iter().collect::<Vec<_>>(),
-			vec![(b"value2".to_vec(), Some(vec![24]))],
-		);
+		// check proof locally
+		let local_result1 =
+			read_proof_check::<Blake2Hasher, _>(remote_root, remote_proof.clone(), &[b"value2"])
+				.unwrap();
+		let local_result2 =
+			read_proof_check::<Blake2Hasher, _>(remote_root, remote_proof.clone(), &[&[0xff]])
+				.is_ok();
+		// check that results are correct
+		assert_eq!(local_result1.into_iter().collect::<Vec<_>>(), vec![(
+			b"value2".to_vec(),
+			Some(vec![24])
+		)],);
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let remote_proof = prove_child_read(
-			remote_backend,
-			b":child_storage:default:sub1",
-			&[b"value3"],
-		).unwrap();
+		let remote_proof =
+			prove_child_read(remote_backend, b":child_storage:default:sub1", &[b"value3"]).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
 			b":child_storage:default:sub1",
 			&[b"value3"],
-		).unwrap();
+		)
+		.unwrap();
 		let local_result2 = read_child_proof_check::<Blake2Hasher, _>(
 			remote_root,
 			remote_proof.clone(),
 			b":child_storage:default:sub1",
 			&[b"value2"],
-		).unwrap();
-		assert_eq!(
-			local_result1.into_iter().collect::<Vec<_>>(),
-			vec![(b"value3".to_vec(), Some(vec![142]))],
-		);
-		assert_eq!(
-			local_result2.into_iter().collect::<Vec<_>>(),
-			vec![(b"value2".to_vec(), None)],
-		);
+		)
+		.unwrap();
+		assert_eq!(local_result1.into_iter().collect::<Vec<_>>(), vec![(
+			b"value3".to_vec(),
+			Some(vec![142])
+		)],);
+		assert_eq!(local_result2.into_iter().collect::<Vec<_>>(), vec![(
+			b"value2".to_vec(),
+			None
+		)],);
 	}
 
 	#[test]
@@ -1078,7 +1103,9 @@ mod tests {
 			Default::default(),
 		);
 
-		assert!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).is_err());
+		assert!(state_machine
+			.execute(ExecutionStrategy::NativeWhenPossible)
+			.is_err());
 	}
 
 	#[test]
@@ -1102,6 +1129,8 @@ mod tests {
 			Default::default(),
 		);
 
-		assert!(state_machine.execute(ExecutionStrategy::NativeElseWasm).is_err());
+		assert!(state_machine
+			.execute(ExecutionStrategy::NativeElseWasm)
+			.is_err());
 	}
 }

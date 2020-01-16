@@ -16,16 +16,22 @@
 
 //! Test utilities
 
-use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+use crate::{GenesisConfig, Module, Trait};
 use primitives::H256;
 use runtime_io;
-use support::{impl_outer_origin, parameter_types};
-use support::traits::Get;
-use support::weights::{Weight, DispatchInfo};
+use sp_runtime::{
+	testing::Header,
+	traits::{ConvertInto, IdentityLookup},
+	Perbill,
+};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait};
+use support::{
+	impl_outer_origin, parameter_types,
+	traits::Get,
+	weights::{DispatchInfo, Weight},
+};
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime {}
 }
 
@@ -60,23 +66,23 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 parameter_types! {
 	pub const TransactionBaseFee: u64 = 0;
@@ -84,22 +90,22 @@ parameter_types! {
 }
 impl transaction_payment::Trait for Runtime {
 	type Currency = Module<Runtime>;
+	type FeeMultiplierUpdate = ();
 	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
-	type FeeMultiplierUpdate = ();
 }
 impl Trait for Runtime {
 	type Balance = u64;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = ();
+	type ExistentialDeposit = ExistentialDeposit;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type Event = ();
-	type DustRemoval = ();
-	type TransferPayment = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 
 pub struct ExtBuilder {
@@ -125,15 +131,18 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
+
 	#[allow(dead_code)]
 	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
 		self.transfer_fee = transfer_fee;
 		self
 	}
+
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
 		self.creation_fee = creation_fee;
 		self
 	}
+
 	pub fn monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
 		if self.existential_deposit == 0 {
@@ -141,18 +150,23 @@ impl ExtBuilder {
 		}
 		self
 	}
+
 	pub fn vesting(mut self, vesting: bool) -> Self {
 		self.vesting = vesting;
 		self
 	}
+
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 	}
+
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Runtime>()
+			.unwrap();
 		GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![
@@ -160,7 +174,7 @@ impl ExtBuilder {
 					(2, 20 * self.existential_deposit),
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
+					(12, 10 * self.existential_deposit),
 				]
 			} else {
 				vec![]
@@ -169,12 +183,14 @@ impl ExtBuilder {
 				vec![
 					(1, 0, 10, 5 * self.existential_deposit),
 					(2, 10, 20, 0),
-					(12, 10, 20, 5 * self.existential_deposit)
+					(12, 10, 20, 5 * self.existential_deposit),
 				]
 			} else {
 				vec![]
 			},
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 }
@@ -186,5 +202,8 @@ pub const CALL: &<Runtime as system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, ..Default::default() }
+	DispatchInfo {
+		weight: w,
+		..Default::default()
+	}
 }

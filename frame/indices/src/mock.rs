@@ -18,16 +18,16 @@
 
 #![cfg(test)]
 
-use std::collections::HashSet;
-use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use sp_runtime::testing::Header;
-use sp_runtime::Perbill;
+use crate::{GenesisConfig, IsDeadAccount, Module, OnNewAccount, ResolveHint, Trait};
 use primitives::H256;
+use ref_thread_local::{ref_thread_local, RefThreadLocal};
+use runtime_io;
+use sp_runtime::{testing::Header, Perbill};
+use std::collections::HashSet;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use {runtime_io, system};
-use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
+use system;
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime {}
 }
 
@@ -40,15 +40,11 @@ pub fn make_account(who: u64) {
 	Indices::on_new_account(&who);
 }
 
-pub fn kill_account(who: u64) {
-	ALIVE.borrow_mut().remove(&who);
-}
+pub fn kill_account(who: u64) { ALIVE.borrow_mut().remove(&who); }
 
 pub struct TestIsDeadAccount {}
 impl IsDeadAccount<u64> for TestIsDeadAccount {
-	fn is_dead_account(who: &u64) -> bool {
-		!ALIVE.borrow_mut().contains(who)
-	}
+	fn is_dead_account(who: &u64) -> bool { !ALIVE.borrow_mut().contains(who) }
 }
 
 pub struct TestResolveHint;
@@ -72,42 +68,48 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = Indices;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = Indices;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;
+	type Event = ();
 	type IsDeadAccount = TestIsDeadAccount;
 	type ResolveHint = TestResolveHint;
-	type Event = ();
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities {
 	{
 		let mut h = ALIVE.borrow_mut();
 		h.clear();
-		for i in 1..5 { h.insert(i); }
+		for i in 1..5 {
+			h.insert(i);
+		}
 	}
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	GenesisConfig::<Runtime> {
-		ids: vec![1, 2, 3, 4]
-	}.assimilate_storage(&mut t).unwrap();
+		ids: vec![1, 2, 3, 4],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 

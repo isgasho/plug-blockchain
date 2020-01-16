@@ -22,15 +22,18 @@
 //! - Before running contract code we check if the cached code has the schedule version that
 //! is equal to the current saved schedule.
 //! If it is equal then run the code, if it isn't reinstrument with the current schedule.
-//! - When we update the schedule we want it to have strictly greater version than the current saved one:
-//! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
-//! Thus, before executing a contract it should be reinstrument with new schedule.
+//! - When we update the schedule we want it to have strictly greater version than the current saved
+//!   one:
+//! this guarantees that every instrumented contract code in cache cannot have the version equal to
+//! the current one. Thus, before executing a contract it should be reinstrument with new schedule.
 
-use crate::gas::{Gas, GasMeter, Token};
-use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
-use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
+use crate::{
+	gas::{Gas, GasMeter, Token},
+	wasm::{prepare, runtime::Env, PrefabWasmModule},
+	CodeHash, CodeStorage, PristineCode, Schedule, Trait,
+};
 use rstd::prelude::*;
-use sp_runtime::traits::{Hash, Bounded};
+use sp_runtime::traits::{Bounded, Hash};
 use support::StorageMap;
 
 /// Gas metering token that used for charging storing code into the code storage.
@@ -66,7 +69,7 @@ pub fn save<T: Trait>(
 		.charge(schedule, PutCodeToken(original_code.len() as u32))
 		.is_out_of_gas()
 	{
-		return Err("there is not enough gas for storing the code");
+		return Err("there is not enough gas for storing the code")
 	}
 
 	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
@@ -87,8 +90,7 @@ pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
 	schedule: &Schedule,
 ) -> Result<PrefabWasmModule, &'static str> {
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
+	let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
 	if prefab_module.schedule_version < schedule.version {
 		// The current schedule version is greater than the version of the one cached

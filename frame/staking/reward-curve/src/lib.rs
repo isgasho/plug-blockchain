@@ -4,7 +4,7 @@ mod log;
 
 use log::log2;
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::crate_name;
 use quote::{quote, ToTokens};
 use std::convert::TryInto;
@@ -15,28 +15,27 @@ use syn::parse::{Parse, ParseStream};
 /// [here](http://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model))
 /// for those parameters. Parameters are:
 /// - `min_inflation`: the minimal amount to be rewarded between validators, expressed as a fraction
-///   of total issuance. Known as `I_0` in the literature.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+///   of total issuance. Known as `I_0` in the literature. Expressed in millionth, must be between 0
+///   and 1_000_000.
 ///
 /// - `max_inflation`: the maximum amount to be rewarded between validators, expressed as a fraction
-///   of total issuance. This is attained only when `ideal_stake` is achieved.
-///   Expressed in millionth, must be between min_inflation and 1_000_000.
+///   of total issuance. This is attained only when `ideal_stake` is achieved. Expressed in
+///   millionth, must be between min_inflation and 1_000_000.
 ///
 /// - `ideal_stake`: the fraction of total issued tokens that should be actively staked behind
-///   validators. Known as `x_ideal` in the literature.
-///   Expressed in millionth, must be between 0_100_000 and 0_900_000.
+///   validators. Known as `x_ideal` in the literature. Expressed in millionth, must be between
+///   0_100_000 and 0_900_000.
 ///
 /// - `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
 ///   the global incentivisation to get the `ideal_stake`. A higher number results in less typical
-///   inflation at the cost of greater volatility for validators.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+///   inflation at the cost of greater volatility for validators. Expressed in millionth, must be
+///   between 0 and 1_000_000.
 ///
 /// - `max_piece_count`: The maximum number of pieces in the curve. A greater number uses more
-///   resources but results in higher accuracy.
-///   Must be between 2 and 1_000.
+///   resources but results in higher accuracy. Must be between 2 and 1_000.
 ///
-/// - `test_precision`: The maximum error allowed in the generated test.
-///   Expressed in millionth, must be between 0 and 1_000_000.
+/// - `test_precision`: The maximum error allowed in the generated test. Expressed in millionth,
+///   must be between 0 and 1_000_000.
 ///
 /// # Example
 ///
@@ -45,15 +44,15 @@ use syn::parse::{Parse, ParseStream};
 /// use sp_runtime::curve::PiecewiseLinear;
 ///
 /// pallet_staking_reward_curve::build! {
-/// 	const I_NPOS: PiecewiseLinear<'static> = curve!(
-/// 		min_inflation: 0_025_000,
-/// 		max_inflation: 0_100_000,
-/// 		ideal_stake: 0_500_000,
-/// 		falloff: 0_050_000,
-/// 		max_piece_count: 40,
-/// 		test_precision: 0_005_000,
-/// 	);
-/// }
+/// const I_NPOS: PiecewiseLinear<'static> = curve!(
+/// 	min_inflation: 0_025_000,
+/// 	max_inflation: 0_100_000,
+/// 	ideal_stake: 0_500_000,
+/// 	falloff: 0_050_000,
+/// 	max_piece_count: 40,
+/// 	test_precision: 0_005_000,
+/// 		);
+/// 			}
 /// ```
 #[proc_macro]
 pub fn build(input: TokenStream) -> TokenStream {
@@ -81,7 +80,8 @@ pub fn build(input: TokenStream) -> TokenStream {
 			#declaration
 		};
 		#test_module
-	).into()
+	)
+	.into()
 }
 
 const MILLION: u32 = 1_000_000;
@@ -138,17 +138,24 @@ impl core::fmt::Display for Bounds {
 	}
 }
 
-fn parse_field<Token: Parse + Default + ToTokens>(input: ParseStream, bounds: Bounds)
-	-> syn::Result<u32>
-{
+fn parse_field<Token: Parse + Default + ToTokens>(
+	input: ParseStream,
+	bounds: Bounds,
+) -> syn::Result<u32> {
 	<Token>::parse(&input)?;
 	<syn::Token![:]>::parse(&input)?;
 	let value_lit = syn::LitInt::parse(&input)?;
 	let value: u32 = value_lit.base10_parse()?;
 	if !bounds.check(value) {
-		return Err(syn::Error::new(value_lit.span(), format!(
-			"Invalid {}: {},  must be in {}", Token::default().to_token_stream(), value, bounds,
-		)));
+		return Err(syn::Error::new(
+			value_lit.span(),
+			format!(
+				"Invalid {}: {},  must be in {}",
+				Token::default().to_token_stream(),
+				value,
+				bounds,
+			),
+		))
 	}
 
 	Ok(value)
@@ -169,7 +176,7 @@ impl Parse for INposInput {
 		<syn::Token![;]>::parse(&input)?;
 
 		if !input.is_empty() {
-			return Err(input.error("expected end of input stream, no token expected"));
+			return Err(input.error("expected end of input stream, no token expected"))
 		}
 
 		let min_inflation = parse_field::<keyword::min_inflation>(&args_input, Bounds {
@@ -216,7 +223,7 @@ impl Parse for INposInput {
 		<Option<syn::Token![,]>>::parse(&args_input)?;
 
 		if !args_input.is_empty() {
-			return Err(args_input.error("expected end of input stream, no token expected"));
+			return Err(args_input.error("expected end of input stream, no token expected"))
 		}
 
 		Ok(Self {
@@ -245,7 +252,8 @@ impl INPoS {
 		INPoS {
 			i_0: input.min_inflation,
 			i_ideal: (input.max_inflation as u64 * MILLION as u64 / input.ideal_stake as u64)
-				.try_into().unwrap(),
+				.try_into()
+				.unwrap(),
 			i_ideal_times_x_ideal: input.max_inflation,
 			x_ideal: input.ideal_stake,
 			d: input.falloff,
@@ -254,11 +262,13 @@ impl INPoS {
 
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
-			return u32::max_value();
+			return u32::max_value()
 		}
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
 
-		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();
+		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000)
+			.try_into()
+			.unwrap();
 
 		self.x_ideal + term
 	}
@@ -300,16 +310,15 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 			let prev = points.last().unwrap();
 			// Compute the y corresponding to x=1_000_000 using the this point and the previous one.
 
-			let delta_y: u32 = (
-				(next_x - 1_000_000) as u64
-				* (prev.1 - next_y) as u64
-				/ (next_x - prev.0) as u64
-			).try_into().unwrap();
+			let delta_y: u32 = ((next_x - 1_000_000) as u64 * (prev.1 - next_y) as u64
+				/ (next_x - prev.0) as u64)
+				.try_into()
+				.unwrap();
 
 			let y = next_y + delta_y;
 
 			points.push((1_000_000, y));
-			return points;
+			return points
 		}
 		points.push((next_x, next_y));
 		y = next_y;
@@ -323,7 +332,8 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	let mut points_tokens = quote!();
 
-	let max = points.iter()
+	let max = points
+		.iter()
 		.map(|&(_, x)| x)
 		.max()
 		.unwrap_or(0)
@@ -332,13 +342,15 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 		.unwrap_or(1_000_000_000);
 
 	for (x, y) in points {
-		let error = || panic!(format!(
-			"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
-			because of point:
+		let error = || {
+			panic!(format!(
+				"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] because \
+				 of point:
 			x = {:07} per million
 			y = {:07} per million",
-			x, y
-		));
+				x, y
+			))
+		};
 
 		let x_perbill = x.checked_mul(1_000).unwrap_or_else(error);
 		let y_perbill = y.checked_mul(1_000).unwrap_or_else(error);
@@ -364,7 +376,7 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 
 	let ident = &input.ident;
 	let precision = input.test_precision;
-	let i_0 = inpos.i_0 as f64/ MILLION as f64;
+	let i_0 = inpos.i_0 as f64 / MILLION as f64;
 	let i_ideal_times_x_ideal = inpos.i_ideal_times_x_ideal as f64 / MILLION as f64;
 	let i_ideal = inpos.i_ideal as f64 / MILLION as f64;
 	let x_ideal = inpos.x_ideal as f64 / MILLION as f64;
@@ -421,5 +433,6 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 				);
 			}
 		}
-	).into()
+	)
+	.into()
 }

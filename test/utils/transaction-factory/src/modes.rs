@@ -24,11 +24,12 @@ use std::str::FromStr;
 pub enum Mode {
 	MasterToN,
 	MasterTo1,
-	MasterToNToM
+	MasterToNToM,
 }
 
 impl FromStr for Mode {
 	type Err = String;
+
 	fn from_str(mode: &str) -> Result<Self, Self::Err> {
 		match mode {
 			"MasterToN" => Ok(Mode::MasterToN),

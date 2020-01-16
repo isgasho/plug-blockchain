@@ -18,13 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-use sp_runtime::traits::{One, Zero, SaturatedConversion};
-use rstd::{prelude::*, result, cmp, vec};
-use support::{decl_module, decl_storage};
-use support::traits::Get;
+use inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
+use rstd::{cmp, prelude::*, result, vec};
+use sp_finality_tracker::{FinalizedInherentData, INHERENT_IDENTIFIER};
+use sp_runtime::traits::{One, SaturatedConversion, Zero};
+use support::{decl_module, decl_storage, traits::Get};
 use system::{ensure_none, Trait as SystemTrait};
-use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
@@ -96,9 +95,12 @@ impl<T: Trait> Module<T> {
 		let mut ordered = Self::ordered_hints();
 		let window_size = cmp::max(T::BlockNumber::one(), T::WindowSize::get());
 
-		let hint = hint.unwrap_or_else(|| recent.last()
-			.expect("always at least one recent sample; qed").clone()
-		);
+		let hint = hint.unwrap_or_else(|| {
+			recent
+				.last()
+				.expect("always at least one recent sample; qed")
+				.clone()
+		});
 
 		// prune off the front of the list -- typically 1 except for when
 		// the sample size has just been shrunk.
@@ -107,7 +109,8 @@ impl<T: Trait> Module<T> {
 			let to_prune = (recent.len() + 1).saturating_sub(window_size.saturated_into::<usize>());
 
 			for drained in recent.drain(..to_prune) {
-				let idx = ordered.binary_search(&drained)
+				let idx = ordered
+					.binary_search(&drained)
 					.expect("recent and ordered contain the same items; qed");
 
 				ordered.remove(idx);
@@ -115,8 +118,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// find the position in the ordered list where the new item goes.
-		let ordered_idx = ordered.binary_search(&hint)
-			.unwrap_or_else(|idx| idx);
+		let ordered_idx = ordered.binary_search(&hint).unwrap_or_else(|idx| idx);
 
 		ordered.insert(ordered_idx, hint);
 		recent.push(hint);
@@ -125,7 +127,10 @@ impl<T: Trait> Module<T> {
 
 		let median = {
 			let len = ordered.len();
-			assert!(len > 0, "pruning dictated by window_size which is always saturated at 1; qed");
+			assert!(
+				len > 0,
+				"pruning dictated by window_size which is always saturated at 1; qed"
+			);
 
 			if len % 2 == 0 {
 				let a = ordered[len / 2];
@@ -169,15 +174,18 @@ pub trait OnFinalizationStalled<N> {
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = MakeFatalError<()>;
+
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		if let Ok(final_num) = data.finalized_number() {
 			// make hint only when not same as last to avoid bloat.
-			Self::recent_hints().last().and_then(|last| if last == &final_num {
-				None
-			} else {
-				Some(Call::final_hint(final_num))
+			Self::recent_hints().last().and_then(|last| {
+				if last == &final_num {
+					None
+				} else {
+					Some(Call::final_hint(final_num))
+				}
 			})
 		} else {
 			None
@@ -193,15 +201,16 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::TestExternalities;
 	use primitives::H256;
+	use runtime_io::TestExternalities;
 	use sp_runtime::{
-		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+		testing::Header,
+		traits::{BlakeTwo256, Header as HeaderT, IdentityLookup, OnFinalize},
+		Perbill,
 	};
+	use std::cell::RefCell;
 	use support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use system;
-	use std::cell::RefCell;
 
 	#[derive(Clone, PartialEq, Debug)]
 	pub struct StallEvent {
@@ -224,7 +233,12 @@ mod tests {
 	impl OnFinalizationStalled<u64> for StallTracker {
 		fn on_stalled(further_wait: u64, _median: u64) {
 			let now = System::block_number();
-			NOTIFICATIONS.with(|v| v.borrow_mut().push(StallEvent { at: now, further_wait }));
+			NOTIFICATIONS.with(|v| {
+				v.borrow_mut().push(StallEvent {
+					at: now,
+					further_wait,
+				})
+			});
 		}
 	}
 
@@ -235,23 +249,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<u64>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;
@@ -259,8 +273,8 @@ mod tests {
 	}
 	impl Trait for Test {
 		type OnFinalizationStalled = StallTracker;
-		type WindowSize = WindowSize;
 		type ReportLatency = ReportLatency;
+		type WindowSize = WindowSize;
 	}
 
 	type System = system::Module<Test>;
@@ -268,7 +282,9 @@ mod tests {
 
 	#[test]
 	fn median_works() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
@@ -278,7 +294,9 @@ mod tests {
 
 	#[test]
 	fn notifies_when_stalled() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
@@ -288,22 +306,26 @@ mod tests {
 				parent_hash = hdr.hash();
 			}
 
-			assert_eq!(
-				NOTIFICATIONS.with(|n| n.borrow().clone()),
-				vec![StallEvent { at: 105, further_wait: 10 }]
-			)
+			assert_eq!(NOTIFICATIONS.with(|n| n.borrow().clone()), vec![
+				StallEvent {
+					at: 105,
+					further_wait: 10
+				}
+			])
 		});
 	}
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
 				assert_ok!(FinalityTracker::dispatch(
-					Call::final_hint(i-1),
+					Call::final_hint(i - 1),
 					Origin::NONE,
 				));
 				FinalityTracker::on_finalize(i);

@@ -166,7 +166,6 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
 mod chain;
@@ -185,16 +184,19 @@ pub mod error;
 pub mod test;
 
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
-pub use service::{
-	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
-	NetworkStateInfo,
-};
-pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
-pub use protocol::event::{Event, DhtEvent};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
+pub use libp2p::{Multiaddr, PeerId};
+pub use protocol::{
+	consensus_gossip,
+	event::{DhtEvent, Event},
+	message, specialization,
+	sync::SyncState,
+	Context, PeerInfo,
+};
+pub use service::{
+	ExHashT, NetworkService, NetworkStateInfo, NetworkWorker, ReportHandle, TransactionPool,
+};
 
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use on_demand_layer::{OnDemand, RemoteResponse};
@@ -207,7 +209,10 @@ pub use sp_runtime::traits::Block as BlockT;
 use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 
 /// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.
 pub trait DiscoveryNetBehaviour {
@@ -296,13 +301,14 @@ pub enum NetworkStatePeerEndpoint {
 impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { address } =>
-				NetworkStatePeerEndpoint::Dialing(address),
-			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				NetworkStatePeerEndpoint::Listening {
-					local_addr,
-					send_back_addr
-				}
+			ConnectedPoint::Dialer { address } => NetworkStatePeerEndpoint::Dialing(address),
+			ConnectedPoint::Listener {
+				local_addr,
+				send_back_addr,
+			} => NetworkStatePeerEndpoint::Listening {
+				local_addr,
+				send_back_addr,
+			},
 		}
 	}
 }

@@ -22,15 +22,20 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use clap::{App, ArgMatches, SubCommand};
 use codec::{Decode, Encode};
 use hex_literal::hex;
-use node_primitives::{Balance, Hash, Index, AccountId, Signature};
+use node_primitives::{AccountId, Balance, Hash, Index, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
-	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
+	ecdsa, ed25519,
+	hexdisplay::HexDisplay,
+	sr25519, Pair, Public, H256,
 };
-use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
+use sp_runtime::{
+	generic::Era,
+	traits::{IdentifyAccount, Verify},
+};
 use std::{
-	convert::{TryInto, TryFrom},
+	convert::{TryFrom, TryInto},
 	io::{stdin, Read},
 	str::FromStr,
 };
@@ -43,14 +48,13 @@ trait Crypto: Sized {
 	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
 		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
-	fn ss58_from_pair(pair: &Self::Pair) -> String where
+	fn ss58_from_pair(pair: &Self::Pair) -> String
+	where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
 		pair.public().into_runtime().into_account().to_ss58check()
 	}
-	fn public_from_pair(pair: &Self::Pair) -> Self::Public {
-		pair.public()
-	}
+	fn public_from_pair(pair: &Self::Pair) -> Self::Public { pair.public() }
 	fn print_from_uri(
 		uri: &str,
 		password: Option<&str>,
@@ -60,11 +64,12 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret phrase `{}` is account:\n  \
-				Secret seed:      {}\n  \
-				Public key (hex): {}\n  \
-				Account ID:       {}\n  \
-				SS58 Address:     {}",
+			println!(
+				"Secret phrase `{}` is account:\n  \
+				 Secret seed:      {}\n  \
+				 Public key (hex): {}\n  \
+				 Account ID:       {}\n  \
+				 SS58 Address:     {}",
 				uri,
 				format_seed::<Self>(seed),
 				format_public_key::<Self>(public_key.clone()),
@@ -73,13 +78,15 @@ trait Crypto: Sized {
 			);
 		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret Key URI `{}` is account:\n  \
-				Secret seed:      {}\n  \
-				Public key (hex): {}\n  \
-				Account ID:       {}\n  \
-				SS58 Address:     {}",
+			println!(
+				"Secret Key URI `{}` is account:\n  Secret seed:      {}\n  Public key (hex): \
+				 {}\n  Account ID:       {}\n  SS58 Address:     {}",
 				uri,
-				if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
+				if let Some(seed) = seed {
+					format_seed::<Self>(seed)
+				} else {
+					"n/a".into()
+				},
 				format_public_key::<Self>(public_key.clone()),
 				format_account_id::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
@@ -88,11 +95,9 @@ trait Crypto: Sized {
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
-			println!("Public Key URI `{}` is account:\n  \
-				Network ID/version: {}\n  \
-				Public key (hex):   {}\n  \
-				Account ID:         {}\n  \
-				SS58 Address:       {}",
+			println!(
+				"Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex):   \
+				 {}\n  Account ID:         {}\n  SS58 Address:       {}",
 				uri,
 				String::from(v),
 				format_public_key::<Self>(public_key.clone()),
@@ -136,90 +141,126 @@ type SeedOf<C> = <<C as Crypto>::Pair as Pair>::Seed;
 type AccountPublic = <Signature as Verify>::Signer;
 
 trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {
-	/// Converts the signature into a runtime account signature, if possible. If not possible, bombs out.
+	/// Converts the signature into a runtime account signature, if possible. If not possible, bombs
+	/// out.
 	fn into_runtime(self) -> Signature {
 		panic!("This cryptography isn't supported for this runtime.")
 	}
 }
 trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {
-	/// Converts the public key into a runtime account public key, if possible. If not possible, bombs out.
+	/// Converts the public key into a runtime account public key, if possible. If not possible,
+	/// bombs out.
 	fn into_runtime(self) -> AccountPublic {
 		panic!("This cryptography isn't supported for this runtime.")
 	}
 }
 
-impl SignatureT for sr25519::Signature { fn into_runtime(self) -> Signature { self.into() } }
-impl SignatureT for ed25519::Signature { fn into_runtime(self) -> Signature { self.into() } }
-impl SignatureT for ecdsa::Signature { fn into_runtime(self) -> Signature { self.into() } }
-impl PublicT for sr25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
-impl PublicT for ed25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
-impl PublicT for ecdsa::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
+impl SignatureT for sr25519::Signature {
+	fn into_runtime(self) -> Signature { self.into() }
+}
+impl SignatureT for ed25519::Signature {
+	fn into_runtime(self) -> Signature { self.into() }
+}
+impl SignatureT for ecdsa::Signature {
+	fn into_runtime(self) -> Signature { self.into() }
+}
+impl PublicT for sr25519::Public {
+	fn into_runtime(self) -> AccountPublic { self.into() }
+}
+impl PublicT for ed25519::Public {
+	fn into_runtime(self) -> AccountPublic { self.into() }
+}
+impl PublicT for ecdsa::Public {
+	fn into_runtime(self) -> AccountPublic { self.into() }
+}
 
 fn get_app<'a, 'b>() -> App<'a, 'b> {
 	App::new("subkey")
 		.author("Parity Team <admin@parity.io>")
 		.about("Utility for generating and restoring with Substrate keys")
 		.version(env!("CARGO_PKG_VERSION"))
-		.args_from_usage("
+		.args_from_usage(
+			"
 			-e, --ed25519 'Use Ed25519/BIP39 cryptography'
 			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
-			[network] -n, --network <network> 'Specify a network. One of substrate \
-									 (default), polkadot, kusama, or dothereum.'
+			[network] -n, --network <network> 'Specify a network. One of substrate (default), polkadot, \
+			 kusama, or dothereum.'
 			[password] -p, --password <password> 'The password for the key'
-		")
+		",
+		)
 		.subcommands(vec![
 			SubCommand::with_name("generate")
 				.about("Generate a random account")
-				.args_from_usage("[words] -w, --words <words> \
-						'The number of words in the phrase to generate. One of 12 \
-						(default), 15, 18, 21 and 24.'
-				"),
+				.args_from_usage(
+					"[words] -w, --words <words> 'The number of words in the phrase to generate. \
+					 One of 12 (default), 15, 18, 21 and 24.'
+				",
+				),
 			SubCommand::with_name("inspect")
 				.about("Gets a public key and a SS58 address from the provided Secret URI")
-				.args_from_usage("<uri> 'A Key URI to be inspected. May be a secret seed, \
-						secret URI (with derivation paths and password), SS58 or public URI.'
-				"),
+				.args_from_usage(
+					"<uri> 'A Key URI to be inspected. May be a secret seed, secret URI (with \
+					 derivation paths and password), SS58 or public URI.'
+				",
+				),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
-				.args_from_usage("
+				.args_from_usage(
+					"
 					-h, --hex 'The message on STDIN is hex-encoded data'
 					<suri> 'The secret key URI.'
-				"),
+				",
+				),
 			SubCommand::with_name("sign-transaction")
-				.about("Sign transaction from encoded Call. Returns a signed and encoded \
-						UncheckedMortalCompactExtrinsic as hex.")
-				.args_from_usage("
+				.about(
+					"Sign transaction from encoded Call. Returns a signed and encoded \
+					 UncheckedMortalCompactExtrinsic as hex.",
+				)
+				.args_from_usage(
+					"
 					-c, --call <call> 'The call, hex-encoded.'
 					-n, --nonce <nonce> 'The nonce.'
 					-p, --password <password> 'The password for the key.'
 					-h, --prior-block-hash <prior-block-hash> 'The prior block hash, hex-encoded.'
 					-s, --suri <suri> 'The secret key URI.'
-				"),
+				",
+				),
 			SubCommand::with_name("transfer")
-				.about("Author and sign a Node balances::Transfer transaction with a given (secret) key")
-				.args_from_usage("
-					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised \
-											chain identifier (dev, elm, alex).'
+				.about(
+					"Author and sign a Node balances::Transfer transaction with a given (secret) \
+					 key",
+				)
+				.args_from_usage(
+					"
+					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised chain identifier (dev, elm, \
+					 alex).'
 					<from> 'The signing secret key URI.'
 					<to> 'The destination account public key URI.'
 					<amount> 'The number of units to transfer.'
 					<index> 'The signing account's transaction index.'
-				"),
+				",
+				),
 			SubCommand::with_name("vanity")
 				.about("Generate a seed that provides a vanity address")
-				.args_from_usage("
+				.args_from_usage(
+					"
 					-n, --number <number> 'Number of keys to generate'
 					<pattern> 'Desired pattern'
-				"),
+				",
+				),
 			SubCommand::with_name("verify")
-				.about("Verify a signature for a message, provided on STDIN, with a given \
-						(public or secret) key")
-				.args_from_usage("
+				.about(
+					"Verify a signature for a message, provided on STDIN, with a given (public or \
+					 secret) key",
+				)
+				.args_from_usage(
+					"
 					-h, --hex 'The message on STDIN is hex-encoded data'
 					<sig> 'Signature, hex-encoded.'
 					<uri> 'The public or secret key URI.'
-				"),
+				",
+				),
 		])
 }
 
@@ -253,19 +294,19 @@ where
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches);
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
-		}
+		},
 		("inspect", Some(matches)) => {
 			let uri = matches
 				.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
 			C::print_from_uri(uri, password, maybe_network);
-		}
+		},
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
 			let signature = do_sign::<C>(matches, message, password);
 			println!("{}", signature);
-		}
+		},
 		("verify", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
@@ -275,7 +316,7 @@ where
 			} else {
 				println!("Signature invalid.");
 			}
-		}
+		},
 		("vanity", Some(matches)) => {
 			let desired: String = matches
 				.value_of("pattern")
@@ -284,7 +325,7 @@ where
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
 			let formated_seed = format_seed::<C>(result.seed);
 			C::print_from_uri(&formated_seed, None, maybe_network);
-		}
+		},
 		("transfer", Some(matches)) => {
 			let signer = read_pair::<C>(matches.value_of("from"), password);
 			let index = read_required_parameter::<Index>(matches, "index");
@@ -297,7 +338,7 @@ where
 			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
-		}
+		},
 		("sign-transaction", Some(matches)) => {
 			let signer = read_pair::<C>(matches.value_of("suri"), password);
 			let index = read_required_parameter::<Index>(matches, "nonce");
@@ -312,7 +353,7 @@ where
 			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
-		}
+		},
 		_ => print_usage(&matches),
 	}
 }
@@ -409,7 +450,8 @@ where
 	signature
 }
 
-fn read_public_key<C: Crypto>(matched_uri: Option<&str>) -> PublicOf<C> where
+fn read_public_key<C: Crypto>(matched_uri: Option<&str>) -> PublicOf<C>
+where
 	PublicOf<C>: PublicT,
 {
 	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
@@ -438,15 +480,13 @@ fn read_account_id(matched_uri: Option<&str>) -> AccountId {
 		AccountId::try_from(data_vec.as_slice())
 			.expect("Invalid hex length for account ID; should be 32 bytes")
 	} else {
-		AccountId::from_ss58check(uri).ok()
+		AccountId::from_ss58check(uri)
+			.ok()
 			.expect("Invalid SS58-check address given for account ID.")
 	}
 }
 
-fn read_pair<C: Crypto>(
-	matched_suri: Option<&str>,
-	password: Option<&str>,
-) -> <C as Crypto>::Pair
+fn read_pair<C: Crypto>(matched_suri: Option<&str>, password: Option<&str>) -> <C as Crypto>::Pair
 where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
@@ -467,10 +507,14 @@ fn format_public_key<C: Crypto>(public_key: PublicOf<C>) -> String {
 	format!("0x{}", HexDisplay::from(&public_key.as_ref()))
 }
 
-fn format_account_id<C: Crypto>(public_key: PublicOf<C>) -> String where
+fn format_account_id<C: Crypto>(public_key: PublicOf<C>) -> String
+where
 	PublicOf<C>: PublicT,
 {
-	format!("0x{}", HexDisplay::from(&public_key.into_runtime().into_account().as_ref()))
+	format!(
+		"0x{}",
+		HexDisplay::from(&public_key.into_runtime().into_account().as_ref())
+	)
 }
 
 fn create_extrinsic<C: Crypto>(
@@ -478,7 +522,8 @@ fn create_extrinsic<C: Crypto>(
 	index: Index,
 	signer: C::Pair,
 	genesis_hash: H256,
-) -> UncheckedExtrinsic where
+) -> UncheckedExtrinsic
+where
 	PublicOf<C>: PublicT,
 	SignatureOf<C>: SignatureT,
 {
@@ -508,16 +553,13 @@ fn create_extrinsic<C: Crypto>(
 			(),
 		),
 	);
-	let signature = raw_payload.using_encoded(|payload| signer.sign(payload)).into_runtime();
+	let signature = raw_payload
+		.using_encoded(|payload| signer.sign(payload))
+		.into_runtime();
 	let signer = signer.public().into_runtime();
 	let (function, extra, _) = raw_payload.deconstruct();
 
-	UncheckedExtrinsic::new_signed(
-		function,
-		signer.into_account().into(),
-		signature,
-		extra,
-	)
+	UncheckedExtrinsic::new_signed(function, signer.into_account().into(), signature, extra)
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
@@ -571,14 +613,10 @@ mod tests {
 	}
 
 	#[test]
-	fn generate_sign_verify_should_work_for_ed25519() {
-		test_generate_sign_verify::<Ed25519>();
-	}
+	fn generate_sign_verify_should_work_for_ed25519() { test_generate_sign_verify::<Ed25519>(); }
 
 	#[test]
-	fn generate_sign_verify_should_work_for_sr25519() {
-		test_generate_sign_verify::<Sr25519>();
-	}
+	fn generate_sign_verify_should_work_for_sr25519() { test_generate_sign_verify::<Sr25519>(); }
 
 	#[test]
 	fn should_work() {

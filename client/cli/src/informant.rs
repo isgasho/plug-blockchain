@@ -17,10 +17,10 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use client_api::BlockchainEvents;
-use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
+use futures::{compat::Stream01CompatExt, future, FutureExt, StreamExt, TryStreamExt};
 use log::{info, warn};
-use sp_runtime::traits::Header;
 use service::AbstractService;
+use sp_runtime::traits::Header;
 use std::time::Duration;
 
 mod display;
@@ -49,19 +49,19 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 	let display_block_import = client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
-			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let maybe_ancestor = sp_blockchain::lowest_common_ancestor(
-					&*client,
-					last_hash.clone(),
-					n.hash,
-				);
+			if n.header.parent_hash() != last_hash && n.is_new_best {
+				let maybe_ancestor =
+					sp_blockchain::lowest_common_ancestor(&*client, last_hash.clone(), n.hash);
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
-						last_num, last_hash,
-						n.header.number(), n.hash,
-						ancestor.number, ancestor.hash,
+						last_num,
+						last_hash,
+						n.header.number(),
+						n.hash,
+						ancestor.number,
+						ancestor.hash,
 					),
 					Ok(_) => {},
 					Err(e) => warn!("Error computing tree route: {}", e),
@@ -77,8 +77,5 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		future::ready(())
 	});
 
-	future::join(
-		display_notifications,
-		display_block_import
-	).map(|_| ())
+	future::join(display_notifications, display_block_import).map(|_| ())
 }

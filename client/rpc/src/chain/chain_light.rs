@@ -16,25 +16,26 @@
 
 //! Blockchain API backend for light nodes.
 
-use std::sync::Arc;
 use futures::{future::ready, FutureExt, TryFutureExt};
-use rpc::futures::future::{result, Future, Either};
+use rpc::futures::future::{result, Either, Future};
+use std::sync::Arc;
 
 use api::Subscriptions;
 use client::{
-	self, Client,
+	self,
 	light::{
-		fetcher::{Fetcher, RemoteBodyRequest},
 		blockchain::RemoteBlockchain,
+		fetcher::{Fetcher, RemoteBodyRequest},
 	},
+	Client,
 };
-use primitives::{H256, Blake2Hasher};
+use primitives::{Blake2Hasher, H256};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT},
+	traits::Block as BlockT,
 };
 
-use super::{ChainBackend, client_err, error::FutureResult};
+use super::{client_err, error::FutureResult, ChainBackend};
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.
@@ -66,20 +67,17 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 	}
 }
 
-impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
-	Block: BlockT<Hash=H256> + 'static,
+impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F>
+where
+	Block: BlockT<Hash = H256> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
-	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
-		&self.client
-	}
+	fn client(&self) -> &Arc<Client<B, E, Block, RA>> { &self.client }
 
-	fn subscriptions(&self) -> &Subscriptions {
-		&self.subscriptions
-	}
+	fn subscriptions(&self) -> &Subscriptions { &self.subscriptions }
 
 	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
 		let hash = self.unwrap_or_best(hash);
@@ -91,32 +89,35 @@ impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Bloc
 			BlockId::Hash(hash),
 		);
 
-		Box::new(maybe_header.then(move |result|
-			ready(result.map_err(client_err)),
-		).boxed().compat())
+		Box::new(
+			maybe_header
+				.then(move |result| ready(result.map_err(client_err)))
+				.boxed()
+				.compat(),
+		)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>)
-		-> FutureResult<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
 		let fetcher = self.fetcher.clone();
-		let block = self.header(hash)
-			.and_then(move |header| match header {
-				Some(header) => Either::A(fetcher
+		let block = self.header(hash).and_then(move |header| match header {
+			Some(header) => Either::A(
+				fetcher
 					.remote_body(RemoteBodyRequest {
 						header: header.clone(),
 						retry_count: Default::default(),
 					})
 					.boxed()
 					.compat()
-					.map(move |body| Some(SignedBlock {
-						block: Block::new(header, body),
-						justification: None,
-					}))
-					.map_err(client_err)
-				),
-				None => Either::B(result(Ok(None))),
-			});
+					.map(move |body| {
+						Some(SignedBlock {
+							block: Block::new(header, body),
+							justification: None,
+						})
+					})
+					.map_err(client_err),
+			),
+			None => Either::B(result(Ok(None))),
+		});
 
 		Box::new(block)
 	}

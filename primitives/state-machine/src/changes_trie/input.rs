@@ -16,8 +16,8 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output, Error};
 use crate::changes_trie::BlockNumber;
+use codec::{Decode, Encode, Error, Input, Output};
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -61,9 +61,11 @@ pub type ChildIndexValue = Vec<u8>;
 pub enum InputPair<Number: BlockNumber> {
 	/// Element of { key => set of extrinsics where key has been changed } element mapping.
 	ExtrinsicIndex(ExtrinsicIndex<Number>, ExtrinsicIndexValue),
-	/// Element of { key => set of blocks/digest blocks where key has been changed } element mapping.
+	/// Element of { key => set of blocks/digest blocks where key has been changed } element
+	/// mapping.
 	DigestIndex(DigestIndex<Number>, DigestIndexValue<Number>),
-	/// Element of { childtrie key => Childchange trie } where key has been changed } element mapping.
+	/// Element of { childtrie key => Childchange trie } where key has been changed } element
+	/// mapping.
 	ChildIndex(ChildIndex<Number>, ChildIndexValue),
 }
 
@@ -135,7 +137,6 @@ impl<Number: BlockNumber> DigestIndex<Number> {
 	}
 }
 
-
 impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		dest.push_byte(2);
@@ -188,7 +189,10 @@ mod tests {
 
 	#[test]
 	fn extrinsic_index_serialized_and_deserialized() {
-		let original = ExtrinsicIndex { block: 777u64, key: vec![42] };
+		let original = ExtrinsicIndex {
+			block: 777u64,
+			key: vec![42],
+		};
 		let serialized = original.encode();
 		let deserialized: InputKey<u64> = Decode::decode(&mut &serialized[..]).unwrap();
 		assert_eq!(InputKey::ExtrinsicIndex(original), deserialized);
@@ -196,7 +200,10 @@ mod tests {
 
 	#[test]
 	fn digest_index_serialized_and_deserialized() {
-		let original = DigestIndex { block: 777u64, key: vec![42] };
+		let original = DigestIndex {
+			block: 777u64,
+			key: vec![42],
+		};
 		let serialized = original.encode();
 		let deserialized: InputKey<u64> = Decode::decode(&mut &serialized[..]).unwrap();
 		assert_eq!(InputKey::DigestIndex(original), deserialized);

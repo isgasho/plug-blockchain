@@ -16,14 +16,17 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::{prelude::*, marker::PhantomData};
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{traits::Len, hash::{Twox128, StorageHasher}};
+use crate::{
+	hash::{StorageHasher, Twox128},
+	traits::Len,
+};
+use codec::{Decode, Encode, EncodeAppend, EncodeLike, FullCodec, FullEncode};
+use rstd::{marker::PhantomData, prelude::*};
 
-pub mod unhashed;
-pub mod hashed;
 pub mod child;
 pub mod generator;
+pub mod hashed;
+pub mod unhashed;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -83,8 +86,8 @@ pub trait StorageValue<T: FullCodec> {
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
+		T: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator;
 
 	/// Append the given items to the value in the storage.
@@ -98,19 +101,20 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
+	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items)
+	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
+		T: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<T>,
 		Items::IntoIter: ExactSizeIterator;
-
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength + Len;
+	where
+		T: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed map in storage.
@@ -148,13 +152,16 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(
+		key: KeyArg,
+		items: Items,
+	) -> Result<(), &'static str>
 	where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator;
 
 	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
@@ -166,8 +173,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
@@ -178,7 +185,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len;
+	where
+		V: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed linked map in storage.
@@ -229,7 +237,8 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len;
+	where
+		V: codec::DecodeLength + Len;
 
 	/// Translate the keys and values from some previous `(K2, V2)` to the current type.
 	///
@@ -250,7 +259,11 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
-		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
+	where
+		K2: FullCodec + Clone,
+		V2: Decode,
+		TK: Fn(K2) -> K,
+		TV: Fn(V2) -> V;
 }
 
 /// An implementation of a map with a two keys.
@@ -303,7 +316,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
+	fn remove_prefix<KArg1>(k1: KArg1)
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
@@ -321,22 +336,21 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator;
 
 	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
 		items: Items,
-	)
-	where
+	) where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
@@ -347,10 +361,10 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
-		where
-			KArg1: EncodeLike<K1>,
-			KArg2: EncodeLike<K2>,
-			V: codec::DecodeLength + Len;
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		V: codec::DecodeLength + Len;
 }
 
 /// Iterator for prefixed map.
@@ -371,7 +385,8 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 				if value.is_none() {
 					runtime_print!(
 						"ERROR: returned next_key has no value:\nkey is {:?}\nnext_key is {:?}",
-						&self.previous_key, &next_key,
+						&self.previous_key,
+						&next_key,
 					);
 				}
 
@@ -391,7 +406,6 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 /// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
 pub trait StoragePrefixedMap<Value: FullCodec> {
-
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
 
@@ -405,9 +419,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		final_key
 	}
 
-	fn remove_all() {
-		runtime_io::storage::clear_prefix(&Self::final_prefix())
-	}
+	fn remove_all() { runtime_io::storage::clear_prefix(&Self::final_prefix()) }
 
 	fn iter() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
@@ -421,22 +433,18 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 
 #[cfg(test)]
 mod test {
+	use crate::storage::{unhashed, StoragePrefixedMap};
 	use primitives::hashing::twox_128;
 	use runtime_io::TestExternalities;
-	use crate::storage::{unhashed, StoragePrefixedMap};
 
 	#[test]
 	fn prefixed_map_works() {
 		TestExternalities::default().execute_with(|| {
 			struct MyStorage;
 			impl StoragePrefixedMap<u64> for MyStorage {
-				fn module_prefix() -> &'static [u8] {
-					b"MyModule"
-				}
+				fn module_prefix() -> &'static [u8] { b"MyModule" }
 
-				fn storage_prefix() -> &'static [u8] {
-					b"MyStorage"
-				}
+				fn storage_prefix() -> &'static [u8] { b"MyStorage" }
 			}
 
 			let key_before = {

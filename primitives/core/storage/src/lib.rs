@@ -19,25 +19,29 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
 
-use rstd::{vec::Vec, borrow::Cow};
+use rstd::{borrow::Cow, vec::Vec};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[cfg_attr(
+	feature = "std",
+	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone)
+)]
 pub struct StorageKey(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[cfg_attr(
+	feature = "std",
+	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone)
+)]
 pub struct StorageData(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
 
 /// A set of key value pairs for storage.
@@ -93,7 +97,8 @@ pub mod well_known_keys {
 	///
 	/// For now, the only valid child trie keys are those starting with `:child_storage:default:`.
 	///
-	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
+	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to
+	/// them.
 	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
 		let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
 		if has_right_prefix {
@@ -130,29 +135,21 @@ impl<'a> ChildStorageKey<'a> {
 	///
 	/// `storage_key` need to start with `:child_storage:default:`
 	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
-		Self::new(Cow::Owned(key))
-	}
+	pub fn from_vec(key: Vec<u8>) -> Option<Self> { Self::new(Cow::Owned(key)) }
 
 	/// Create a new `ChildStorageKey` from a slice.
 	///
 	/// `storage_key` need to start with `:child_storage:default:`
 	/// See `is_child_trie_key_valid` for more details.
-	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
-		Self::new(Cow::Borrowed(key))
-	}
+	pub fn from_slice(key: &'a [u8]) -> Option<Self> { Self::new(Cow::Borrowed(key)) }
 
 	/// Get access to the byte representation of the storage key.
 	///
 	/// This key is guaranteed to be correct.
-	pub fn as_ref(&self) -> &[u8] {
-		&*self.storage_key
-	}
+	pub fn as_ref(&self) -> &[u8] { &*self.storage_key }
 
 	/// Destruct this instance into an owned vector that represents the storage key.
 	///
 	/// This key is guaranteed to be correct.
-	pub fn into_owned(self) -> Vec<u8> {
-		self.storage_key.into_owned()
-	}
+	pub fn into_owned(self) -> Vec<u8> { self.storage_key.into_owned() }
 }

@@ -16,36 +16,42 @@
 
 //! Test implementation for Externalities.
 
-use std::{collections::{HashMap, BTreeMap}, any::{Any, TypeId}};
-use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges,
+	backend::{Backend, InMemory},
 	changes_trie::{
-		InMemoryStorage as ChangesTrieInMemoryStorage,
-		BlockNumber as ChangesTrieBlockNumber,
+		BlockNumber as ChangesTrieBlockNumber, InMemoryStorage as ChangesTrieInMemoryStorage,
 	},
 	ext::Ext,
-};
-use primitives::{
-	storage::{
-		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
-	},
-	hash::H256, Blake2Hasher,
+	OverlayedChanges,
 };
 use codec::Encode;
-use externalities::{Extensions, Extension};
+use externalities::{Extension, Extensions};
+use hash_db::Hasher;
+use primitives::{
+	hash::H256,
+	storage::well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES},
+	Blake2Hasher,
+};
+use std::{
+	any::{Any, TypeId},
+	collections::{BTreeMap, HashMap},
+};
 
-type StorageTuple = (BTreeMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>);
+type StorageTuple = (
+	BTreeMap<Vec<u8>, Vec<u8>>,
+	HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
+);
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
+pub struct TestExternalities<H: Hasher<Out = H256> = Blake2Hasher, N: ChangesTrieBlockNumber = u64>
+{
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+impl<H: Hasher<Out = H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
@@ -57,9 +63,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: StorageTuple) -> Self {
-		Self::new_with_code(&[], storage)
-	}
+	pub fn new(storage: StorageTuple) -> Self { Self::new_with_code(&[], storage) }
 
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
@@ -72,12 +76,15 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			&mut overlay,
 			storage.0.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
-		).expect("changes trie configuration is correct in test env; qed");
+		)
+		.expect("changes trie configuration is correct in test env; qed");
 
 		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.0.insert(CODE.to_vec(), code.to_vec());
 
-		let backend: HashMap<_, _> = storage.1.into_iter()
+		let backend: HashMap<_, _> = storage
+			.1
+			.into_iter()
 			.map(|(keyspace, map)| (Some(keyspace), map))
 			.chain(Some((None, storage.0)).into_iter())
 			.collect();
@@ -107,11 +114,21 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		let top = self.overlay.committed.top.clone().into_iter()
+		let top = self
+			.overlay
+			.committed
+			.top
+			.clone()
+			.into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
 			.map(|(k, v)| (None, k, v.value));
 
-		let children = self.overlay.committed.children.clone().into_iter()
+		let children = self
+			.overlay
+			.committed
+			.children
+			.clone()
+			.into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
 			.flat_map(|(keyspace, map)| {
 				map.into_iter()
@@ -131,13 +148,18 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
+impl<H: Hasher<Out = H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
+		write!(
+			f,
+			"overlay: {:?}\nbackend: {:?}",
+			self.overlay,
+			self.backend.pairs()
+		)
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
+impl<H: Hasher<Out = H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
@@ -145,18 +167,19 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternali
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
+impl<H: Hasher<Out = H256>, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
-	fn from(storage: StorageTuple) -> Self {
-		Self::new(storage)
-	}
+impl<H: Hasher<Out = H256>, N: ChangesTrieBlockNumber> From<StorageTuple>
+	for TestExternalities<H, N>
+{
+	fn from(storage: StorageTuple) -> Self { Self::new(storage) }
 }
 
-impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
-	H: Hasher<Out=H256>,
+impl<H, N> externalities::ExtensionStore for TestExternalities<H, N>
+where
+	H: Hasher<Out = H256>,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
@@ -167,8 +190,8 @@ impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::traits::Externalities;
 	use hex_literal::hex;
+	use primitives::traits::Externalities;
 
 	#[test]
 	fn commit_should_work() {
@@ -177,7 +200,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
+		const ROOT: [u8; 32] =
+			hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
 		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
@@ -195,6 +219,6 @@ mod tests {
 	#[test]
 	fn check_send() {
 		fn assert_send<T: Send>() {}
-		assert_send::<TestExternalities::<Blake2Hasher, u64>>();
+		assert_send::<TestExternalities<Blake2Hasher, u64>>();
 	}
 }

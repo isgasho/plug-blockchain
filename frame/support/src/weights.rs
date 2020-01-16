@@ -35,15 +35,15 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use codec::{Decode, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
-use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{Bounded, Zero};
 use sp_runtime::{
-	RuntimeDebug,
-	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+	traits::SignedExtension,
+	RuntimeDebug,
 };
 
 /// Re-export priority as type
@@ -79,9 +79,7 @@ pub trait WeighBlock<BlockNumber> {
 /// Indicates if dispatch function should pay fees or not.
 /// If set to false, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee {
-	fn pays_fee(&self) -> bool {
-		true
-	}
+	fn pays_fee(&self) -> bool { true }
 }
 
 /// Maybe I can do something to remove the duplicate code here.
@@ -104,8 +102,9 @@ impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
 	}
 }
 
-/// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
-/// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
+/// A generalized group of dispatch types. This is only distinguishing normal, user-triggered
+/// transactions (`Normal`) and anything beyond which serves a higher purpose to the system
+/// (`Operational`).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -117,9 +116,7 @@ pub enum DispatchClass {
 }
 
 impl Default for DispatchClass {
-	fn default() -> Self {
-		DispatchClass::Normal
-	}
+	fn default() -> Self { DispatchClass::Normal }
 }
 
 impl From<SimpleDispatchInfo> for DispatchClass {
@@ -163,7 +160,7 @@ pub trait GetDispatchInfo {
 ///
 /// For each generalized group (`Normal` and `Operation`):
 ///   - A `Fixed` variant means weight fee is charged normally and the weight is the number
-///      specified in the inner value of the variant.
+///     specified in the inner value of the variant.
 ///   - A `Free` variant is equal to `::Fixed(0)`. Note that this does not guarantee inclusion.
 ///   - A `Max` variant is equal to `::Fixed(Weight::max_value())`.
 ///
@@ -203,9 +200,7 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 }
 
 impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::from(*self)
-	}
+	fn classify_dispatch(&self, _: T) -> DispatchClass { DispatchClass::from(*self) }
 }
 
 impl PaysFee for SimpleDispatchInfo {
@@ -231,9 +226,7 @@ impl Default for SimpleDispatchInfo {
 
 impl SimpleDispatchInfo {
 	/// An _additive zero_ variant of SimpleDispatchInfo.
-	pub fn zero() -> Self {
-		Self::FixedNormal(0)
-	}
+	pub fn zero() -> Self { Self::FixedNormal(0) }
 }
 
 /// Implementation for unchecked extrinsic.
@@ -243,25 +236,22 @@ where
 	Call: GetDispatchInfo,
 	Extra: SignedExtension,
 {
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		self.function.get_dispatch_info()
-	}
+	fn get_dispatch_info(&self) -> DispatchInfo { self.function.get_dispatch_info() }
 }
 
 /// Implementation for checked extrinsic.
-impl<AccountId, Call, Extra> GetDispatchInfo
-	for CheckedExtrinsic<AccountId, Call, Extra>
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	Call: GetDispatchInfo,
 {
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		self.function.get_dispatch_info()
-	}
+	fn get_dispatch_info(&self) -> DispatchInfo { self.function.get_dispatch_info() }
 }
 
 /// Implementation for test extrinsic.
 #[cfg(feature = "std")]
-impl<AccountId: Encode, Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<AccountId, Call, Extra> {
+impl<AccountId: Encode, Call: Encode, Extra: Encode> GetDispatchInfo
+	for sp_runtime::testing::TestXt<AccountId, Call, Extra>
+{
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {

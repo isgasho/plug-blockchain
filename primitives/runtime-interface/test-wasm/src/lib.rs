@@ -21,7 +21,7 @@
 use runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use rstd::{vec, vec::Vec, mem, convert::TryFrom};
+use rstd::{convert::TryFrom, mem, vec, vec::Vec};
 
 use primitives::{sr25519::Public, wasm_export_functions};
 
@@ -35,9 +35,7 @@ const TEST_ARRAY: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 #[runtime_interface]
 pub trait TestApi {
 	/// Returns the input data as result.
-	fn return_input(data: Vec<u8>) -> Vec<u8> {
-		data
-	}
+	fn return_input(data: Vec<u8>) -> Vec<u8> { data }
 
 	/// Set the storage at key with value.
 	fn set_storage(&mut self, key: &[u8], data: &[u8]) {
@@ -51,9 +49,7 @@ pub trait TestApi {
 	}
 
 	/// Returns the input data wrapped in an `Option` as result.
-	fn return_option_input(data: Vec<u8>) -> Option<Vec<u8>> {
-		Some(data)
-	}
+	fn return_option_input(data: Vec<u8>) -> Option<Vec<u8>> { Some(data) }
 
 	/// Get an array as input and returns a subset of this array.
 	fn get_and_return_array(data: [u8; 34]) -> [u8; 16] {
@@ -63,14 +59,10 @@ pub trait TestApi {
 	}
 
 	/// Take and fill mutable array.
-	fn array_as_mutable_reference(data: &mut [u8; 16]) {
-		data.copy_from_slice(&TEST_ARRAY);
-	}
+	fn array_as_mutable_reference(data: &mut [u8; 16]) { data.copy_from_slice(&TEST_ARRAY); }
 
 	/// Returns the given public key as result.
-	fn return_input_public_key(key: Public) -> Public {
-		key
-	}
+	fn return_input_public_key(key: Public) -> Public { key }
 
 	/// A function that is called with invalid utf8 data from the runtime.
 	///
@@ -79,9 +71,7 @@ pub trait TestApi {
 
 	/// Overwrite the native implementation in wasm. The native implementation always returns
 	/// `false` and the replacement function will return always `true`.
-	fn overwrite_native_function_implementation() -> bool {
-		false
-	}
+	fn overwrite_native_function_implementation() -> bool { false }
 }
 
 /// Two random external functions from the old runtime interface.
@@ -95,16 +85,18 @@ extern "C" {
 /// Make sure the old runtime interface needs to be imported.
 #[no_mangle]
 pub fn force_old_runtime_interface_import() {
-	unsafe { ext_clear_storage(rstd::ptr::null(), 0); }
-	unsafe { ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut()); }
+	unsafe {
+		ext_clear_storage(rstd::ptr::null(), 0);
+	}
+	unsafe {
+		ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut());
+	}
 }
 
 /// This function is not used, but we require it for the compiler to include `runtime-io`.
 /// `runtime-io` is required for its panic and oom handler.
 #[no_mangle]
-pub fn import_runtime_io() {
-	runtime_io::misc::print_utf8(&[]);
-}
+pub fn import_runtime_io() { runtime_io::misc::print_utf8(&[]); }
 
 wasm_export_functions! {
 	fn test_return_data() {

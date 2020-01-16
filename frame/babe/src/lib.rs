@@ -20,26 +20,33 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 #![deny(unused_imports)]
-pub use timestamp;
 use sp_timestamp;
+pub use timestamp;
 
-use rstd::{result, prelude::*};
-use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
-use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use rstd::{prelude::*, result};
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, RandomnessBeacon, SaturatedConversion, Saturating},
+	ConsensusEngineId, Perbill,
+};
 use sp_staking::{
+	offence::{Kind, Offence},
 	SessionIndex,
-	offence::{Offence, Kind},
+};
+use sp_timestamp::OnTimestampSet;
+use support::{
+	decl_module, decl_storage,
+	traits::{FindAuthor, Get},
 };
 
-use codec::{Encode, Decode};
-use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use babe_primitives::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
-	SlotNumber, inherents::{INHERENT_IDENTIFIER, BabeInherentData}
+	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
+	BabeAuthorityWeight, ConsensusLog, NextEpochDescriptor, RawBabePreDigest, SlotNumber,
+	BABE_ENGINE_ID,
 };
-pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+pub use babe_primitives::{AuthorityId, PUBLIC_KEY_LENGTH, VRF_OUTPUT_LENGTH};
+use codec::{Decode, Encode};
+use inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
@@ -61,8 +68,8 @@ pub trait Trait: timestamp::Trait {
 	/// BABE requires some logic to be triggered on every block to query for whether an epoch
 	/// has ended and to perform the transition to the next epoch.
 	///
-	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
-	/// when no other module is responsible for changing authority set.
+	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be
+	/// used when no other module is responsible for changing authority set.
 	type EpochChangeTrigger: EpochChangeTrigger;
 }
 
@@ -78,7 +85,7 @@ pub trait EpochChangeTrigger {
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Trait>(_: T::BlockNumber) { } // nothing - trigger is external.
+	fn trigger<T: Trait>(_: T::BlockNumber) {} // nothing - trigger is external.
 }
 
 /// A type signifying to BABE that it should perform epoch changes
@@ -101,7 +108,7 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
-type MaybeVrf = Option<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+type MaybeVrf = Option<[u8; 32]>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -192,31 +199,32 @@ decl_module! {
 }
 
 impl<T: Trait> RandomnessBeacon for Module<T> {
-	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
-		Self::randomness()
-	}
+	fn random() -> [u8; VRF_OUTPUT_LENGTH] { Self::randomness() }
 }
 
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
 impl<T: Trait> FindAuthor<u32> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
-		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	fn find_author<'a, I>(digests: I) -> Option<u32>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
 				let pre_digest = RawBabePreDigest::decode(&mut data).ok()?;
 				return Some(match pre_digest {
-					RawBabePreDigest::Primary { authority_index, .. } =>
-						authority_index,
-					RawBabePreDigest::Secondary { authority_index, .. } =>
-						authority_index,
-				});
+					RawBabePreDigest::Primary {
+						authority_index, ..
+					} => authority_index,
+					RawBabePreDigest::Secondary {
+						authority_index, ..
+					} => authority_index,
+				})
 			}
 		}
 
-		return None;
+		return None
 	}
 }
 
@@ -256,30 +264,22 @@ struct BabeEquivocationOffence<FullIdentification> {
 	offender: FullIdentification,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"babe:equivocatio";
+impl<FullIdentification: Clone> Offence<FullIdentification>
+	for BabeEquivocationOffence<FullIdentification>
+{
 	type TimeSlot = u64;
 
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
+	const ID: Kind = *b"babe:equivocatio";
 
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
+	fn offenders(&self) -> Vec<FullIdentification> { vec![self.offender.clone()] }
 
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
+	fn session_index(&self) -> SessionIndex { self.session_index }
 
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.slot
-	}
+	fn validator_set_count(&self) -> u32 { self.validator_set_count }
 
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
+	fn time_slot(&self) -> Self::TimeSlot { self.slot }
+
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2
@@ -312,11 +312,11 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
-	/// and the caller is the only caller of this function.
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
+	/// has returned `true`, and the caller is the only caller of this function.
 	///
-	/// Typically, this is not handled directly by the user, but by higher-level validator-set manager logic like
-	/// `pallet-session`.
+	/// Typically, this is not handled directly by the user, but by higher-level validator-set
+	/// manager logic like `pallet-session`.
 	pub fn enact_epoch_change(
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
@@ -390,17 +390,19 @@ impl<T: Trait> Module<T> {
 		// => let's ensure that we only modify the storage once per block
 		let initialized = Self::initialized().is_some();
 		if initialized {
-			return;
+			return
 		}
 
 		let maybe_pre_digest = <system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
-			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawBabePreDigest::decode(&mut data).ok()
-			} else {
-				None
+			.filter_map(|(id, mut data)| {
+				if id == BABE_ENGINE_ID {
+					RawBabePreDigest::decode(&mut data).ok()
+				} else {
+					None
+				}
 			})
 			.next();
 
@@ -462,14 +464,17 @@ impl<T: Trait> Module<T> {
 
 	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
-			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			assert!(
+				Authorities::get().is_empty(),
+				"Authorities are already initialized!"
+			);
 			Authorities::put(authorities);
 		}
 	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(_moment: T::Moment) { }
+	fn on_timestamp_set(_moment: T::Moment) {}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
@@ -480,29 +485,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
-		let authorities = validators.map(|(_account, k)| {
-			(k, 1)
-		}).collect::<Vec<_>>();
+		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
 
-		let next_authorities = queued_validators.map(|(_account, k)| {
-			(k, 1)
-		}).collect::<Vec<_>>();
+		let next_authorities = queued_validators
+			.map(|(_account, k)| (k, 1))
+			.collect::<Vec<_>>();
 
 		Self::enact_epoch_change(authorities, next_authorities)
 	}
 
-	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
-	}
+	fn on_disabled(i: usize) { Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32)) }
 }
 
 // compute randomness for a new epoch. rho is the concatenation of all
@@ -512,7 +515,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 fn compute_randomness(
 	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
 	epoch_index: u64,
-	rho: impl Iterator<Item=[u8; VRF_OUTPUT_LENGTH]>,
+	rho: impl Iterator<Item = [u8; VRF_OUTPUT_LENGTH]>,
 	rho_size_hint: Option<usize>,
 ) -> [u8; RANDOMNESS_LENGTH] {
 	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
@@ -529,11 +532,10 @@ fn compute_randomness(
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = timestamp::Call<T>;
 	type Error = MakeFatalError<inherents::Error>;
+
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
+	fn create_inherent(_: &InherentData) -> Option<Self::Call> { None }
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {

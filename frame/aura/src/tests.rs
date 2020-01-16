@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::mock::{Aura, new_test_ext};
+use crate::mock::{new_test_ext, Aura};
 
 #[test]
 fn initial_values() {

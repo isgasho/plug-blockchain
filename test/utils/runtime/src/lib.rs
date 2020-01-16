@@ -22,34 +22,37 @@
 pub mod genesismap;
 pub mod system;
 
-use rstd::{prelude::*, marker::PhantomData};
-use codec::{Encode, Decode, Input, Error};
+use codec::{Decode, Encode, Error, Input};
+use rstd::{marker::PhantomData, prelude::*};
 
-use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
-use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
-use trie_db::{TrieMut, Trie};
-use sp_trie::PrefixedMemoryDB;
-use sp_trie::trie_types::{TrieDB, TrieDBMut};
-
-use sp_api::{decl_runtime_apis, impl_runtime_apis};
-use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
-	transaction_validity::{
-		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
-	},
-	traits::{
-		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
-	},
+use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
+use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
+use sp_trie::{
+	trie_types::{TrieDB, TrieDBMut},
+	PrefixedMemoryDB,
 };
-use runtime_version::RuntimeVersion;
-pub use primitives::{hash::H256};
+use trie_db::{Trie, TrieMut};
+
+use cfg_if::cfg_if;
+use inherents::{CheckInherentsResult, InherentData};
+pub use primitives::hash::H256;
+use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
-use inherents::{CheckInherentsResult, InherentData};
-use cfg_if::cfg_if;
+use runtime_version::RuntimeVersion;
+use sp_api::{decl_runtime_apis, impl_runtime_apis};
+use sp_runtime::{
+	create_runtime_str, impl_opaque_keys,
+	traits::{
+		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
+		GetRuntimeBlockType, IdentityLookup, Verify,
+	},
+	transaction_validity::{
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
+	},
+	ApplyExtrinsicResult, Perbill,
+};
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::AuthorityId;
@@ -69,9 +72,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	apis: RUNTIME_API_VERSIONS,
 };
 
-fn version() -> RuntimeVersion {
-	VERSION
-}
+fn version() -> RuntimeVersion { VERSION }
 
 /// Native version.
 #[cfg(any(feature = "std", test))]
@@ -96,7 +97,9 @@ impl Transfer {
 	#[cfg(feature = "std")]
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = keyring::AccountKeyring::from_public(&self.from)
-			.expect("Creates keyring from public key.").sign(&self.encode()).into();
+			.expect("Creates keyring from public key.")
+			.sign(&self.encode())
+			.into();
 		Extrinsic::Transfer(self, signature)
 	}
 }
@@ -112,7 +115,10 @@ pub enum Extrinsic {
 
 #[cfg(feature = "std")]
 impl serde::Serialize for Extrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
@@ -188,7 +194,11 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialized block.");
-	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
+	let stxs = block
+		.extrinsics
+		.iter()
+		.map(Encode::encode)
+		.collect::<Vec<_>>();
 	print("reserialized transactions.");
 	[stxs.len() as u8].encode()
 }
@@ -208,9 +218,7 @@ pub struct DecodeFails<B: BlockT> {
 }
 
 impl<B: BlockT> Encode for DecodeFails<B> {
-	fn encode(&self) -> Vec<u8> {
-		Vec::new()
-	}
+	fn encode(&self) -> Vec<u8> { Vec::new() }
 }
 
 impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
@@ -225,9 +233,7 @@ impl<B: BlockT> DecodeFails<B> {
 }
 
 impl<B: BlockT> Decode for DecodeFails<B> {
-	fn decode<I: Input>(_: &mut I) -> Result<Self, Error> {
-		Err("DecodeFails always fails".into())
-	}
+	fn decode<I: Input>(_: &mut I) -> Result<Self, Error> { Err("DecodeFails always fails".into()) }
 }
 
 cfg_if! {
@@ -337,7 +343,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
@@ -345,9 +351,7 @@ impl_outer_origin!{
 pub struct Event;
 
 impl From<frame_system::Event> for Event {
-	fn from(_evt: frame_system::Event) -> Self {
-		unimplemented!("Not required in tests!")
-	}
+	fn from(_evt: frame_system::Event) -> Self { unimplemented!("Not required in tests!") }
 }
 
 parameter_types! {
@@ -359,30 +363,30 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Runtime {
-	type Origin = Origin;
-	type Call = Extrinsic;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
+	type Call = Extrinsic;
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = Event;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
+	type MinimumPeriod = MinimumPeriod;
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
 }
 
 parameter_types! {
@@ -391,19 +395,17 @@ parameter_types! {
 }
 
 impl pallet_babe::Trait for Runtime {
-	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
-fn benchmark_add_one(i: u64) -> u64 {
-	i + 1
-}
+fn benchmark_add_one(i: u64) -> u64 { i + 1 }
 
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
@@ -414,7 +416,8 @@ fn code_using_trie() -> u64 {
 	let pairs = [
 		(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
 		(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
-	].to_vec();
+	]
+	.to_vec();
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = rstd::default::Default::default();
@@ -422,10 +425,10 @@ fn code_using_trie() -> u64 {
 		let v = &pairs;
 		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
-			let key: &[u8]= &v[i].0;
+			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
 			if !t.insert(key, val).is_ok() {
-				return 101;
+				return 101
 			}
 		}
 		t
@@ -440,8 +443,12 @@ fn code_using_trie() -> u64 {
 				}
 			}
 			iter_pairs.len() as u64
-		} else { 102 }
-	} else { 103 }
+		} else {
+			102
+		}
+	} else {
+		103
+	}
 }
 
 impl_opaque_keys! {
@@ -871,7 +878,9 @@ fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
 	assert!(all.contains(&public1));
 	assert!(all.contains(&public2));
 
-	let signature = public0.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
+	let signature = public0
+		.sign(&"ed25519")
+		.expect("Generates a valid `ed25519` signature.");
 	assert!(public0.verify(&"ed25519", &signature));
 	(signature, public0)
 }
@@ -886,7 +895,9 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	assert!(all.contains(&public1));
 	assert!(all.contains(&public2));
 
-	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
+	let signature = public0
+		.sign(&"sr25519")
+		.expect("Generates a valid `sr25519` signature.");
 	assert!(public0.verify(&"sr25519", &signature));
 	(signature, public0)
 }
@@ -896,11 +907,7 @@ fn test_read_storage() {
 	runtime_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::read(
-		KEY,
-		&mut v,
-		0
-	);
+	let r = runtime_io::storage::read(KEY, &mut v, 0);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
@@ -916,12 +923,7 @@ fn test_read_child_storage() {
 	runtime_io::storage::child_set(CHILD_KEY, KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::child_read(
-		CHILD_KEY,
-		KEY,
-		&mut v,
-		0
-	);
+	let r = runtime_io::storage::child_read(CHILD_KEY, KEY, &mut v, 0);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
@@ -933,23 +935,20 @@ fn test_read_child_storage() {
 
 #[cfg(test)]
 mod tests {
-	use substrate_test_runtime_client::{
-		prelude::*,
-		consensus::BlockOrigin,
-		DefaultTestClientBuilderExt, TestClientBuilder,
-		runtime::TestAPI,
-	};
-	use sp_runtime::{
-		generic::BlockId,
-		traits::ProvideRuntimeApi,
-	};
-	use primitives::storage::well_known_keys::HEAP_PAGES;
-	use state_machine::ExecutionStrategy;
 	use codec::Encode;
+	use primitives::storage::well_known_keys::HEAP_PAGES;
+	use sp_runtime::{generic::BlockId, traits::ProvideRuntimeApi};
+	use state_machine::ExecutionStrategy;
+	use substrate_test_runtime_client::{
+		consensus::BlockOrigin, prelude::*, runtime::TestAPI, DefaultTestClientBuilderExt,
+		TestClientBuilder,
+	};
 
 	#[test]
 	fn returns_mutable_static() {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 
@@ -973,8 +972,8 @@ mod tests {
 		// (plus some additional space unused from the initial pages requested by the wasm runtime
 		// module).
 		//
-		// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however, due
-		// to our allocator algorithm there are inefficiencies.
+		// The fixture performs 2 allocations of 768KB and this theoretically gives 1536KB, however,
+		// due to our allocator algorithm there are inefficiencies.
 		const REQUIRED_MEMORY_PAGES: u64 = 32;
 
 		let client = TestClientBuilder::new()
@@ -1014,7 +1013,9 @@ mod tests {
 		// ~2048k of heap memory.
 		let new_block_id = {
 			let mut builder = client.new_block(Default::default()).unwrap();
-			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
+			builder
+				.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode()))
+				.unwrap();
 			let block = builder.bake().unwrap();
 			let hash = block.header.hash();
 			client.import(BlockOrigin::Own, block).unwrap();

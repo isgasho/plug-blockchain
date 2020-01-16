@@ -24,10 +24,10 @@ use test::Bencher;
 
 use rand::{self, Rng};
 extern crate sp_phragmen as phragmen;
-use phragmen::{Support, SupportMap, PhragmenStakedAssignment};
+use phragmen::{PhragmenStakedAssignment, Support, SupportMap};
 
-use std::collections::BTreeMap;
 use sp_runtime::traits::{Convert, SaturatedConversion};
+use std::collections::BTreeMap;
 
 const VALIDATORS: u64 = 1000;
 const NOMINATORS: u64 = 10_000;
@@ -64,28 +64,23 @@ fn do_phragmen(
 	let mut candidates = Vec::with_capacity(num_vals as usize);
 	let mut slashable_balance_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
-	(1 ..= num_vals)
-		.for_each(|acc| {
-			candidates.push(acc);
-			slashable_balance_of.insert(acc, STAKE + rr(10, 50));
-		});
+	(1..=num_vals).for_each(|acc| {
+		candidates.push(acc);
+		slashable_balance_of.insert(acc, STAKE + rr(10, 50));
+	});
 
 	let mut voters = Vec::with_capacity(num_noms as usize);
-	(np ..= (np + num_noms))
-		.for_each(|acc| {
-			let mut stashes_to_vote = candidates.clone();
-			let votes = (0 .. votes_per)
-				.map(|_| {
-					stashes_to_vote.remove(rr(0, stashes_to_vote.len()) as usize)
-				})
-				.collect::<Vec<AccountId>>();
-			voters.push((acc, votes));
-			slashable_balance_of.insert(acc, STAKE + rr(10, 50));
-		});
+	(np..=(np + num_noms)).for_each(|acc| {
+		let mut stashes_to_vote = candidates.clone();
+		let votes = (0..votes_per)
+			.map(|_| stashes_to_vote.remove(rr(0, stashes_to_vote.len()) as usize))
+			.collect::<Vec<AccountId>>();
+		voters.push((acc, votes));
+		slashable_balance_of.insert(acc, STAKE + rr(10, 50));
+	});
 
-	let slashable_balance = |who: &AccountId| -> Balance {
-		*slashable_balance_of.get(who).unwrap()
-	};
+	let slashable_balance =
+		|who: &AccountId| -> Balance { *slashable_balance_of.get(who).unwrap() };
 
 	b.iter(|| {
 		let r = phragmen::elect::<AccountId, Balance, _, TestCurrencyToVote>(
@@ -95,15 +90,16 @@ fn do_phragmen(
 			voters.clone(),
 			slashable_balance,
 			true,
-		).unwrap();
+		)
+		.unwrap();
 
 		// Do the benchmarking with equalize.
 		if eq_iters > 0 {
 			let elected_stashes = r.winners;
 			let assignments = r.assignments;
 
-			let to_votes = |b: Balance|
-				<TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
+			let to_votes =
+				|b: Balance| <TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
 
 			// Initialize the support of each candidate.
 			let mut supports = <SupportMap<u64>>::new();
@@ -111,7 +107,11 @@ fn do_phragmen(
 				.iter()
 				.map(|(e, _)| (e, to_votes(slashable_balance(e))))
 				.for_each(|(e, s)| {
-					let item = Support { own: s, total: s, ..Default::default() };
+					let item = Support {
+						own: s,
+						total: s,
+						..Default::default()
+					};
 					supports.insert(e.clone(), item);
 				});
 
@@ -127,13 +127,11 @@ fn do_phragmen(
 				}
 			}
 
-			let mut staked_assignments
-				: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)>
-				= Vec::with_capacity(assignments.len());
+			let mut staked_assignments: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)> =
+				Vec::with_capacity(assignments.len());
 			for (n, assignment) in assignments.iter() {
-				let mut staked_assignment
-					: Vec<PhragmenStakedAssignment<AccountId>>
-					= Vec::with_capacity(assignment.len());
+				let mut staked_assignment: Vec<PhragmenStakedAssignment<AccountId>> =
+					Vec::with_capacity(assignment.len());
 				for (c, per_thing) in assignment.iter() {
 					let nominator_stake = to_votes(slashable_balance(n));
 					let other_stake = *per_thing * nominator_stake;

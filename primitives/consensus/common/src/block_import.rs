@@ -16,13 +16,13 @@
 
 //! Block import helpers.
 
-use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::Arc;
+use sp_runtime::{
+	traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor},
+	Justification,
+};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
-use crate::import_queue::{Verifier, CacheKeyId};
+use crate::import_queue::{CacheKeyId, Verifier};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -150,16 +150,17 @@ pub struct BlockImportParams<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportParams<Block> {
 	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self)
-		-> (
-			BlockOrigin,
-			<Block as BlockT>::Header,
-			Option<Justification>,
-			Vec<DigestItemFor<Block>>,
-			Option<Vec<<Block as BlockT>::Extrinsic>>,
-			bool,
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		) {
+	pub fn into_inner(
+		self,
+	) -> (
+		BlockOrigin,
+		<Block as BlockT>::Header,
+		Option<Justification>,
+		Vec<DigestItemFor<Block>>,
+		Option<Vec<<Block as BlockT>::Extrinsic>>,
+		bool,
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	) {
 		(
 			self.origin,
 			self.header,
@@ -193,10 +194,7 @@ pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
 	/// Check block preconditions.
-	fn check_block(
-		&mut self,
-		block: BlockCheckParams<B>,
-	) -> Result<ImportResult, Self::Error>;
+	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
 	///
@@ -212,10 +210,7 @@ impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 	type Error = crate::error::Error;
 
 	/// Check block preconditions.
-	fn check_block(
-		&mut self,
-		block: BlockCheckParams<B>,
-	) -> Result<ImportResult, Self::Error> {
+	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error> {
 		(**self).check_block(block)
 	}
 
@@ -232,14 +227,12 @@ impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 }
 
 impl<B: BlockT, T, E: std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
-where for<'r> &'r T: BlockImport<B, Error = E>
+where
+	for<'r> &'r T: BlockImport<B, Error = E>,
 {
 	type Error = E;
 
-	fn check_block(
-		&mut self,
-		block: BlockCheckParams<B>,
-	) -> Result<ImportResult, Self::Error> {
+	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error> {
 		(&**self).check_block(block)
 	}
 

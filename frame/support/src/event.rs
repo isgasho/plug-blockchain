@@ -17,7 +17,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use frame_metadata::{DecodeDifferent, EventMetadata, FnEncode, OuterEventMetadata};
 
 /// Implement the `Event` for a module.
 ///
@@ -25,13 +25,13 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///
 /// ```rust
 /// frame_support::decl_event!(
-///    pub enum Event {
-///       Success,
-///       Failure(String),
-///    }
-/// );
+/// 	pub enum Event {
+/// 		Success,
+/// 		Failure(String),
+/// 		}
+/// 	);
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// # Generic Event Example:
@@ -71,7 +71,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///     );
 /// }
 ///
-///# fn main() {}
+/// # fn main() {}
 /// ```
 ///
 /// The syntax for generic events requires the `where`.
@@ -79,9 +79,9 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// # Generic Event with Instance Example:
 ///
 /// ```rust
-///# struct DefaultInstance;
-///# trait Instance {}
-///# impl Instance for DefaultInstance {}
+/// # struct DefaultInstance;
+/// # trait Instance {}
+/// # impl Instance for DefaultInstance {}
 /// trait Trait<I: Instance=DefaultInstance> {
 ///     type Balance;
 ///     type Token;
@@ -96,7 +96,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///       Message(Balance, Token),
 ///    }
 /// );
-///# fn main() {}
+/// # fn main() {}
 /// ```
 #[macro_export]
 macro_rules! decl_event {
@@ -565,8 +565,8 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use codec::{Decode, Encode};
 	use serde::Serialize;
-	use codec::{Encode, Decode};
 
 	mod system {
 		pub trait Trait {
@@ -638,9 +638,10 @@ mod tests {
 
 		decl_event!(
 			/// Event with renamed generic parameter
-			pub enum Event<T> where
+			pub enum Event<T>
+			where
 				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as Trait>::Origin
+				OriginRenamed = <T as Trait>::Origin,
 			{
 				TestEvent(BalanceRenamed),
 				TestOrigin(OriginRenamed),
@@ -691,7 +692,8 @@ mod tests {
 
 		decl_event!(
 			/// Event finish formatting on an named one with trailing comma
-			pub enum Event<T> where
+			pub enum Event<T>
+			where
 				BalanceRenamed = <T as Trait>::Balance,
 				OriginRenamed = <T as Trait>::Origin,
 			{
@@ -723,37 +725,37 @@ mod tests {
 	}
 
 	impl event_module::Trait for TestRuntime {
-		type Origin = u32;
 		type Balance = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
-		type Origin = u32;
 		type Balance = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	impl system::Trait for TestRuntime {
-		type Origin = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	impl event_module::Trait for TestRuntime2 {
-		type Origin = u32;
 		type Balance = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime2 {
-		type Origin = u32;
 		type Balance = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	impl system_renamed::Trait for TestRuntime2 {
-		type Origin = u32;
 		type BlockNumber = u32;
+		type Origin = u32;
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
@@ -761,55 +763,59 @@ mod tests {
 		events: DecodeDifferent::Encode(&[
 			(
 				"system",
-				FnEncode(|| &[
-					EventMetadata {
+				FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("SystemEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					}
-				])
+					}]
+				}),
 			),
 			(
 				"event_module",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
-						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("EventWithoutParams"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
-					},
-				])
+				FnEncode(|| {
+					&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance", "Origin"]),
+							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("EventWithoutParams"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[" Dog"]),
+						},
+					]
+				}),
 			),
 			(
 				"event_module2",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				])
+				FnEncode(|| {
+					&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["BalanceRenamed"]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestOrigin"),
+							arguments: DecodeDifferent::Encode(&["OriginRenamed"]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+					]
+				}),
 			),
 			(
 				"event_module3",
-				FnEncode(|| &[
-					EventMetadata {
+				FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("HiEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[])
-					}
-				])
-			)
-		])
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}),
+			),
+		]),
 	};
 
 	#[test]

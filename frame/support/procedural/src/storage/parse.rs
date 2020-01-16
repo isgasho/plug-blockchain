@@ -16,8 +16,8 @@
 
 //! Parsing of decl_storage input.
 
-use frame_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
-use syn::{Ident, Token, spanned::Spanned};
+use frame_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
+use syn::{spanned::Spanned, Ident, Token};
 
 mod keyword {
 	syn::custom_keyword!(hiddencrate);
@@ -197,9 +197,7 @@ struct SetHasher {
 }
 
 impl From<SetHasher> for super::HasherKind {
-	fn from(set_hasher: SetHasher) -> Self {
-		set_hasher.inner.content.into()
-	}
+	fn from(set_hasher: SetHasher) -> Self { set_hasher.inner.content.into() }
 }
 
 impl From<Hasher> for super::HasherKind {
@@ -230,36 +228,27 @@ fn get_module_instance(
 			}))
 		},
 		(None, None, None) => Ok(None),
-		(Some(instance), None, _) => Err(
-			syn::Error::new(
-				instance.span(),
-				format!(
-					"Expect instantiable trait bound for instance: {}. {}",
-					instance,
-					right_syntax,
-				)
-			)
-		),
-		(None, Some(instantiable), _) => Err(
-			syn::Error::new(
-				instantiable.span(),
-				format!(
-					"Expect instance generic for bound instantiable: {}. {}",
-					instantiable,
-					right_syntax,
-				)
-			)
-		),
-		(None, _, Some(default_instance)) => Err(
-			syn::Error::new(
-				default_instance.span(),
-				format!(
-					"Expect instance generic for default instance: {}. {}",
-					default_instance,
-					right_syntax,
-				)
-			)
-		),
+		(Some(instance), None, _) => Err(syn::Error::new(
+			instance.span(),
+			format!(
+				"Expect instantiable trait bound for instance: {}. {}",
+				instance, right_syntax,
+			),
+		)),
+		(None, Some(instantiable), _) => Err(syn::Error::new(
+			instantiable.span(),
+			format!(
+				"Expect instance generic for bound instantiable: {}. {}",
+				instantiable, right_syntax,
+			),
+		)),
+		(None, _, Some(default_instance)) => Err(syn::Error::new(
+			default_instance.span(),
+			format!(
+				"Expect instance generic for default instance: {}. {}",
+				default_instance, right_syntax,
+			),
+		)),
 	}
 }
 
@@ -277,28 +266,31 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 	let mut extra_genesis_config_lines = vec![];
 	let mut extra_genesis_build = None;
 
-	for line in def.extra_genesis.inner.into_iter()
+	for line in def
+		.extra_genesis
+		.inner
+		.into_iter()
 		.flat_map(|o| o.content.content.lines.inner.into_iter())
 	{
 		match line {
 			AddExtraGenesisLineEnum::AddExtraGenesisLine(def) => {
-				extra_genesis_config_lines.push(super::ExtraGenesisLineDef{
+				extra_genesis_config_lines.push(super::ExtraGenesisLineDef {
 					attrs: def.attrs.inner,
 					name: def.extra_field.content,
 					typ: def.extra_type,
 					default: def.default_value.inner.map(|o| o.expr),
 				});
-			}
+			},
 			AddExtraGenesisLineEnum::AddExtraGenesisBuild(def) => {
 				if extra_genesis_build.is_some() {
 					return Err(syn::Error::new(
 						def.span(),
-						"Only one build expression allowed for extra genesis"
+						"Only one build expression allowed for extra genesis",
 					))
 				}
 
 				extra_genesis_build = Some(def.expr.content);
-			}
+			},
 		}
 	}
 
@@ -337,8 +329,8 @@ fn parse_storage_line_defs(
 				return Err(syn::Error::new(
 					config.span(),
 					"Invalid storage definition, couldn't find config identifier: storage must \
-					either have a get identifier `get(fn ident)` or a defined config identifier \
-					`config(ident)`",
+					 either have a get identifier `get(fn ident)` or a defined config identifier \
+					 `config(ident)`",
 				))
 			}
 		} else {
@@ -346,45 +338,55 @@ fn parse_storage_line_defs(
 		};
 
 		if let Some(ref config) = config {
-			storage_lines.iter().filter_map(|sl| sl.config.as_ref()).try_for_each(|other_config| {
-				if other_config == config {
-					Err(syn::Error::new(
-						config.span(),
-						"`config()`/`get()` with the same name already defined.",
-					))
-				} else {
-					Ok(())
-				}
-			})?;
+			storage_lines
+				.iter()
+				.filter_map(|sl| sl.config.as_ref())
+				.try_for_each(|other_config| {
+					if other_config == config {
+						Err(syn::Error::new(
+							config.span(),
+							"`config()`/`get()` with the same name already defined.",
+						))
+					} else {
+						Ok(())
+					}
+				})?;
 		}
 
 		let storage_type = match line.storage_type {
-			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
-				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
+			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(super::MapDef {
+				hasher: map
+					.hasher
+					.inner
+					.map(Into::into)
+					.unwrap_or(super::HasherKind::Blake2_256),
+				key: map.key,
+				value: map.value,
+			}),
+			DeclStorageType::LinkedMap(map) => {
+				super::StorageLineTypeDef::LinkedMap(super::MapDef {
+					hasher: map
+						.hasher
+						.inner
+						.map(Into::into)
 						.unwrap_or(super::HasherKind::Blake2_256),
 					key: map.key,
 					value: map.value,
-				}
-			),
-			DeclStorageType::LinkedMap(map) => super::StorageLineTypeDef::LinkedMap(
-				super::MapDef {
-					hasher: map.hasher.inner.map(Into::into)
-						.unwrap_or(super::HasherKind::Blake2_256),
-					key: map.key,
-					value: map.value,
-				}
-			),
-			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
-				super::DoubleMapDef {
-					hasher1: map.hasher.inner.map(Into::into)
+				})
+			},
+			DeclStorageType::DoubleMap(map) => {
+				super::StorageLineTypeDef::DoubleMap(super::DoubleMapDef {
+					hasher1: map
+						.hasher
+						.inner
+						.map(Into::into)
 						.unwrap_or(super::HasherKind::Blake2_256),
 					hasher2: map.key2_hasher.into(),
 					key1: map.key1,
 					key2: map.key2.content,
 					value: map.value,
-				}
-			),
+				})
+			},
 			DeclStorageType::Simple(expr) => super::StorageLineTypeDef::Simple(expr),
 		};
 

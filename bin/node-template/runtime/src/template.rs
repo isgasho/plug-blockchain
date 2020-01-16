@@ -1,14 +1,12 @@
 /// A runtime module template with necessary imports
 
 /// Feel free to remove or edit this file as needed.
-/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
-/// If you remove this file, you can remove those references
-
+/// If you change the name of this file, make sure to update its references in
+/// runtime/src/lib.rs If you remove this file, you can remove those references
 
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
-
-use support::{decl_module, decl_storage, decl_event, dispatch::Result};
+use support::{decl_event, decl_module, decl_storage, dispatch::Result};
 use system::ensure_signed;
 
 /// The module's configuration trait.
@@ -56,7 +54,10 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
+	pub enum Event<T>
+	where
+		AccountId = <T as system::Trait>::AccountId,
+	{
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
@@ -72,14 +73,14 @@ mod tests {
 	use primitives::H256;
 	use prml_doughnut::{DoughnutRuntime, PlugDoughnut};
 	use sp_runtime::{
+		testing::{doughnut::TestAccountId, Header},
 		traits::{BlakeTwo256, IdentityLookup},
-		testing::{
-			doughnut::{TestAccountId},
-			Header,
-		},
 		Perbill,
 	};
-	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight, additional_traits::DummyDispatchVerifier};
+	use support::{
+		additional_traits::DummyDispatchVerifier, assert_ok, impl_outer_origin, parameter_types,
+		weights::Weight,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -97,28 +98,28 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Call = ();
-		type Index = u64;
+		type AccountId = TestAccountId;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
+		type Call = ();
+		type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
+		type Doughnut = PlugDoughnut<Test>;
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = TestAccountId;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type Doughnut = PlugDoughnut<Test>;
-		type DelegatedDispatchVerifier = DummyDispatchVerifier<Self::Doughnut, Self::AccountId>;
-		type MaximumBlockWeight = MaximumBlockWeight;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
 	}
 	impl timestamp::Trait for Test {
+		type MinimumPeriod = ();
 		type Moment = u64;
 		type OnTimestampSet = ();
-		type MinimumPeriod = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -134,7 +135,10 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap()
+			.into()
 	}
 
 	#[test]

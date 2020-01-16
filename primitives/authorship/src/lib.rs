@@ -18,10 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result::Result, prelude::*};
+use rstd::{prelude::*, result::Result};
 
-use codec::{Encode, Decode};
-use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
+use codec::{Decode, Encode};
+use sp_inherents::{Error, InherentData, InherentIdentifier, IsFatalError};
 use sp_runtime::RuntimeString;
 
 /// The identifier for the `uncles` inherent.
@@ -64,17 +64,20 @@ pub struct InherentDataProvider<F, H> {
 #[cfg(feature = "std")]
 impl<F, H> InherentDataProvider<F, H> {
 	pub fn new(uncles_oracle: F) -> Self {
-		InherentDataProvider { inner: uncles_oracle, _marker: Default::default() }
+		InherentDataProvider {
+			inner: uncles_oracle,
+			_marker: Default::default(),
+		}
 	}
 }
 
 #[cfg(feature = "std")]
-impl<F, H: Encode + std::fmt::Debug> sp_inherents::ProvideInherentData for InherentDataProvider<F, H>
-where F: Fn() -> Vec<H>
+impl<F, H: Encode + std::fmt::Debug> sp_inherents::ProvideInherentData
+	for InherentDataProvider<F, H>
+where
+	F: Fn() -> Vec<H>,
 {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
+	fn inherent_identifier(&self) -> &'static InherentIdentifier { &INHERENT_IDENTIFIER }
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let uncles = (self.inner)();

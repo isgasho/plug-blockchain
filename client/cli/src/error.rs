@@ -34,7 +34,7 @@ pub enum Error {
 	#[from(ignore)]
 	Input(String),
 	/// Invalid listen multiaddress
-	#[display(fmt="Invalid listen multiaddress")]
+	#[display(fmt = "Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
 	#[from(ignore)]
@@ -44,9 +44,7 @@ pub enum Error {
 /// Must be implemented explicitly because `derive_more` won't generate this
 /// case due to conflicting derive for `Other(String)`.
 impl std::convert::From<String> for Error {
-	fn from(s: String) -> Error {
-		Error::Input(s)
-	}
+	fn from(s: String) -> Error { Error::Input(s) }
 }
 
 impl std::error::Error for Error {

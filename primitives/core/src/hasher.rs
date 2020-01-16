@@ -16,12 +16,12 @@
 
 //! Substrate Blake2b Hasher implementation
 
-use hash_db::Hasher;
-use hash256_std_hasher::Hash256StdHasher;
 use crate::hash::H256;
+use hash256_std_hasher::Hash256StdHasher;
+use hash_db::Hasher;
 
 pub mod blake2 {
-	use super::{Hasher, Hash256StdHasher, H256};
+	use super::{Hash256StdHasher, Hasher, H256};
 	#[cfg(feature = "std")]
 	use crate::hashing::blake2_256;
 
@@ -45,9 +45,9 @@ pub mod blake2 {
 	impl Hasher for Blake2Hasher {
 		type Out = H256;
 		type StdHasher = Hash256StdHasher;
+
 		const LENGTH: usize = 32;
-		fn hash(x: &[u8]) -> Self::Out {
-			blake2_256(x).into()
-		}
+
+		fn hash(x: &[u8]) -> Self::Out { blake2_256(x).into() }
 	}
 }

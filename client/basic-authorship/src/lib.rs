@@ -50,8 +50,7 @@
 //! let block = futures::executor::block_on(future).unwrap();
 //! println!("Generated block: {:?}", block);
 //! ```
-//!
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, Proposer};
+pub use crate::basic_authorship::{Proposer, ProposerFactory};

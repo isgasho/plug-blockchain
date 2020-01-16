@@ -35,12 +35,12 @@
 //! that WASM debug formatting of structs will be empty.
 //!
 //! ```rust,no_run
-//!	use frame_support::debug;
+//! 	use frame_support::debug;
 //!
 //! #[derive(primitives::RuntimeDebug)]
-//!	struct MyStruct {
+//! 	struct MyStruct {
 //!   a: u64,
-//!	}
+//! 	}
 //!
 //! // First initialize the logger.
 //! //
@@ -48,16 +48,16 @@
 //! // also during non-native run.
 //! // Note that enabling the logger has performance impact on
 //! // WASM runtime execution and should be used sparingly.
-//!	debug::RuntimeLogger::init();
+//! 	debug::RuntimeLogger::init();
 //!
 //! let x = MyStruct { a: 5 };
-//!	// will log an info line `"My struct: MyStruct{a:5}"` when running
-//!	// natively, but will only print `"My struct: "` when running WASM.
-//!	debug::info!("My struct: {:?}", x);
+//! 	// will log an info line `"My struct: MyStruct{a:5}"` when running
+//! 	// natively, but will only print `"My struct: "` when running WASM.
+//! 	debug::info!("My struct: {:?}", x);
 //!
-//!	// same output here, although this will print to stdout
-//!	// (and without log format)
-//!	debug::print!("My struct: {:?}", x);
+//! 	// same output here, although this will print to stdout
+//! 	// (and without log format)
+//! 	debug::print!("My struct: {:?}", x);
 //! ```
 //!
 //! If you want to avoid extra overhead in WASM, but still be able
@@ -66,31 +66,33 @@
 //! logs conditionally and strips out logs in WASM.
 //!
 //! ```rust,no_run
-//!	use frame_support::debug::native;
+//! 	use frame_support::debug::native;
 //!
 //! #[derive(primitives::RuntimeDebug)]
-//!	struct MyStruct {
+//! 	struct MyStruct {
 //!   a: u64,
-//!	}
+//! 	}
 //!
 //! // We don't initialize the logger, since
 //! // we are not printing anything out in WASM.
-//!	// debug::RuntimeLogger::init();
+//! 	// debug::RuntimeLogger::init();
 //!
 //! let x = MyStruct { a: 5 };
 //!
-//!	// Displays an info log when running natively, nothing when WASM.
-//!	native::info!("My struct: {:?}", x);
+//! 	// Displays an info log when running natively, nothing when WASM.
+//! 	native::info!("My struct: {:?}", x);
 //!
-//!	// same output to stdout, no overhead on WASM.
-//!	native::print!("My struct: {:?}", x);
+//! 	// same output to stdout, no overhead on WASM.
+//! 	native::print!("My struct: {:?}", x);
 //! ```
 
-use rstd::vec::Vec;
-use rstd::fmt::{self, Debug};
+use rstd::{
+	fmt::{self, Debug},
+	vec::Vec,
+};
 
-pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
+pub use log::{debug, error, info, trace, warn};
 
 /// Native-only logging.
 ///
@@ -98,7 +100,7 @@ pub use crate::runtime_print as print;
 /// only if the runtime is running natively (i.e. not via WASM)
 #[cfg(feature = "std")]
 pub mod native {
-	pub use super::{info, debug, error, trace, warn, print};
+	pub use super::{debug, error, info, print, trace, warn};
 }
 
 /// Native-only logging.
@@ -109,7 +111,7 @@ pub mod native {
 pub mod native {
 	#[macro_export]
 	macro_rules! noop {
-		($($arg:tt)+) => {}
+		($($arg:tt)+) => {};
 	}
 	pub use noop as info;
 	pub use noop as debug;
@@ -154,9 +156,7 @@ impl fmt::Write for Writer {
 
 impl Writer {
 	/// Print the content of this `Writer` out.
-	pub fn print(&self) {
-		runtime_io::misc::print_utf8(&self.0)
-	}
+	pub fn print(&self) { runtime_io::misc::print_utf8(&self.0) }
 }
 
 /// Runtime logger implementation - `log` crate backend.
@@ -204,11 +204,7 @@ impl log::Log for RuntimeLogger {
 		let mut w = Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
 
-		runtime_io::logging::log(
-			record.level().into(),
-			record.target(),
-			&w.0,
-		);
+		runtime_io::logging::log(record.level().into(), record.target(), &w.0);
 	}
 
 	fn flush(&self) {}

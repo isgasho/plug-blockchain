@@ -19,18 +19,28 @@
 //! This code is based on and large parts are copied from wasmtime's
 //! wasmtime-api/src/trampoline/func.rs.
 
-use cranelift_codegen::{Context, binemit, ir, isa};
-use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
+use cranelift_codegen::{
+	binemit, ir,
+	ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode},
+	isa,
+	print_errors::pretty_error,
+	Context,
+};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_codegen::print_errors::pretty_error;
-use wasmtime_jit::{CodeMemory, Compiler};
-use wasmtime_environ::CompiledFunction;
-use wasmtime_runtime::{VMContext, VMFunctionBody};
+use std::{
+	cmp,
+	panic::{self, AssertUnwindSafe},
+	ptr,
+};
 use wasm_interface::{Function, Value, ValueType};
-use std::{cmp, panic::{self, AssertUnwindSafe}, ptr};
+use wasmtime_environ::CompiledFunction;
+use wasmtime_jit::{CodeMemory, Compiler};
+use wasmtime_runtime::{VMContext, VMFunctionBody};
 
-use crate::error::{Error, WasmError};
-use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor};
+use crate::{
+	error::{Error, WasmError},
+	wasmtime::function_executor::{FunctionExecutor, FunctionExecutorState},
+};
 
 const CALL_SUCCESS: u32 = 0;
 const CALL_FAILED_WITH_ERROR: u32 = 1;
@@ -74,9 +84,7 @@ impl EnvState {
 	}
 
 	/// Resets the trap error to None and returns the current value.
-	pub fn take_trap(&mut self) -> Option<Error> {
-		self.trap.take()
-	}
+	pub fn take_trap(&mut self) -> Option<Error> { self.trap.take() }
 }
 
 /// This is called by the dynamically generated trampoline taking the function index and reference
@@ -84,20 +92,20 @@ impl EnvState {
 /// on failure.
 unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec: *mut i64) -> u32 {
 	if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
-			match stub_fn_inner(
-				vmctx,
-				&state.host_functions,
-				&mut state.compiler,
-				state.executor_state.as_mut(),
-				func_index,
-				values_vec,
-			) {
-				Ok(()) => CALL_SUCCESS,
-				Err(err) => {
-					state.trap = Some(err);
-					CALL_FAILED_WITH_ERROR
-				}
-			}
+		match stub_fn_inner(
+			vmctx,
+			&state.host_functions,
+			&mut state.compiler,
+			state.executor_state.as_mut(),
+			func_index,
+			values_vec,
+		) {
+			Ok(()) => CALL_SUCCESS,
+			Err(err) => {
+				state.trap = Some(err);
+				CALL_FAILED_WITH_ERROR
+			},
+		}
 	} else {
 		// Well, we can't even set a trap message, so we'll just exit without one.
 		CALL_WITH_BAD_HOST_STATE
@@ -114,10 +122,14 @@ unsafe fn stub_fn_inner(
 	func_index: u32,
 	values_vec: *mut i64,
 ) -> Result<(), Error> {
-	let func = externals.get(func_index as usize)
-		.ok_or_else(|| format!("call to undefined external function with index {}", func_index))?;
-	let executor_state = executor_state
-		.ok_or_else(|| "executor state is None during call to external function")?;
+	let func = externals.get(func_index as usize).ok_or_else(|| {
+		format!(
+			"call to undefined external function with index {}",
+			func_index
+		)
+	})?;
+	let executor_state =
+		executor_state.ok_or_else(|| "executor state is None during call to external function")?;
 
 	// Build the external function context.
 	let mut context = FunctionExecutor::new(vmctx, compiler, executor_state)?;
@@ -128,7 +140,9 @@ unsafe fn stub_fn_inner(
 		let signature = func.signature();
 
 		// Read the arguments from the stack.
-		let mut args = signature.args.iter()
+		let mut args = signature
+			.args
+			.iter()
 			.enumerate()
 			.map(|(i, &param_type)| read_value_from(values_vec.offset(i as isize), param_type));
 
@@ -137,8 +151,9 @@ unsafe fn stub_fn_inner(
 
 	match return_val {
 		Ok(ret_val) => {
-			if let Some(val) = ret_val
-				.map_err(|e| Error::FunctionExecution(func.name().to_string(), e))? {
+			if let Some(val) =
+				ret_val.map_err(|e| Error::FunctionExecution(func.name().to_string(), e))?
+			{
 				write_value_to(values_vec, val);
 			}
 
@@ -154,7 +169,7 @@ unsafe fn stub_fn_inner(
 			};
 
 			Err(Error::FunctionExecution(func.name().to_string(), message))
-		}
+		},
 	}
 }
 
@@ -252,7 +267,9 @@ pub fn make_trampoline(
 			.call_indirect(new_sig, callee_value, &callee_args);
 
 		let call_result = builder.func.dfg.inst_results(call)[0];
-		builder.ins().trapnz(call_result, TrapCode::User(TRAP_USER_CODE));
+		builder
+			.ins()
+			.trapnz(call_result, TrapCode::User(TRAP_USER_CODE));
 
 		let mflags = ir::MemFlags::trusted();
 		let mut results = Vec::new();
@@ -315,6 +332,7 @@ impl binemit::RelocSink for RelocSink {
 	) {
 		panic!("trampoline compilation should not produce ebb relocs");
 	}
+
 	fn reloc_external(
 		&mut self,
 		_offset: binemit::CodeOffset,
@@ -324,6 +342,7 @@ impl binemit::RelocSink for RelocSink {
 	) {
 		panic!("trampoline compilation should not produce external symbol relocs");
 	}
+
 	fn reloc_constant(
 		&mut self,
 		_code_offset: binemit::CodeOffset,
@@ -332,6 +351,7 @@ impl binemit::RelocSink for RelocSink {
 	) {
 		panic!("trampoline compilation should not produce constant relocs");
 	}
+
 	fn reloc_jt(
 		&mut self,
 		_offset: binemit::CodeOffset,

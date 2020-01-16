@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::{
+	hash::{StorageHasher, Twox128},
+	storage::{self, unhashed},
+	traits::Len,
+};
+use codec::{Encode, EncodeAppend, EncodeLike, FullCodec, FullEncode, Ref};
+use rstd::borrow::Borrow;
 #[cfg(not(feature = "std"))]
 use rstd::prelude::*;
-use rstd::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -60,7 +64,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		let key_hashed = key.borrow().using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -129,28 +133,29 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		G::from_optional_value_to_query(value)
 	}
 
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(
+		key: KeyArg,
+		items: Items,
+	) -> Result<(), &'static str>
 	where
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator,
 	{
 		let key = Self::storage_map_final_key(key);
-		let encoded_value = unhashed::get_raw(key.as_ref())
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
+		let encoded_value =
+			unhashed::get_raw(key.as_ref()).unwrap_or_else(
+				|| match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
 					None => vec![],
-				}
-			});
+				},
+			);
 
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
+		let new_val =
+			V::append_or_new(encoded_value, items).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(key.as_ref(), &new_val);
 		Ok(())
 	}
@@ -160,16 +165,16 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		KeyArg: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator,
 	{
-		Self::append(Ref::from(&key), items.clone())
-			.unwrap_or_else(|_| Self::insert(key, items));
+		Self::append(Ref::from(&key), items.clone()).unwrap_or_else(|_| Self::insert(key, items));
 	}
 
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
+	where
+		V: codec::DecodeLength + Len,
 	{
 		let key = Self::storage_map_final_key(key);
 		if let Some(v) = unhashed::get_raw(key.as_ref()) {

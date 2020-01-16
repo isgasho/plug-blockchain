@@ -17,13 +17,15 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Trait};
-use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, ExecResult};
-use crate::gas::GasMeter;
+use crate::{
+	exec::{ExecResult, Ext},
+	gas::GasMeter,
+	wasm::env_def::FunctionImplProvider,
+	CodeHash, Schedule, Trait,
+};
 
+use codec::{Decode, Encode};
 use rstd::prelude::*;
-use codec::{Encode, Decode};
 use sandbox;
 
 #[macro_use]
@@ -32,8 +34,10 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::{to_execution_result, Runtime};
-use self::code_cache::load as load_code;
+use self::{
+	code_cache::load as load_code,
+	runtime::{to_execution_result, Runtime},
+};
 
 pub use self::code_cache::save as save_code;
 
@@ -68,9 +72,7 @@ pub struct WasmLoader<'a> {
 }
 
 impl<'a> WasmLoader<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
-		WasmLoader { schedule }
-	}
+	pub fn new(schedule: &'a Schedule) -> Self { WasmLoader { schedule } }
 }
 
 impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
@@ -83,6 +85,7 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
 			prefab_module,
 		})
 	}
+
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
 		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
@@ -98,9 +101,7 @@ pub struct WasmVm<'a> {
 }
 
 impl<'a> WasmVm<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
-		WasmVm { schedule }
-	}
+	pub fn new(schedule: &'a Schedule) -> Self { WasmVm { schedule } }
 }
 
 impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
@@ -116,10 +117,11 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		let memory =
 			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
-				// unlike `.expect`, explicit panic preserves the source location.
-				// Needed as we can't use `RUST_BACKTRACE` in here.
+					// unlike `.expect`, explicit panic preserves the source location.
+					// Needed as we can't use `RUST_BACKTRACE` in here.
 					panic!(
-						"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
+						"exec.prefab_module.initial can't be greater than \
+						 exec.prefab_module.maximum;
 						thus Memory::new must not fail;
 						qed"
 					)
@@ -131,13 +133,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 			imports.add_host_func("env", name, func_ptr);
 		});
 
-		let mut runtime = Runtime::new(
-			&mut ext,
-			input_data,
-			&self.schedule,
-			memory,
-			gas_meter,
-		);
+		let mut runtime = Runtime::new(&mut ext, input_data, &self.schedule, memory, gas_meter);
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
@@ -150,17 +146,18 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::collections::HashMap;
-	use std::cell::RefCell;
-	use primitives::H256;
-	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, STATUS_SUCCESS};
-	use crate::gas::{Gas, GasMeter};
-	use crate::tests::{Test, Call};
-	use crate::wasm::prepare::prepare_contract;
-	use crate::CodeHash;
-	use wabt;
-	use hex_literal::hex;
+	use crate::{
+		exec::{ExecError, ExecReturnValue, Ext, StorageKey, STATUS_SUCCESS},
+		gas::{Gas, GasMeter},
+		tests::{Call, Test},
+		wasm::prepare::prepare_contract,
+		CodeHash,
+	};
 	use assert_matches::assert_matches;
+	use hex_literal::hex;
+	use primitives::H256;
+	use std::{cell::RefCell, collections::HashMap};
+	use wabt;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -219,12 +216,16 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+
+		fn set_storage(
+			&mut self,
+			key: StorageKey,
+			value: Option<Vec<u8>>,
+		) -> Result<(), &'static str> {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 			Ok(())
 		}
+
 		fn instantiate(
 			&mut self,
 			code_hash: &CodeHash<Test>,
@@ -241,8 +242,12 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok((address, ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }))
+			Ok((address, ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			}))
 		}
+
 		fn call(
 			&mut self,
 			to: &u64,
@@ -258,11 +263,14 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
+			Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			})
 		}
-		fn note_dispatch_call(&mut self, call: Call) {
-			self.dispatches.push(DispatchEntry(call));
-		}
+
+		fn note_dispatch_call(&mut self, call: Call) { self.dispatches.push(DispatchEntry(call)); }
+
 		fn note_restore_to(
 			&mut self,
 			dest: u64,
@@ -277,36 +285,24 @@ mod tests {
 				delta,
 			});
 		}
-		fn caller(&self) -> &u64 {
-			&42
-		}
-		fn origin(&self) -> &u64 {
-			&24
-		}
-		fn address(&self) -> &u64 {
-			&69
-		}
-		fn doughnut(&self) -> Option<&()> {
-			Some(&())
-		}
-		fn balance(&self) -> u64 {
-			228
-		}
-		fn value_transferred(&self) -> u64 {
-			1337
-		}
 
-		fn now(&self) -> &u64 {
-			&1111
-		}
+		fn caller(&self) -> &u64 { &42 }
 
-		fn minimum_balance(&self) -> u64 {
-			666
-		}
+		fn origin(&self) -> &u64 { &24 }
 
-		fn random(&self, subject: &[u8]) -> H256 {
-			H256::from_slice(subject)
-		}
+		fn address(&self) -> &u64 { &69 }
+
+		fn doughnut(&self) -> Option<&()> { Some(&()) }
+
+		fn balance(&self) -> u64 { 228 }
+
+		fn value_transferred(&self) -> u64 { 1337 }
+
+		fn now(&self) -> &u64 { &1111 }
+
+		fn minimum_balance(&self) -> u64 { 666 }
+
+		fn random(&self, subject: &[u8]) -> H256 { H256::from_slice(subject) }
 
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push((topics, data))
@@ -316,39 +312,36 @@ mod tests {
 			self.rent_allowance = rent_allowance;
 		}
 
-		fn rent_allowance(&self) -> u64 {
-			self.rent_allowance
-		}
+		fn rent_allowance(&self) -> u64 { self.rent_allowance }
 
 		fn block_number(&self) -> u64 { 121 }
 
 		fn max_value_size(&self) -> u32 { 16_384 }
 
 		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-			let opt_value = self.runtime_storage_keys
-				.borrow_mut()
-				.remove(key);
-			opt_value.unwrap_or_else(||
+			let opt_value = self.runtime_storage_keys.borrow_mut().remove(key);
+			opt_value.unwrap_or_else(|| {
 				panic!(
 					"{:?} doesn't exist. values that do exist {:?}",
-					key,
-					self.runtime_storage_keys
+					key, self.runtime_storage_keys
 				)
-			)
+			})
 		}
 	}
 
 	impl Ext for &mut MockExt {
 		type T = <MockExt as Ext>::T;
 
-		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
-			(**self).get_storage(key)
-		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> { (**self).get_storage(key) }
+
+		fn set_storage(
+			&mut self,
+			key: [u8; 32],
+			value: Option<Vec<u8>>,
+		) -> Result<(), &'static str> {
 			(**self).set_storage(key, value)
 		}
+
 		fn instantiate(
 			&mut self,
 			code: &CodeHash<Test>,
@@ -358,6 +351,7 @@ mod tests {
 		) -> Result<(u64, ExecReturnValue), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
+
 		fn call(
 			&mut self,
 			to: &u64,
@@ -367,9 +361,9 @@ mod tests {
 		) -> ExecResult {
 			(**self).call(to, value, gas_meter, input_data)
 		}
-		fn note_dispatch_call(&mut self, call: Call) {
-			(**self).note_dispatch_call(call)
-		}
+
+		fn note_dispatch_call(&mut self, call: Call) { (**self).note_dispatch_call(call) }
+
 		fn note_restore_to(
 			&mut self,
 			dest: u64,
@@ -377,55 +371,41 @@ mod tests {
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
 		) {
-			(**self).note_restore_to(
-				dest,
-				code_hash,
-				rent_allowance,
-				delta,
-			)
+			(**self).note_restore_to(dest, code_hash, rent_allowance, delta)
 		}
-		fn caller(&self) -> &u64 {
-			(**self).caller()
-		}
-		fn origin(&self) -> &u64 {
-			(**self).origin()
-		}
-		fn address(&self) -> &u64 {
-			(**self).address()
-		}
-		fn doughnut(&self) -> Option<&()> {
-			(**self).doughnut()
-		}
-		fn balance(&self) -> u64 {
-			(**self).balance()
-		}
-		fn value_transferred(&self) -> u64 {
-			(**self).value_transferred()
-		}
-		fn now(&self) -> &u64 {
-			(**self).now()
-		}
-		fn minimum_balance(&self) -> u64 {
-			(**self).minimum_balance()
-		}
-		fn random(&self, subject: &[u8]) -> H256 {
-			(**self).random(subject)
-		}
+
+		fn caller(&self) -> &u64 { (**self).caller() }
+
+		fn origin(&self) -> &u64 { (**self).origin() }
+
+		fn address(&self) -> &u64 { (**self).address() }
+
+		fn doughnut(&self) -> Option<&()> { (**self).doughnut() }
+
+		fn balance(&self) -> u64 { (**self).balance() }
+
+		fn value_transferred(&self) -> u64 { (**self).value_transferred() }
+
+		fn now(&self) -> &u64 { (**self).now() }
+
+		fn minimum_balance(&self) -> u64 { (**self).minimum_balance() }
+
+		fn random(&self, subject: &[u8]) -> H256 { (**self).random(subject) }
+
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			(**self).deposit_event(topics, data)
 		}
+
 		fn set_rent_allowance(&mut self, rent_allowance: u64) {
 			(**self).set_rent_allowance(rent_allowance)
 		}
-		fn rent_allowance(&self) -> u64 {
-			(**self).rent_allowance()
-		}
-		fn block_number(&self) -> u64 {
-			(**self).block_number()
-		}
-		fn max_value_size(&self) -> u32 {
-			(**self).max_value_size()
-		}
+
+		fn rent_allowance(&self) -> u64 { (**self).rent_allowance() }
+
+		fn block_number(&self) -> u64 { (**self).block_number() }
+
+		fn max_value_size(&self) -> u32 { (**self).max_value_size() }
+
 		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 			(**self).get_runtime_storage(key)
 		}
@@ -441,8 +421,7 @@ mod tests {
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let prefab_module =
-			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
+		let prefab_module = prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
@@ -503,17 +482,15 @@ mod tests {
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			&mock_ext.transfers,
-			&[TransferEntry {
-				to: 9,
-				value: 6,
-				data: vec![1, 2, 3, 4],
-				gas_left: 49971,
-			}]
-		);
+		assert_eq!(&mock_ext.transfers, &[TransferEntry {
+			to: 9,
+			value: 6,
+			data: vec![1, 2, 3, 4],
+			gas_left: 49971,
+		}]);
 	}
 
 	const CODE_INSTANTIATE: &str = r#"
@@ -565,17 +542,15 @@ mod tests {
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			&mock_ext.instantiates,
-			&[InstantiateEntry {
-				code_hash: [0x11; 32].into(),
-				endowment: 3,
-				data: vec![1, 2, 3, 4],
-				gas_left: 49947,
-			}]
-		);
+		assert_eq!(&mock_ext.instantiates, &[InstantiateEntry {
+			code_hash: [0x11; 32].into(),
+			endowment: 3,
+			data: vec![1, 2, 3, 4],
+			gas_left: 49947,
+		}]);
 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
@@ -625,17 +600,15 @@ mod tests {
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			&mock_ext.transfers,
-			&[TransferEntry {
-				to: 9,
-				value: 6,
-				data: vec![1, 2, 3, 4],
-				gas_left: 228,
-			}]
-		);
+		assert_eq!(&mock_ext.transfers, &[TransferEntry {
+			to: 9,
+			value: 6,
+			data: vec![1, 2, 3, 4],
+			gas_left: 228,
+		}]);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
@@ -709,18 +682,20 @@ mod tests {
 	#[test]
 	fn get_storage_puts_data_into_scratch_buf() {
 		let mut mock_ext = MockExt::default();
-		mock_ext
-			.storage
-			.insert([0x11; 32], [0x22; 32].to_vec());
+		mock_ext.storage.insert([0x11; 32], [0x22; 32].to_vec());
 
 		let output = execute(
 			CODE_GET_STORAGE,
 			vec![],
 			mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: [0x22; 32].to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			status: STATUS_SUCCESS,
+			data: [0x22; 32].to_vec()
+		});
 	}
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
@@ -782,7 +757,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	/// calls `ext_origin`, loads the address from the scratch buffer and
@@ -844,7 +820,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	/// calls `ext_address`, loads the address from the scratch buffer and
@@ -906,7 +883,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	const CODE_BALANCE: &str = r#"
@@ -961,12 +939,7 @@ mod tests {
 	#[test]
 	fn balance() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
-		let _ = execute(
-			CODE_BALANCE,
-			vec![],
-			MockExt::default(),
-			&mut gas_meter,
-		).unwrap();
+		let _ = execute(CODE_BALANCE, vec![], MockExt::default(), &mut gas_meter).unwrap();
 	}
 
 	const CODE_GAS_PRICE: &str = r#"
@@ -1021,12 +994,7 @@ mod tests {
 	#[test]
 	fn gas_price() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
-		let _ = execute(
-			CODE_GAS_PRICE,
-			vec![],
-			MockExt::default(),
-			&mut gas_meter,
-		).unwrap();
+		let _ = execute(CODE_GAS_PRICE, vec![], MockExt::default(), &mut gas_meter).unwrap();
 	}
 
 	const CODE_GAS_LEFT: &str = r#"
@@ -1080,16 +1048,14 @@ mod tests {
 	fn gas_left() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
 
-		let output = execute(
-			CODE_GAS_LEFT,
-			vec![],
-			MockExt::default(),
-			&mut gas_meter,
-		).unwrap();
+		let output = execute(CODE_GAS_LEFT, vec![], MockExt::default(), &mut gas_meter).unwrap();
 
 		let gas_left = Gas::decode(&mut output.data.as_slice()).unwrap();
 		assert!(gas_left < 50_000, "gas_left must be less than initial");
-		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
+		assert!(
+			gas_left > gas_meter.gas_left(),
+			"gas_left must be greater than final"
+		);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1149,7 +1115,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	const CODE_DISPATCH_CALL: &str = r#"
@@ -1180,14 +1147,12 @@ mod tests {
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			&mock_ext.dispatches,
-			&[DispatchEntry(
-				Call::Balances(balances::Call::set_balance(42, 1337, 0)),
-			)]
-		);
+		assert_eq!(&mock_ext.dispatches, &[DispatchEntry(Call::Balances(
+			balances::Call::set_balance(42, 1337, 0)
+		),)]);
 	}
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
@@ -1220,9 +1185,13 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] });
+		assert_eq!(output, ExecReturnValue {
+			status: STATUS_SUCCESS,
+			data: vec![1, 2, 3, 4]
+		});
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1282,7 +1251,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1341,7 +1311,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	const CODE_RANDOM: &str = r#"
@@ -1405,21 +1376,13 @@ mod tests {
 	fn random() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
-		let output = execute(
-			CODE_RANDOM,
-			vec![],
-			MockExt::default(),
-			&mut gas_meter,
-		).unwrap();
+		let output = execute(CODE_RANDOM, vec![], MockExt::default(), &mut gas_meter).unwrap();
 
 		// The mock ext just returns the same data that was passed as the subject.
-		assert_eq!(
-			output,
-			ExecReturnValue {
-				status: STATUS_SUCCESS,
-				data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
-			},
-		);
+		assert_eq!(output, ExecReturnValue {
+			status: STATUS_SUCCESS,
+			data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
+		},);
 	}
 
 	const CODE_DEPOSIT_EVENT: &str = r#"
@@ -1449,17 +1412,12 @@ mod tests {
 	fn deposit_event() {
 		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
-		let _ = execute(
-			CODE_DEPOSIT_EVENT,
-			vec![],
-			&mut mock_ext,
-			&mut gas_meter
-		).unwrap();
+		let _ = execute(CODE_DEPOSIT_EVENT, vec![], &mut mock_ext, &mut gas_meter).unwrap();
 
-		assert_eq!(mock_ext.events, vec![
-			(vec![H256::repeat_byte(0x33)],
-			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
-		]);
+		assert_eq!(mock_ext.events, vec![(
+			vec![H256::repeat_byte(0x33)],
+			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00]
+		)]);
 
 		assert_eq!(gas_meter.gas_left(), 49934);
 	}
@@ -1503,7 +1461,10 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError {
+				reason: "during execution",
+				buffer: _,
+			})
 		);
 	}
 
@@ -1545,7 +1506,10 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution", buffer: _ })
+			Err(ExecError {
+				reason: "during execution",
+				buffer: _,
+			})
 		);
 	}
 
@@ -1608,7 +1572,8 @@ mod tests {
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 	}
 
 	// asserts that the size of the input data is 4.
@@ -1648,7 +1613,8 @@ mod tests {
 			input_data,
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(output.data.len(), 0);
 		assert_eq!(output.data.capacity(), 1_234);
@@ -1664,7 +1630,9 @@ mod tests {
 			input_data,
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).err().unwrap();
+		)
+		.err()
+		.unwrap();
 
 		assert_eq!(error.buffer.capacity(), 1_234);
 	}
@@ -1718,9 +1686,13 @@ mod tests {
 			hex!("00112233445566778899").to_vec(),
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: 0, data: hex!("445566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			status: 0,
+			data: hex!("445566778899").to_vec()
+		});
 		assert!(output.is_success());
 	}
 
@@ -1731,9 +1703,13 @@ mod tests {
 			hex!("112233445566778899").to_vec(),
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: 17, data: hex!("5566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			status: 17,
+			data: hex!("5566778899").to_vec()
+		});
 		assert!(!output.is_success());
 	}
 
@@ -1822,17 +1798,15 @@ mod tests {
 		// "\01\02\03\04" - Some(0x14144020)
 		// "\02\03\04\05" - None
 		*mock_ext.runtime_storage_keys.borrow_mut() = [
-			([1, 2, 3, 4].to_vec(), Some(0x14144020u32.to_le_bytes().to_vec())),
+			(
+				[1, 2, 3, 4].to_vec(),
+				Some(0x14144020u32.to_le_bytes().to_vec()),
+			),
 			([2, 3, 4, 5].to_vec().to_vec(), None),
 		]
 		.iter()
 		.cloned()
 		.collect();
-		let _ = execute(
-			CODE_GET_RUNTIME_STORAGE,
-			vec![],
-			mock_ext,
-			&mut gas_meter,
-		).unwrap();
+		let _ = execute(CODE_GET_RUNTIME_STORAGE, vec![], mock_ext, &mut gas_meter).unwrap();
 	}
 }

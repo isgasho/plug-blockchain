@@ -31,26 +31,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
 use rstd::prelude::*;
-use codec::{Encode, Decode};
-use support::{
-	decl_storage, decl_module,
-	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
-	weights::{Weight, DispatchInfo, GetDispatchInfo},
-};
 use sp_runtime::{
-	Fixed64,
+	traits::{Convert, SaturatedConversion, Saturating, SignedExtension, Zero},
 	transaction_validity::{
-		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
-		TransactionValidity,
+		InvalidTransaction, TransactionPriority, TransactionValidity, TransactionValidityError,
+		ValidTransaction,
 	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
+	Fixed64,
+};
+use support::{
+	decl_module, decl_storage,
+	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason},
+	weights::{DispatchInfo, GetDispatchInfo, Weight},
 };
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 type Multiplier = Fixed64;
-type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
@@ -119,10 +118,15 @@ impl<T: Trait> Module<T> {
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let partial_fee =
+			<ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
-		RuntimeDispatchInfo { weight, class, partial_fee }
+		RuntimeDispatchInfo {
+			weight,
+			class,
+			partial_fee,
+		}
 	}
 }
 
@@ -133,19 +137,17 @@ pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] Ba
 
 impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// utility constructor. Used only in client/factory code.
-	pub fn from(fee: BalanceOf<T>) -> Self {
-		Self(fee)
-	}
+	pub fn from(fee: BalanceOf<T>) -> Self { Self(fee) }
 
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
 	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
 	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
-	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
-	///      and the time it consumes.
+	///     size-fee, this is not input dependent and reflects the _complexity_ of the execution and
+	///     the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
-	///      transactions can have a tip.
+	///     transactions can have a tip.
 	fn compute_fee(
 		len: u32,
 		info: <Self as SignedExtension>::DispatchInfo,
@@ -161,9 +163,11 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			let len_fee = base.saturating_add(per_byte.saturating_mul(len));
 
 			let weight_fee = {
-				// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
-				// maximum of its data type, which is not desired.
-				let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+				// cap the weight to the maximum defined in runtime, otherwise it will be the
+				// `Bounded` maximum of its data type, which is not desired.
+				let capped_weight = info
+					.weight
+					.min(<T as system::Trait>::MaximumBlockWeight::get());
 				T::WeightToFee::convert(capped_weight)
 			};
 
@@ -184,20 +188,21 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
 	}
+
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
-	where BalanceOf<T>: Send + Sync
+where
+	BalanceOf<T>: Send + Sync,
 {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Call = T::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
@@ -236,19 +241,19 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use balances::Call as BalancesCall;
 	use codec::Encode;
+	use primitives::H256;
+	use rstd::cell::RefCell;
+	use sp_runtime::{
+		testing::{Header, TestXt},
+		traits::{BlakeTwo256, Extrinsic, IdentityLookup},
+		Perbill,
+	};
 	use support::{
-		parameter_types, impl_outer_origin, impl_outer_dispatch,
+		impl_outer_dispatch, impl_outer_origin, parameter_types,
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 	};
-	use primitives::H256;
-	use sp_runtime::{
-		Perbill,
-		testing::{Header, TestXt},
-		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
-	};
-	use balances::Call as BalancesCall;
-	use rstd::cell::RefCell;
 	use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 	const CALL: &<Runtime as system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
@@ -263,7 +268,7 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Runtime;
 
-	impl_outer_origin!{
+	impl_outer_origin! {
 		pub enum Origin for Runtime {}
 	}
 
@@ -275,22 +280,22 @@ mod tests {
 	}
 
 	impl system::Trait for Runtime {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = Call;
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
 	}
 
@@ -302,14 +307,14 @@ mod tests {
 
 	impl balances::Trait for Runtime {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 
 	thread_local! {
@@ -330,18 +335,16 @@ mod tests {
 
 	pub struct WeightToFee(u64);
 	impl Convert<Weight, u64> for WeightToFee {
-		fn convert(t: Weight) -> u64 {
-			WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
-		}
+		fn convert(t: Weight) -> u64 { WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64)) }
 	}
 
 	impl Trait for Runtime {
 		type Currency = balances::Module<Runtime>;
+		type FeeMultiplierUpdate = ();
 		type OnTransactionPayment = ();
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
-		type FeeMultiplierUpdate = ();
 	}
 
 	type Balances = balances::Module<Runtime>;
@@ -352,7 +355,7 @@ mod tests {
 		balance_factor: u64,
 		base_fee: u64,
 		byte_fee: u64,
-		weight_to_fee: u64
+		weight_to_fee: u64,
 	}
 
 	impl Default for ExtBuilder {
@@ -373,18 +376,23 @@ mod tests {
 			self.weight_to_fee = weight;
 			self
 		}
+
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
 			self
 		}
+
 		fn set_constants(&self) {
 			TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.base_fee);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
+
 		pub fn build(self) -> runtime_io::TestExternalities {
 			self.set_constants();
-			let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			let mut t = system::GenesisConfig::default()
+				.build_storage::<Runtime>()
+				.unwrap();
 			balances::GenesisConfig::<Runtime> {
 				balances: vec![
 					(1, 10 * self.balance_factor),
@@ -392,64 +400,62 @@ mod tests {
 					(3, 30 * self.balance_factor),
 					(4, 40 * self.balance_factor),
 					(5, 50 * self.balance_factor),
-					(6, 60 * self.balance_factor)
+					(6, 60 * self.balance_factor),
 				],
 				vesting: vec![],
-			}.assimilate_storage(&mut t).unwrap();
+			}
+			.assimilate_storage(&mut t)
+			.unwrap();
 			t.into()
 		}
 	}
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
+		DispatchInfo {
+			weight: w,
+			pays_fee: true,
+			..Default::default()
+		}
 	}
 
 	#[test]
 	fn signed_extension_transaction_payment_work() {
-			ExtBuilder::default()
+		ExtBuilder::default()
 			.balance_factor(10) // 100
 			.fees(5, 1, 1) // 5 fixed, 1 per byte, 1 per weight
 			.build()
-			.execute_with(||
-		{
-			let len = 10;
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
+			.execute_with(|| {
+				let len = 10;
+				assert!(ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&1, CALL, info_from_weight(5), len)
-					.is_ok()
-			);
-			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+					.is_ok());
+				assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
 
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				assert!(ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, info_from_weight(3), len)
-					.is_ok()
-			);
-			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
-		});
+					.is_ok());
+				assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+			});
 	}
 
 	#[test]
 	fn signed_extension_transaction_payment_is_bounded() {
-			ExtBuilder::default()
+		ExtBuilder::default()
 			.balance_factor(1000)
 			.fees(0, 0, 1)
 			.build()
-			.execute_with(||
-		{
-			// maximum weight possible
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
+			.execute_with(|| {
+				// maximum weight possible
+				assert!(ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10)
-					.is_ok()
-			);
-			// fee will be proportional to what is the actual maximum weight in the runtime.
-			assert_eq!(
-				Balances::free_balance(&1),
-				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
-			);
-		});
+					.is_ok());
+				// fee will be proportional to what is the actual maximum weight in the runtime.
+				assert_eq!(
+					Balances::free_balance(&1),
+					(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
+				);
+			});
 	}
 
 	#[test]
@@ -458,37 +464,32 @@ mod tests {
 			.fees(100, 1, 1)
 			.balance_factor(0)
 			.build()
-			.execute_with(||
-		{
-			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
+			.execute_with(|| {
+				// 1 ain't have a penny.
+				assert_eq!(Balances::free_balance(&1), 0);
 
-			let len = 100;
+				let len = 100;
 
-			// like a FreeOperational
-			let operational_transaction = DispatchInfo {
-				weight: 0,
-				class: DispatchClass::Operational,
-				pays_fee: false,
-			};
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, operational_transaction , len)
-					.is_ok()
-			);
+				// like a FreeOperational
+				let operational_transaction = DispatchInfo {
+					weight: 0,
+					class: DispatchClass::Operational,
+					pays_fee: false,
+				};
+				assert!(ChargeTransactionPayment::<Runtime>::from(0)
+					.validate(&1, CALL, operational_transaction, len)
+					.is_ok());
 
-			// like a FreeNormal
-			let free_transaction = DispatchInfo {
-				weight: 0,
-				class: DispatchClass::Normal,
-				pays_fee: true,
-			};
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, free_transaction , len)
-					.is_err()
-			);
-		});
+				// like a FreeNormal
+				let free_transaction = DispatchInfo {
+					weight: 0,
+					class: DispatchClass::Normal,
+					pays_fee: true,
+				};
+				assert!(ChargeTransactionPayment::<Runtime>::from(0)
+					.validate(&1, CALL, free_transaction, len)
+					.is_err());
+			});
 	}
 
 	#[test]
@@ -497,19 +498,16 @@ mod tests {
 			.fees(5, 1, 1)
 			.balance_factor(10)
 			.build()
-			.execute_with(||
-		{
-			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
-			let len = 10;
+			.execute_with(|| {
+				// all fees should be x1.5
+				NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+				let len = 10;
 
-			assert!(
-				ChargeTransactionPayment::<Runtime>::from(10) // tipped
+				assert!(ChargeTransactionPayment::<Runtime>::from(10) // tipped
 					.pre_dispatch(&1, CALL, info_from_weight(3), len)
-					.is_ok()
-			);
-			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
-		})
+					.is_ok());
+				assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
+			})
 	}
 
 	#[test]
@@ -518,31 +516,29 @@ mod tests {
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call, Some((origin, extra))).unwrap();
-		let info  = xt.get_dispatch_info();
+		let info = xt.get_dispatch_info();
 		let ext = xt.encode();
 		let len = ext.len() as u32;
 		ExtBuilder::default()
 			.fees(5, 1, 2)
 			.build()
-			.execute_with(||
-		{
-			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			.execute_with(|| {
+				// all fees should be x1.5
+				NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
 
-			assert_eq!(
-				TransactionPayment::query_info(xt, len),
-				RuntimeDispatchInfo {
-					weight: info.weight,
-					class: info.class,
-					partial_fee: (
-						5 /* base */
+				assert_eq!(
+					TransactionPayment::query_info(xt, len),
+					RuntimeDispatchInfo {
+						weight: info.weight,
+						class: info.class,
+						partial_fee: (
+							5 /* base */
 						+ len as u64 /* len * 1 */
-						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
-					) * 3 / 2
-				},
-			);
-
-		});
+						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2
+							// weight * weight_to_fee
+						) * 3 / 2
+					},
+				);
+			});
 	}
 }
-

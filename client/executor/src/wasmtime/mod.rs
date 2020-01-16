@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
-
+/// ! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 mod function_executor;
 mod runtime;
 mod trampoline;

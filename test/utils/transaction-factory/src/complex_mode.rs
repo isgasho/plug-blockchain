@@ -37,18 +37,19 @@
 ///   G -> J
 ///   ...
 ///   ... x `rounds`
-
 use std::sync::Arc;
 
-use log::info;
-use client::Client;
 use block_builder_api::BlockBuilder;
-use sp_api::ConstructRuntimeApi;
+use client::Client;
+use log::info;
 use primitives::{Blake2Hasher, Hasher};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi, One, Zero};
+use sp_api::ConstructRuntimeApi;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, One, ProvideRuntimeApi, Zero},
+};
 
-use crate::{RuntimeAdapter, create_block};
+use crate::{create_block, RuntimeAdapter};
 
 pub fn next<RA, Backend, Exec, Block, RtApi>(
 	factory_state: &mut RA,
@@ -71,7 +72,7 @@ where
 	let total = factory_state.start_number() + factory_state.num() * factory_state.rounds();
 
 	if factory_state.block_no() >= total || factory_state.round() >= factory_state.rounds() {
-		return None;
+		return None
 	}
 
 	info!(
@@ -101,7 +102,9 @@ where
 	);
 
 	let inherents = factory_state.inherent_extrinsics();
-	let inherents = client.runtime_api().inherent_extrinsics(&prior_block_id, inherents)
+	let inherents = client
+		.runtime_api()
+		.inherent_extrinsics(&prior_block_id, inherents)
 		.expect("Failed to create inherent extrinsics");
 
 	let block = create_block::<RA, _, _, _, _>(&client, transfer, inherents);
@@ -130,9 +133,13 @@ where
 
 /// Return the account which received tokens at this point in the previous round.
 fn from<RA>(
-	factory_state: &mut RA
-) -> (<RA as RuntimeAdapter>::AccountId, <RA as RuntimeAdapter>::Secret)
-where RA: RuntimeAdapter
+	factory_state: &mut RA,
+) -> (
+	<RA as RuntimeAdapter>::AccountId,
+	<RA as RuntimeAdapter>::Secret,
+)
+where
+	RA: RuntimeAdapter,
 {
 	let is_first_round = factory_state.round() == RA::Number::zero();
 	match is_first_round {
@@ -146,12 +153,16 @@ where RA: RuntimeAdapter
 			let seed = match is_round_one {
 				true => factory_state.start_number() + factory_state.block_in_round(),
 				_ => {
-					let block_no_in_prior_round =
-						factory_state.num() * (factory_state.round() - RA::Number::one()) + factory_state.block_in_round();
+					let block_no_in_prior_round = factory_state.num()
+						* (factory_state.round() - RA::Number::one())
+						+ factory_state.block_in_round();
 					factory_state.start_number() + block_no_in_prior_round
-				}
+				},
 			};
-			(RA::gen_random_account_id(&seed), RA::gen_random_account_secret(&seed))
+			(
+				RA::gen_random_account_id(&seed),
+				RA::gen_random_account_secret(&seed),
+			)
 		},
 	}
 }

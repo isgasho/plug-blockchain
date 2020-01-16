@@ -19,9 +19,8 @@
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
-	TransactionValidity, UnknownTransaction, TransactionValidityError,
+	TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-
 
 /// Implement `ValidateUnsigned` for `Runtime`.
 /// All given modules need to implement `ValidateUnsigned`.

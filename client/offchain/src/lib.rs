@@ -35,14 +35,20 @@
 
 use std::{fmt, marker::PhantomData, sync::Arc};
 
-use parking_lot::Mutex;
-use threadpool::ThreadPool;
-use sp_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
-use sp_runtime::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use parking_lot::Mutex;
+use primitives::{
+	offchain::{self, OffchainStorage},
+	ExecutionContext,
+};
+use sp_api::ApiExt;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{self, ProvideRuntimeApi},
+};
+use threadpool::ThreadPool;
 
 mod api;
 
@@ -68,21 +74,14 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Blo
 	}
 }
 
-impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
-	Client,
-	Storage,
-	Block,
-> {
+impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<Client, Storage, Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
 }
 
-impl<Client, Storage, Block> OffchainWorkers<
-	Client,
-	Storage,
-	Block,
-> where
+impl<Client, Storage, Block> OffchainWorkers<Client, Storage, Block>
+where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
@@ -102,11 +101,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {
-			let (api, runner) = api::AsyncApi::new(
-				self.db.clone(),
-				network_state.clone(),
-				is_validator,
-			);
+			let (api, runner) =
+				api::AsyncApi::new(self.db.clone(), network_state.clone(), is_validator);
 			debug!("Spawning offchain workers at {:?}", at);
 			let number = *number;
 			let client = self.client.clone();
@@ -119,7 +115,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all()))),
 					number,
 				);
-				if let Err(e) =	run {
+				if let Err(e) = run {
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
 			});
@@ -145,22 +141,18 @@ impl<Client, Storage, Block> OffchainWorkers<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::Arc;
 	use network::{Multiaddr, PeerId};
+	use std::sync::Arc;
 	use test_client::runtime::Block;
 	use txpool::{BasicPool, FullChainApi};
-	use txpool_api::{TransactionPool, InPoolTransaction};
+	use txpool_api::{InPoolTransaction, TransactionPool};
 
 	struct MockNetworkStateInfo();
 
 	impl NetworkStateInfo for MockNetworkStateInfo {
-		fn external_addresses(&self) -> Vec<Multiaddr> {
-			Vec::new()
-		}
+		fn external_addresses(&self) -> Vec<Multiaddr> { Vec::new() }
 
-		fn peer_id(&self) -> PeerId {
-			PeerId::random()
-		}
+		fn peer_id(&self) -> PeerId { PeerId::random() }
 	}
 
 	struct TestPool(BasicPool<FullChainApi<test_client::TestClient, Block>, Block>);
@@ -182,8 +174,12 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
-		client.execution_extensions()
+		let pool = Arc::new(TestPool(BasicPool::new(
+			Default::default(),
+			FullChainApi::new(client.clone()),
+		)));
+		client
+			.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());

@@ -14,7 +14,8 @@
 
 //! # Attestation Module
 //!
-//! The Attestation module provides functionality for entities to create attestation claims about one another.
+//! The Attestation module provides functionality for entities to create attestation claims about
+//! one another.
 //!
 //! This module borrows heavily from ERC 780 https://github.com/ethereum/EIPs/issues/780
 //!
@@ -27,17 +28,19 @@
 //!
 //! ## Usage
 //!
-//! Topic and Value are U256 integers. This means that Topic and Value can technically store any value that can be represented in 256 bits.
+//! Topic and Value are U256 integers. This means that Topic and Value can technically store any
+//! value that can be represented in 256 bits.
 //!
-//! The user of the module must convert whatever value that they would like to store into a value that can be stored as a U256.
+//! The user of the module must convert whatever value that they would like to store into a value
+//! that can be stored as a U256.
 //!
-//! It is recommended that Topic be a string value converted to hex and stored on the blockchain as a U256.
+//! It is recommended that Topic be a string value converted to hex and stored on the blockchain as
+//! a U256.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use primitives::uint::U256;
-use support::rstd::prelude::*;
-use support::{decl_event, decl_module, decl_storage, dispatch::Result};
+use support::{decl_event, decl_module, decl_storage, dispatch::Result, rstd::prelude::*};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {

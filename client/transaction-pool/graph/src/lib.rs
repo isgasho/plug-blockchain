@@ -34,9 +34,10 @@ mod validated_pool;
 pub mod base_pool;
 pub mod watcher;
 
-pub use self::base_pool::Transaction;
-pub use self::pool::{
-	Pool,
-	Options, ChainApi, EventStream, ExtrinsicFor,
-	BlockHash, ExHash, NumberFor, TransactionFor,
+pub use self::{
+	base_pool::Transaction,
+	pool::{
+		BlockHash, ChainApi, EventStream, ExHash, ExtrinsicFor, NumberFor, Options, Pool,
+		TransactionFor,
+	},
 };

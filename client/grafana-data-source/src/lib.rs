@@ -28,11 +28,11 @@
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
-mod types;
-mod server;
+mod database;
 #[cfg(not(target_os = "unknown"))]
 mod networking;
-mod database;
+mod server;
+mod types;
 
 use database::Database;
 pub use server::run_server;
@@ -75,7 +75,7 @@ pub enum Error {
 	Serde(serde_json::Error),
 	Http(hyper::http::Error),
 	Timestamp(TryFromIntError),
-	Io(std::io::Error)
+	Io(std::io::Error),
 }
 
 impl std::error::Error for Error {
@@ -85,7 +85,7 @@ impl std::error::Error for Error {
 			Error::Serde(error) => Some(error),
 			Error::Http(error) => Some(error),
 			Error::Timestamp(error) => Some(error),
-			Error::Io(error) => Some(error)
+			Error::Io(error) => Some(error),
 		}
 	}
 }

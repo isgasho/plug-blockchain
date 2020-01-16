@@ -23,12 +23,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde::Serialize;
-#[cfg(feature = "std")]
-use codec::{Decode, Input, Error};
+use codec::{Decode, Error, Input};
 use codec::{Encode, Output};
-use rstd::vec::Vec;
 use primitives::RuntimeDebug;
+use rstd::vec::Vec;
+#[cfg(feature = "std")]
+use serde::Serialize;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -46,12 +46,20 @@ type StringBuf = &'static str;
 ///
 /// For example a `&'static [ &'static str ]` can be decoded to a `Vec<String>`.
 #[derive(Clone)]
-pub enum DecodeDifferent<B, O> where B: 'static, O: 'static {
+pub enum DecodeDifferent<B, O>
+where
+	B: 'static,
+	O: 'static,
+{
 	Encode(B),
 	Decoded(O),
 }
 
-impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {
+impl<B, O> Encode for DecodeDifferent<B, O>
+where
+	B: Encode + 'static,
+	O: Encode + 'static,
+{
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		match self {
 			DecodeDifferent::Encode(b) => b.encode_to(dest),
@@ -60,14 +68,21 @@ impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode
 	}
 }
 
-impl<B, O> codec::EncodeLike for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {}
+impl<B, O> codec::EncodeLike for DecodeDifferent<B, O>
+where
+	B: Encode + 'static,
+	O: Encode + 'static,
+{
+}
 
 #[cfg(feature = "std")]
-impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
+impl<B, O> Decode for DecodeDifferent<B, O>
+where
+	B: 'static,
+	O: Decode + 'static,
+{
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-		<O>::decode(input).map(|val| {
-			DecodeDifferent::Decoded(val)
-		})
+		<O>::decode(input).map(|val| DecodeDifferent::Decoded(val))
 	}
 }
 
@@ -76,19 +91,20 @@ where
 	B: Encode + Eq + PartialEq + 'static,
 	O: Encode + Eq + PartialEq + 'static,
 {
-	fn eq(&self, other: &Self) -> bool {
-		self.encode() == other.encode()
-	}
+	fn eq(&self, other: &Self) -> bool { self.encode() == other.encode() }
 }
 
 impl<B, O> Eq for DecodeDifferent<B, O>
-	where B: Encode + Eq + PartialEq + 'static, O: Encode + Eq + PartialEq + 'static
-{}
+where
+	B: Encode + Eq + PartialEq + 'static,
+	O: Encode + Eq + PartialEq + 'static,
+{
+}
 
 impl<B, O> rstd::fmt::Debug for DecodeDifferent<B, O>
-	where
-		B: rstd::fmt::Debug + Eq + 'static,
-		O: rstd::fmt::Debug + Eq + 'static,
+where
+	B: rstd::fmt::Debug + Eq + 'static,
+	O: rstd::fmt::Debug + Eq + 'static,
 {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		match self {
@@ -100,11 +116,14 @@ impl<B, O> rstd::fmt::Debug for DecodeDifferent<B, O>
 
 #[cfg(feature = "std")]
 impl<B, O> serde::Serialize for DecodeDifferent<B, O>
-	where
-		B: serde::Serialize + 'static,
-		O: serde::Serialize + 'static,
+where
+	B: serde::Serialize + 'static,
+	O: serde::Serialize + 'static,
 {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		match self {
 			DecodeDifferent::Encode(b) => b.serialize(serializer),
 			DecodeDifferent::Decoded(o) => o.serialize(serializer),
@@ -112,7 +131,7 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 	}
 }
 
-pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
+pub type DecodeDifferentArray<B, O = B> = DecodeDifferent<&'static [B], Vec<O>>;
 
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
@@ -135,31 +154,30 @@ pub struct FunctionArgumentMetadata {
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
 #[derive(Clone, Eq)]
-pub struct FnEncode<E>(pub fn() -> E) where E: Encode + 'static;
+pub struct FnEncode<E>(pub fn() -> E)
+where
+	E: Encode + 'static;
 
 impl<E: Encode> Encode for FnEncode<E> {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.0().encode_to(dest);
-	}
+	fn encode_to<W: Output>(&self, dest: &mut W) { self.0().encode_to(dest); }
 }
 
 impl<E: Encode> codec::EncodeLike for FnEncode<E> {}
 
 impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
-	fn eq(&self, other: &Self) -> bool {
-		self.0().eq(&other.0())
-	}
+	fn eq(&self, other: &Self) -> bool { self.0().eq(&other.0()) }
 }
 
 impl<E: Encode + rstd::fmt::Debug> rstd::fmt::Debug for FnEncode<E> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		self.0().fmt(f)
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { self.0().fmt(f) }
 }
 
 #[cfg(feature = "std")]
 impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		self.0().serialize(serializer)
 	}
 }
@@ -171,7 +189,7 @@ pub struct OuterEventMetadata {
 	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<
 		(&'static str, FnEncode<&'static [EventMetadata]>),
-		(StringBuf, Vec<EventMetadata>)
+		(StringBuf, Vec<EventMetadata>),
 	>,
 }
 
@@ -219,9 +237,7 @@ pub trait ModuleErrorMetadata {
 }
 
 impl ModuleErrorMetadata for &'static str {
-	fn metadata() -> &'static [ErrorMetadata] {
-		&[]
-	}
+	fn metadata() -> &'static [ErrorMetadata] { &[] }
 }
 
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
@@ -237,9 +253,7 @@ pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
 
 impl Encode for DefaultByteGetter {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.0.default_byte().encode_to(dest)
-	}
+	fn encode_to<W: Output>(&self, dest: &mut W) { self.0.default_byte().encode_to(dest) }
 }
 
 impl codec::EncodeLike for DefaultByteGetter {}
@@ -252,11 +266,14 @@ impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
 	}
 }
 
-impl Eq for DefaultByteGetter { }
+impl Eq for DefaultByteGetter {}
 
 #[cfg(feature = "std")]
 impl serde::Serialize for DefaultByteGetter {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
 		self.0.default_byte().serialize(serializer)
 	}
 }
@@ -351,7 +368,7 @@ pub enum RuntimeMetadata {
 /// Enum that should fail.
 #[derive(Eq, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-pub enum RuntimeMetadataDeprecated { }
+pub enum RuntimeMetadataDeprecated {}
 
 impl Encode for RuntimeMetadataDeprecated {
 	fn encode_to<W: Output>(&self, _dest: &mut W) {}
@@ -392,9 +409,7 @@ type ODFnA<T> = Option<DFnA<T>>;
 type DFnA<T> = DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>;
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
-	fn into(self) -> primitives::OpaqueMetadata {
-		primitives::OpaqueMetadata::new(self.encode())
-	}
+	fn into(self) -> primitives::OpaqueMetadata { primitives::OpaqueMetadata::new(self.encode()) }
 }
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {

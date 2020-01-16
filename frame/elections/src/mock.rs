@@ -18,18 +18,20 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
-use support::{
-	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency},
-	weights::Weight,
-};
+use crate as elections;
 use primitives::H256;
 use sp_runtime::{
-	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+	testing::Header,
+	traits::{BlakeTwo256, Block as BlockT, IdentityLookup},
+	BuildStorage, Perbill,
 };
-use crate as elections;
-
+use std::cell::RefCell;
+use support::{
+	assert_ok, parameter_types,
+	traits::{ChangeMembers, Currency, Get},
+	weights::Weight,
+	StorageMap, StorageValue,
+};
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -38,23 +40,23 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = Event;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-    type DelegatedDispatchVerifier = ();
 }
 
 parameter_types! {
@@ -64,14 +66,14 @@ parameter_types! {
 }
 impl balances::Trait for Test {
 	type Balance = u64;
-	type OnNewAccount = ();
-	type OnFreeBalanceZero = ();
-	type Event = Event;
-	type TransferPayment = ();
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = Event;
+	type ExistentialDeposit = ExistentialDeposit;
+	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
+	type TransferFee = TransferFee;
+	type TransferPayment = ();
 }
 
 parameter_types! {
@@ -126,22 +128,22 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 impl elections::Trait for Test {
-	type Event = Event;
-	type Currency = Balances;
 	type BadPresentation = ();
 	type BadReaper = ();
 	type BadVoterIndex = ();
-	type LoserCandidate = ();
-	type ChangeMembers = TestChangeMembers;
 	type CandidacyBond = CandidacyBond;
-	type VotingBond = VotingBond;
-	type VotingFee = VotingFee;
+	type CarryCount = CarryCount;
+	type ChangeMembers = TestChangeMembers;
+	type Currency = Balances;
+	type DecayRatio = DecayRatio;
+	type Event = Event;
+	type InactiveGracePeriod = InactiveGracePeriod;
+	type LoserCandidate = ();
 	type MinimumVotingLock = MinimumVotingLock;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
-	type CarryCount = CarryCount;
-	type InactiveGracePeriod = InactiveGracePeriod;
+	type VotingBond = VotingBond;
+	type VotingFee = VotingFee;
 	type VotingPeriod = VotingPeriod;
-	type DecayRatio = DecayRatio;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -186,81 +188,89 @@ impl ExtBuilder {
 		self.balance_factor = factor;
 		self
 	}
+
 	pub fn decay_ratio(mut self, ratio: u32) -> Self {
 		self.decay_ratio = ratio;
 		self
 	}
+
 	pub fn voting_fee(mut self, fee: u64) -> Self {
 		self.voting_fee = fee;
 		self
 	}
+
 	pub fn bad_presentation_punishment(mut self, fee: u64) -> Self {
 		self.bad_presentation_punishment = fee;
 		self
 	}
+
 	pub fn voter_bond(mut self, fee: u64) -> Self {
 		self.voter_bond = fee;
 		self
 	}
+
 	pub fn desired_seats(mut self, seats: u32) -> Self {
 		self.desired_seats = seats;
 		self
 	}
+
 	pub fn build(self) -> runtime_io::TestExternalities {
 		VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 		VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
 		GenesisConfig {
-			balances: Some(balances::GenesisConfig::<Test>{
+			balances: Some(balances::GenesisConfig::<Test> {
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
 					(3, 30 * self.balance_factor),
 					(4, 40 * self.balance_factor),
 					(5, 50 * self.balance_factor),
-					(6, 60 * self.balance_factor)
+					(6, 60 * self.balance_factor),
 				],
 				vesting: vec![],
 			}),
-			elections: Some(elections::GenesisConfig::<Test>{
+			elections: Some(elections::GenesisConfig::<Test> {
 				members: vec![],
 				desired_seats: self.desired_seats,
 				presentation_duration: 2,
 				term_duration: 5,
 			}),
-		}.build_storage().unwrap().into()
+		}
+		.build_storage()
+		.unwrap()
+		.into()
 	}
 }
 
 pub(crate) fn voter_ids() -> Vec<u64> {
-	Elections::all_voters().iter().map(|v| v.unwrap_or(0) ).collect::<Vec<u64>>()
+	Elections::all_voters()
+		.iter()
+		.map(|v| v.unwrap_or(0))
+		.collect::<Vec<u64>>()
 }
 
 pub(crate) fn vote(i: u64, l: usize) {
 	let _ = Balances::make_free_balance_be(&i, 20);
-	assert_ok!(
-		Elections::set_approvals(
-			Origin::signed(i),
-			(0..l).map(|_| true).collect::<Vec<bool>>(),
-			0,
-			0,
-			20,
-		)
-	);
+	assert_ok!(Elections::set_approvals(
+		Origin::signed(i),
+		(0..l).map(|_| true).collect::<Vec<bool>>(),
+		0,
+		0,
+		20,
+	));
 }
 
 pub(crate) fn vote_at(i: u64, l: usize, index: elections::VoteIndex) {
 	let _ = Balances::make_free_balance_be(&i, 20);
-	assert_ok!(
-		Elections::set_approvals(
-			Origin::signed(i),
-			(0..l).map(|_| true).collect::<Vec<bool>>(),
-			0,
-			index,
-			20,
-		)
-	);
+	assert_ok!(Elections::set_approvals(
+		Origin::signed(i),
+		(0..l).map(|_| true).collect::<Vec<bool>>(),
+		0,
+		index,
+		20,
+	));
 }
 
 pub(crate) fn create_candidate(i: u64, index: u32) {
@@ -273,7 +283,10 @@ pub(crate) fn balances(who: &u64) -> (u64, u64) {
 }
 
 pub(crate) fn locks(who: &u64) -> Vec<u64> {
-	Balances::locks(who).iter().map(|l| l.amount).collect::<Vec<u64>>()
+	Balances::locks(who)
+		.iter()
+		.map(|l| l.amount)
+		.collect::<Vec<u64>>()
 }
 
 pub(crate) fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities {

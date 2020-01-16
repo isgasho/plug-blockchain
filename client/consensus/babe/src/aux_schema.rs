@@ -16,33 +16,31 @@
 
 //! Schema for BABE epoch changes in the aux-db.
 
-use log::info;
 use codec::{Decode, Encode};
+use log::info;
 
-use client_api::backend::AuxStore;
-use sp_blockchain::{Result as ClientResult, Error as ClientError};
-use sp_runtime::traits::Block as BlockT;
 use babe_primitives::BabeBlockWeight;
+use client_api::backend::AuxStore;
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
+use sp_runtime::traits::Block as BlockT;
 
 use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};
 
 const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
 
-fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
-	(b"block_weight", block_hash).encode()
-}
+fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> { (b"block_weight", block_hash).encode() }
 
 fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
-	where
-		B: AuxStore,
-		T: Decode,
+where
+	B: AuxStore,
+	T: Decode,
 {
 	let corrupt = |e: codec::Error| {
 		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what()))
 	};
 	match backend.get_aux(key)? {
 		None => Ok(None),
-		Some(t) => T::decode(&mut &t[..]).map(Some).map_err(corrupt)
+		Some(t) => T::decode(&mut &t[..]).map(Some).map_err(corrupt),
 	}
 }
 
@@ -66,13 +64,12 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 	epoch_changes: &EpochChangesFor<Block>,
 	write_aux: F,
-) -> R where
+) -> R
+where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	let encoded_epoch_changes = epoch_changes.encode();
-	write_aux(
-		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
-	)
+	write_aux(&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())])
 }
 
 /// Write the cumulative chain-weight of a block ot aux storage.
@@ -80,16 +77,12 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 	block_hash: H,
 	block_weight: &BabeBlockWeight,
 	write_aux: F,
-) -> R where
+) -> R
+where
 	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
 {
-
 	let key = block_weight_key(block_hash);
-	block_weight.using_encoded(|s|
-		write_aux(
-			&[(key, s)],
-		)
-	)
+	block_weight.using_encoded(|s| write_aux(&[(key, s)]))
 }
 
 /// Load the cumulative chain-weight associated with a block.

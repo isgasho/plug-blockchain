@@ -20,13 +20,13 @@
 
 #![cfg(test)]
 
+use primitives::H256;
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
-use primitives::H256;
-use support::{parameter_types, impl_outer_event, impl_outer_origin, weights::Weight};
+use support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 
 use super::*;
 
@@ -46,28 +46,28 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Call = ();
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<u64>;
-	type Header = Header;
-	type Event = TestEvent;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type BlockHashCount = BlockHashCount;
-	type Version = ();
-	type Doughnut = ();
+	type BlockNumber = u64;
+	type Call = ();
 	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = TestEvent;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type Header = Header;
+	type Index = u64;
+	type Lookup = IdentityLookup<u64>;
+	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
+	type Version = ();
 }
 
 impl Trait for Test {
-	type Balance = u64;
 	type AssetId = u32;
+	type Balance = u64;
 	type Event = TestEvent;
 }
 
@@ -120,17 +120,20 @@ impl ExtBuilder {
 
 	// builds genesis config
 	pub fn build(self) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 
 		GenesisConfig::<Test> {
-				assets: vec![self.asset_id],
-				endowed_accounts: self.accounts,
-				initial_balance: self.initial_balance,
-				next_asset_id: self.next_asset_id,
-				staking_asset_id: 16000,
-				spending_asset_id: 16001,
-			}
-			.assimilate_storage(&mut t).unwrap();
+			assets: vec![self.asset_id],
+			endowed_accounts: self.accounts,
+			initial_balance: self.initial_balance,
+			next_asset_id: self.next_asset_id,
+			staking_asset_id: 16000,
+			spending_asset_id: 16001,
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		t.into()
 	}

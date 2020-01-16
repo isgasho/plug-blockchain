@@ -16,9 +16,9 @@
 
 //! Substrate system API helpers.
 
+use serde::{Deserialize, Serialize};
+use serde_json::{map::Map, Value};
 use std::fmt;
-use serde::{Serialize, Deserialize};
-use serde_json::{Value, map::Map};
 
 /// Node properties
 pub type Properties = Map<String, Value>;
@@ -52,9 +52,12 @@ pub struct Health {
 
 impl fmt::Display for Health {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		write!(fmt, "{} peers ({})", self.peers, if self.is_syncing {
-			"syncing"
-		} else { "idle" })
+		write!(
+			fmt,
+			"{} peers ({})",
+			self.peers,
+			if self.is_syncing { "syncing" } else { "idle" }
+		)
 	}
 }
 
@@ -84,7 +87,7 @@ pub enum NodeRole {
 	/// The node is an authority
 	Authority,
 	/// An unknown role with a bit number
-	UnknownRole(u8)
+	UnknownRole(u8),
 }
 
 #[cfg(test)]
@@ -98,7 +101,8 @@ mod tests {
 				peers: 1,
 				is_syncing: false,
 				should_have_peers: true,
-			}).unwrap(),
+			})
+			.unwrap(),
 			r#"{"peers":1,"isSyncing":false,"shouldHavePeers":true}"#,
 		);
 	}
@@ -112,7 +116,8 @@ mod tests {
 				protocol_version: 2,
 				best_hash: 5u32,
 				best_number: 6u32,
-			}).unwrap(),
+			})
+			.unwrap(),
 			r#"{"peerId":"2","roles":"a","protocolVersion":2,"bestHash":5,"bestNumber":6}"#,
 		);
 	}

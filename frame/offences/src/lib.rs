@@ -24,15 +24,11 @@
 mod mock;
 mod tests;
 
+use codec::{Decode, Encode};
 use rstd::vec::Vec;
-use support::{
-	decl_module, decl_event, decl_storage, Parameter,
-};
 use sp_runtime::traits::Hash;
-use sp_staking::{
-	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
-};
-use codec::{Encode, Decode};
+use sp_staking::offence::{Kind, Offence, OffenceDetails, OnOffenceHandler, ReportOffence};
+use support::{decl_event, decl_module, decl_storage, Parameter};
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
@@ -94,11 +90,9 @@ where
 
 		// Go through all offenders in the offence report and find all offenders that was spotted
 		// in unique reports.
-		let TriageOutcome { concurrent_offenders } = match Self::triage_offence_report::<O>(
-			reporters,
-			&time_slot,
-			offenders,
-		) {
+		let TriageOutcome {
+			concurrent_offenders,
+		} = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
 			Some(triage) => triage,
 			// The report contained only duplicates, so there is no need to slash again.
 			None => return,
@@ -113,7 +107,8 @@ where
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
-			.map(|_| new_fraction.clone()).collect();
+			.map(|_| new_fraction.clone())
+			.collect();
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
@@ -149,13 +144,10 @@ impl<T: Trait> Module<T> {
 
 			if !<Reports<T>>::exists(&report_id) {
 				any_new = true;
-				<Reports<T>>::insert(
-					&report_id,
-					OffenceDetails {
-						offender,
-						reporters: reporters.clone(),
-					},
-				);
+				<Reports<T>>::insert(&report_id, OffenceDetails {
+					offender,
+					reporters: reporters.clone(),
+				});
 
 				storage.insert(time_slot, report_id);
 			}
@@ -163,7 +155,8 @@ impl<T: Trait> Module<T> {
 
 		if any_new {
 			// Load report details for the all reports happened at the same time.
-			let concurrent_offenders = storage.concurrent_reports
+			let concurrent_offenders = storage
+				.concurrent_reports
 				.iter()
 				.filter_map(|report_id| <Reports<T>>::get(report_id))
 				.collect::<Vec<_>>();

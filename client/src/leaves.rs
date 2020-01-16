@@ -16,12 +16,11 @@
 
 //! Helper for managing the set of available leaves in the chain for DB implementations.
 
-use std::collections::BTreeMap;
-use std::cmp::Reverse;
-use kvdb::{KeyValueDB, DBTransaction};
-use sp_runtime::traits::SimpleArithmetic;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use kvdb::{DBTransaction, KeyValueDB};
 use sp_blockchain::{Error, Result};
+use sp_runtime::traits::SimpleArithmetic;
+use std::{cmp::Reverse, collections::BTreeMap};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
@@ -63,7 +62,8 @@ pub struct LeafSet<H, N> {
 	pending_removed: Vec<H>,
 }
 
-impl<H, N> LeafSet<H, N> where
+impl<H, N> LeafSet<H, N>
+where
 	H: Clone + PartialEq + Decode + Encode,
 	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
 {
@@ -81,7 +81,9 @@ impl<H, N> LeafSet<H, N> where
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
-			if !key.starts_with(prefix) { break }
+			if !key.starts_with(prefix) {
+				break
+			}
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
 				Ok(hash) => hash,
@@ -91,7 +93,10 @@ impl<H, N> LeafSet<H, N> where
 				Ok(number) => number,
 				Err(_) => return Err(Error::Backend("Error decoding number".into())),
 			};
-			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
+			storage
+				.entry(Reverse(number))
+				.or_insert_with(Vec::new)
+				.push(hash);
 		}
 		Ok(Self {
 			storage,
@@ -124,11 +129,15 @@ impl<H, N> LeafSet<H, N> where
 		};
 
 		self.insert_leaf(Reverse(number.clone()), hash.clone());
-		self.pending_added.push(LeafSetItem { hash, number: Reverse(number) });
+		self.pending_added.push(LeafSetItem {
+			hash,
+			number: Reverse(number),
+		});
 		displaced
 	}
 
-	/// Note a block height finalized, displacing all leaves with number less than the finalized block's.
+	/// Note a block height finalized, displacing all leaves with number less than the finalized
+	/// block's.
 	///
 	/// Although it would be more technically correct to also prune out leaves at the
 	/// same number as the finalized block, but with different hashes, the current behavior
@@ -136,13 +145,16 @@ impl<H, N> LeafSet<H, N> where
 	/// will be pruned soon afterwards anyway.
 	pub fn finalize_height(&mut self, number: N) -> FinalizationDisplaced<H, N> {
 		let boundary = if number == N::zero() {
-			return FinalizationDisplaced { leaves: BTreeMap::new() };
+			return FinalizationDisplaced {
+				leaves: BTreeMap::new(),
+			}
 		} else {
 			number - N::one()
 		};
 
 		let below_boundary = self.storage.split_off(&Reverse(boundary));
-		self.pending_removed.extend(below_boundary.values().flat_map(|h| h.iter()).cloned());
+		self.pending_removed
+			.extend(below_boundary.values().flat_map(|h| h.iter()).cloned());
 		FinalizationDisplaced {
 			leaves: below_boundary,
 		}
@@ -154,9 +166,7 @@ impl<H, N> LeafSet<H, N> where
 	/// `Displaced` objects that have returned by previous method calls
 	/// should be passed to via the appropriate methods. Otherwise,
 	/// the on-disk state may get out of sync with in-memory state.
-	pub fn undo(&mut self) -> Undo<H, N> {
-		Undo { inner: self }
-	}
+	pub fn undo(&mut self) -> Undo<H, N> { Undo { inner: self } }
 
 	/// currently since revert only affects the canonical chain
 	/// we assume that parent has no further children
@@ -169,11 +179,20 @@ impl<H, N> LeafSet<H, N> where
 	/// returns an iterator over all hashes in the leaf set
 	/// ordered by their block number descending.
 	pub fn hashes(&self) -> Vec<H> {
-		self.storage.iter().flat_map(|(_, hashes)| hashes.iter()).cloned().collect()
+		self.storage
+			.iter()
+			.flat_map(|(_, hashes)| hashes.iter())
+			.cloned()
+			.collect()
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+	pub fn prepare_transaction(
+		&mut self,
+		tx: &mut DBTransaction,
+		column: Option<u32>,
+		prefix: &[u8],
+	) {
 		let mut buf = prefix.to_vec();
 		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
 			hash.using_encoded(|s| buf.extend(s));
@@ -189,11 +208,16 @@ impl<H, N> LeafSet<H, N> where
 
 	#[cfg(test)]
 	fn contains(&self, number: N, hash: H) -> bool {
-		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
+		self.storage
+			.get(&Reverse(number))
+			.map_or(false, |hashes| hashes.contains(&hash))
 	}
 
 	fn insert_leaf(&mut self, number: Reverse<N>, hash: H) {
-		self.storage.entry(number).or_insert_with(Vec::new).push(hash);
+		self.storage
+			.entry(number)
+			.or_insert_with(Vec::new)
+			.push(hash);
 	}
 
 	// returns true if this leaf was contained, false otherwise.
@@ -201,14 +225,18 @@ impl<H, N> LeafSet<H, N> where
 		let mut empty = false;
 		let removed = self.storage.get_mut(number).map_or(false, |leaves| {
 			let mut found = false;
-			leaves.retain(|h| if h == hash {
-				found = true;
-				false
-			} else {
-				true
+			leaves.retain(|h| {
+				if h == hash {
+					found = true;
+					false
+				} else {
+					true
+				}
 			});
 
-			if leaves.is_empty() { empty = true }
+			if leaves.is_empty() {
+				empty = true
+			}
 
 			found
 		});
@@ -226,7 +254,8 @@ pub struct Undo<'a, H: 'a, N: 'a> {
 	inner: &'a mut LeafSet<H, N>,
 }
 
-impl<'a, H: 'a, N: 'a> Undo<'a, H, N> where
+impl<'a, H: 'a, N: 'a> Undo<'a, H, N>
+where
 	H: Clone + PartialEq + Decode + Encode,
 	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
 {
@@ -299,7 +328,7 @@ mod tests {
 	fn two_leaves_same_height_can_be_included() {
 		let mut set = LeafSet::new();
 
-		set.import(1_1u32, 10u32,0u32);
+		set.import(1_1u32, 10u32, 0u32);
 		set.import(1_2, 10, 0);
 
 		assert!(set.storage.contains_key(&Reverse(10)));

@@ -25,7 +25,11 @@
 //!
 //! For more information see <https://crates.io/substrate-wasm-builder>
 
-use std::{env, process::{Command, self}, fs, path::{PathBuf, Path}};
+use std::{
+	env, fs,
+	path::{Path, PathBuf},
+	process::{self, Command},
+};
 
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
@@ -43,9 +47,7 @@ const DUMMY_WASM_BINARY_ENV: &str = "BUILD_DUMMY_WASM_BINARY";
 const TRIGGER_WASM_BUILD_ENV: &str = "TRIGGER_WASM_BUILD";
 
 /// Replace all backslashes with slashes.
-fn replace_back_slashes<T: ToString>(path: T) -> String {
-	path.to_string().replace("\\", "/")
-}
+fn replace_back_slashes<T: ToString>(path: T) -> String { path.to_string().replace("\\", "/") }
 
 /// The `wasm-builder` dependency source.
 pub enum WasmBuilderSource {
@@ -62,7 +64,7 @@ pub enum WasmBuilderSource {
 	CratesOrPath {
 		version: &'static str,
 		path: &'static str,
-	}
+	},
 }
 
 impl WasmBuilderSource {
@@ -73,27 +75,20 @@ impl WasmBuilderSource {
 		match self {
 			WasmBuilderSource::Path(path) => {
 				replace_back_slashes(format!("path = \"{}\"", manifest_dir.join(path).display()))
-			}
-			WasmBuilderSource::Git { repo, rev } => {
-				format!("git = \"{}\", rev=\"{}\"", repo, rev)
-			}
-			WasmBuilderSource::Crates(version) => {
-				format!("version = \"{}\"", version)
-			}
-			WasmBuilderSource::CratesOrPath { version, path } => {
-				replace_back_slashes(
-					format!(
-						"path = \"{}\", version = \"{}\"",
-						manifest_dir.join(path).display(),
-						version
-					)
-				)
-			}
+			},
+			WasmBuilderSource::Git { repo, rev } => format!("git = \"{}\", rev=\"{}\"", repo, rev),
+			WasmBuilderSource::Crates(version) => format!("version = \"{}\"", version),
+			WasmBuilderSource::CratesOrPath { version, path } => replace_back_slashes(format!(
+				"path = \"{}\", version = \"{}\"",
+				manifest_dir.join(path).display(),
+				version
+			)),
 		}
 	}
 }
 
-/// Build the currently built project as WASM binary and extend `RUSTFLAGS` with the given rustflags.
+/// Build the currently built project as WASM binary and extend `RUSTFLAGS` with the given
+/// rustflags.
 ///
 /// For more information, see [`build_current_project`].
 pub fn build_current_project_with_rustflags(
@@ -102,15 +97,15 @@ pub fn build_current_project_with_rustflags(
 	default_rustflags: &str,
 ) {
 	if check_skip_build() {
-		// If we skip the build, we still want to make sure to be called when an env variable changes
+		// If we skip the build, we still want to make sure to be called when an env variable
+		// changes
 		generate_rerun_if_changed_instructions();
-		return;
+		return
 	}
 
 	let manifest_dir = PathBuf::from(
-		env::var("CARGO_MANIFEST_DIR").expect(
-			"`CARGO_MANIFEST_DIR` is always set for `build.rs` files; qed"
-		)
+		env::var("CARGO_MANIFEST_DIR")
+			.expect("`CARGO_MANIFEST_DIR` is always set for `build.rs` files; qed"),
 	);
 
 	let cargo_toml_path = manifest_dir.join("Cargo.toml");
@@ -159,9 +154,11 @@ fn get_workspace_root() -> PathBuf {
 	loop {
 		match out_dir.parent() {
 			Some(parent) if out_dir.ends_with("build") => return parent.join("wbuild-runner"),
-			_ => if !out_dir.pop() {
-				break;
-			}
+			_ => {
+				if !out_dir.pop() {
+					break
+				}
+			},
 		}
 	}
 
@@ -194,8 +191,9 @@ fn create_project(
 				[workspace]
 			"#,
 			wasm_builder_source = wasm_builder_source.to_cargo_source(manifest_dir),
-		)
-	).expect("WASM build runner `Cargo.toml` writing can not fail; qed");
+		),
+	)
+	.expect("WASM build runner `Cargo.toml` writing can not fail; qed");
 
 	fs::write(
 		project_folder.join("src/main.rs"),
@@ -214,22 +212,27 @@ fn create_project(
 			file_path = replace_back_slashes(file_path.display()),
 			cargo_toml_path = replace_back_slashes(cargo_toml_path.display()),
 			default_rustflags = default_rustflags,
-		)
-	).expect("WASM build runner `main.rs` writing can not fail; qed");
+		),
+	)
+	.expect("WASM build runner `main.rs` writing can not fail; qed");
 }
 
 fn run_project(project_folder: &Path) {
-	let cargo = env::var("CARGO").expect("`CARGO` env variable is always set when executing `build.rs`.");
+	let cargo =
+		env::var("CARGO").expect("`CARGO` env variable is always set when executing `build.rs`.");
 	let mut cmd = Command::new(cargo);
-	cmd.arg("run").arg(format!("--manifest-path={}", project_folder.join("Cargo.toml").display()));
+	cmd.arg("run").arg(format!(
+		"--manifest-path={}",
+		project_folder.join("Cargo.toml").display()
+	));
 
 	if env::var("DEBUG") != Ok(String::from("true")) {
 		cmd.arg("--release");
 	}
 
-	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
-	// The runner project is created in `CARGO_TARGET_DIR` and executing it will create a sub target
-	// directory inside of `CARGO_TARGET_DIR`.
+	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir
+	// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will create
+	// a sub target directory inside of `CARGO_TARGET_DIR`.
 	cmd.env_remove("CARGO_TARGET_DIR");
 
 	if !cmd.status().map(|s| s.success()).unwrap_or(false) {
@@ -242,7 +245,10 @@ fn run_project(project_folder: &Path) {
 fn generate_crate_skip_build_env_name() -> String {
 	format!(
 		"SKIP_{}_WASM_BUILD",
-		env::var("CARGO_PKG_NAME").expect("Package name is set").to_uppercase().replace('-', "_"),
+		env::var("CARGO_PKG_NAME")
+			.expect("Package name is set")
+			.to_uppercase()
+			.replace('-', "_"),
 	)
 }
 
@@ -252,16 +258,15 @@ fn check_skip_build() -> bool {
 }
 
 /// Check if we should provide a dummy WASM binary.
-fn check_provide_dummy_wasm_binary() -> bool {
-	env::var(DUMMY_WASM_BINARY_ENV).is_ok()
-}
+fn check_provide_dummy_wasm_binary() -> bool { env::var(DUMMY_WASM_BINARY_ENV).is_ok() }
 
 /// Provide the dummy WASM binary
 fn provide_dummy_wasm_binary(file_path: &Path) {
 	fs::write(
 		file_path,
 		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];",
-	).expect("Writing dummy WASM binary should not fail");
+	)
+	.expect("Writing dummy WASM binary should not fail");
 }
 
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
@@ -271,5 +276,8 @@ fn generate_rerun_if_changed_instructions() {
 	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", DUMMY_WASM_BINARY_ENV);
 	println!("cargo:rerun-if-env-changed={}", TRIGGER_WASM_BUILD_ENV);
-	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
+	println!(
+		"cargo:rerun-if-env-changed={}",
+		generate_crate_skip_build_env_name()
+	);
 }

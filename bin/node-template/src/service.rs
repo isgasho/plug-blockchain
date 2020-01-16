@@ -1,17 +1,16 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use std::sync::Arc;
-use std::time::Duration;
-use sc_client::LongestChain;
-use runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
-use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
+use aura_primitives::sr25519::AuthorityPair as AuraPair;
+use basic_authorship;
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use inherents::InherentDataProviders;
-use network::{construct_simple_protocol};
+use network::construct_simple_protocol;
+use runtime::{self, opaque::Block, GenesisConfig, RuntimeApi};
+use sc_client::LongestChain;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use aura_primitives::sr25519::{AuthorityPair as AuraPair};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use basic_authorship;
+use sc_service::{error::Error as ServiceError, AbstractService, Configuration, ServiceBuilder};
+use std::{sync::Arc, time::Duration};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -35,50 +34,53 @@ macro_rules! new_full_start {
 		let inherent_data_providers = inherents::InherentDataProviders::new();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
-			runtime::opaque::Block, runtime::RuntimeApi, crate::service::Executor
+			runtime::opaque::Block,
+			runtime::RuntimeApi,
+			crate::service::Executor,
 		>($config)?
-			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
-			})?
-			.with_transaction_pool(|config, client, _fetcher| {
-				let pool_api = txpool::FullChainApi::new(client.clone());
-				let pool = txpool::BasicPool::new(config, pool_api);
-				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
-				let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
-				Ok(maintainable_pool)
-			})?
-			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
-				let select_chain = select_chain.take()
-					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+		.with_select_chain(|_config, backend| Ok(sc_client::LongestChain::new(backend.clone())))?
+		.with_transaction_pool(|config, client, _fetcher| {
+			let pool_api = txpool::FullChainApi::new(client.clone());
+			let pool = txpool::BasicPool::new(config, pool_api);
+			let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+			Ok(maintainable_pool)
+		})?
+		.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+			let select_chain = select_chain
+				.take()
+				.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
-				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, runtime::RuntimeApi, _>(
-						client.clone(), &*client, select_chain
-					)?;
-
-				let import_queue = aura::import_queue::<_, _, AuraPair, _>(
-					aura::SlotDuration::get_or_compute(&*client)?,
-					Box::new(grandpa_block_import.clone()),
-					Some(Box::new(grandpa_block_import.clone())),
-					None,
-					client,
-					inherent_data_providers.clone(),
-					Some(transaction_pool),
+			let (grandpa_block_import, grandpa_link) =
+				grandpa::block_import::<_, _, _, runtime::RuntimeApi, _>(
+					client.clone(),
+					&*client,
+					select_chain,
 				)?;
 
-				import_setup = Some((grandpa_block_import, grandpa_link));
+			let import_queue = aura::import_queue::<_, _, AuraPair, _>(
+				aura::SlotDuration::get_or_compute(&*client)?,
+				Box::new(grandpa_block_import.clone()),
+				Some(Box::new(grandpa_block_import.clone())),
+				None,
+				client,
+				inherent_data_providers.clone(),
+				Some(transaction_pool),
+			)?;
 
-				Ok(import_queue)
-			})?;
+			import_setup = Some((grandpa_block_import, grandpa_link));
+
+			Ok(import_queue)
+		})?;
 
 		(builder, import_setup, inherent_data_providers)
-	}}
+		}};
 }
 
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
-	-> Result<impl AbstractService, ServiceError>
-{
+pub fn new_full<C: Send + Default + 'static>(
+	config: Configuration<C, GenesisConfig>,
+) -> Result<impl AbstractService, ServiceError> {
 	let is_authority = config.roles.is_authority();
 	let force_authoring = config.force_authoring;
 	let name = config.name.clone();
@@ -91,14 +93,15 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
-	let (block_import, grandpa_link) =
-		import_setup.take()
-			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+	let (block_import, grandpa_link) = import_setup.take().expect(
+		"Link Half and Block Import are present for Full Services or setup failed before. qed",
+	);
 
-	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
-		.with_finality_proof_provider(|client, backend|
+	let service = builder
+		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
+		.with_finality_proof_provider(|client, backend| {
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
-		)?
+		})?
 		.build()?;
 
 	if participates_in_consensus {
@@ -108,7 +111,8 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		};
 
 		let client = service.client();
-		let select_chain = service.select_chain()
+		let select_chain = service
+			.select_chain()
 			.ok_or(ServiceError::SelectChainRequired)?;
 
 		let can_author_with =
@@ -189,50 +193,59 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
-	-> Result<impl AbstractService, ServiceError>
-{
+pub fn new_light<C: Send + Default + 'static>(
+	config: Configuration<C, GenesisConfig>,
+) -> Result<impl AbstractService, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
-		.with_select_chain(|_config, backend| {
-			Ok(LongestChain::new(backend.clone()))
-		})?
+		.with_select_chain(|_config, backend| Ok(LongestChain::new(backend.clone())))?
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = txpool::BasicPool::new(config, pool_api);
-			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(
+				pool.pool().clone(),
+				client,
+				fetcher,
+			);
 			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
 			Ok(maintainable_pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
-			let fetch_checker = fetcher
-				.map(|fetcher| fetcher.checker().clone())
-				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
-				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
-			)?;
-			let finality_proof_import = grandpa_block_import.clone();
-			let finality_proof_request_builder =
-				finality_proof_import.create_finality_proof_request_builder();
+		.with_import_queue_and_fprb(
+			|_config, client, backend, fetcher, _select_chain, _tx_pool| {
+				let fetch_checker = fetcher
+					.map(|fetcher| fetcher.checker().clone())
+					.ok_or_else(|| {
+						"Trying to start light import queue without active fetch checker"
+					})?;
+				let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+					client.clone(),
+					backend,
+					&*client.clone(),
+					Arc::new(fetch_checker),
+				)?;
+				let finality_proof_import = grandpa_block_import.clone();
+				let finality_proof_request_builder =
+					finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
-				aura::SlotDuration::get_or_compute(&*client)?,
-				Box::new(grandpa_block_import),
-				None,
-				Some(Box::new(finality_proof_import)),
-				client,
-				inherent_data_providers.clone(),
-				None,
-			)?;
+				let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
+					aura::SlotDuration::get_or_compute(&*client)?,
+					Box::new(grandpa_block_import),
+					None,
+					Some(Box::new(finality_proof_import)),
+					client,
+					inherent_data_providers.clone(),
+					None,
+				)?;
 
-			Ok((import_queue, finality_proof_request_builder))
-		})?
-		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
-		.with_finality_proof_provider(|client, backend|
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
+				Ok((import_queue, finality_proof_request_builder))
+			},
 		)?
+		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
+		.with_finality_proof_provider(|client, backend| {
+			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
+		})?
 		.build()
 }

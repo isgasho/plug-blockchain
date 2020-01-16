@@ -27,13 +27,15 @@
 //!
 //! ### Public Functions
 //!
-//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module
+//!   configuration.
 //!
 //! ## Related Modules
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [Consensus](../frame_consensus/index.html): The Consensus module does not relate directly to Aura,
+//! - [Consensus](../frame_consensus/index.html): The Consensus module does not relate directly to
+//!   Aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References
@@ -41,27 +43,30 @@
 //! If you're interested in hacking on this module, it is useful to understand the interaction with
 //! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
 //! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
+//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check
+//! inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use pallet_timestamp;
 
-use rstd::{result, prelude::*};
-use codec::{Encode, Decode};
-use support::{
-	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
-	ConsensusEngineId,
+use codec::{Decode, Encode};
+use inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
+use rstd::{prelude::*, result};
+use sp_consensus_aura::{
+	inherents::{AuraInherentData, INHERENT_IDENTIFIER},
+	AuthorityIndex, ConsensusLog, AURA_ENGINE_ID,
 };
 use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
-	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
-use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_aura::{
-	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
-	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
+use support::{
+	decl_module, decl_storage,
+	traits::{FindAuthor, Get},
+	ConsensusEngineId, Parameter,
 };
 
 mod mock;
@@ -96,14 +101,17 @@ impl<T: Trait> Module<T> {
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new).encode()
+			ConsensusLog::AuthoritiesChange(new).encode(),
 		);
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
-			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+			assert!(
+				<Authorities<T>>::get().is_empty(),
+				"Authorities are already initialized!"
+			);
 			<Authorities<T>>::put(authorities);
 		}
 	}
@@ -117,14 +125,16 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		// instant changes
 		if changed {
@@ -147,8 +157,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> FindAuthor<u32> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
-		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	fn find_author<'a, I>(digests: I) -> Option<u32>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
@@ -165,9 +176,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 
 impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
-		Self::authorities()
-			.iter()
-			.any(|id| id == authority_id)
+		Self::authorities().iter().any(|id| id == authority_id)
 	}
 }
 
@@ -184,34 +193,37 @@ impl<T: Trait> Module<T> {
 		<Self as Store>::LastTimestamp::put(now);
 
 		if last.is_zero() {
-			return;
+			return
 		}
 
-		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
+		assert!(
+			!slot_duration.is_zero(),
+			"Aura slot duration cannot be zero."
+		);
 
 		let last_slot = last / slot_duration;
 		let cur_slot = now / slot_duration;
 
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
+		assert!(
+			last_slot < cur_slot,
+			"Only one block may be authored per slot."
+		);
 
 		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
 	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set(moment, Self::slot_duration())
-	}
+	fn on_timestamp_set(moment: T::Moment) { Self::on_timestamp_set(moment, Self::slot_duration()) }
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = pallet_timestamp::Call<T>;
 	type Error = MakeFatalError<inherents::Error>;
+
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
+	fn create_inherent(_: &InherentData) -> Option<Self::Call> { None }
 
 	/// Verify the validity of the inherent using the timestamp.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {

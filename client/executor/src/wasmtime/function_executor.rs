@@ -14,26 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::allocator::FreeingBumpHeapAllocator;
-use crate::error::{Error, Result};
-use crate::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-use crate::wasmtime::util::{
-	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
+use crate::{
+	allocator::FreeingBumpHeapAllocator,
+	error::{Error, Result},
+	sandbox::{self, SandboxCapabilities, SupervisorFuncIndex},
+	wasmtime::util::{checked_range, cranelift_ir_signature, read_memory_into, write_memory_from},
 };
 
 use codec::{Decode, Encode};
-use cranelift_codegen::ir;
-use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::{ir, isa::TargetFrontendConfig};
 use log::trace;
 use primitives::sandbox as sandbox_primitives;
 use std::{cmp, mem, ptr};
-use wasmtime_environ::translate_signature;
-use wasmtime_jit::{ActionError, Compiler};
-use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext, wasmtime_call_trampoline};
 use wasm_interface::{
 	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
 	WordSize,
 };
+use wasmtime_environ::translate_signature;
+use wasmtime_jit::{ActionError, Compiler};
+use wasmtime_runtime::{wasmtime_call_trampoline, Export, VMCallerCheckedAnyfunc, VMContext};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -62,9 +61,7 @@ impl FunctionExecutorState {
 	}
 
 	/// Returns a mutable reference to the heap allocator.
-	pub fn heap(&mut self) -> &mut FreeingBumpHeapAllocator {
-		&mut self.heap
-	}
+	pub fn heap(&mut self) -> &mut FreeingBumpHeapAllocator { &mut self.heap }
 }
 
 /// A `FunctionExecutor` implements `FunctionContext` for making host calls from a Wasmtime
@@ -87,22 +84,24 @@ impl<'a> FunctionExecutor<'a> {
 		vmctx: *mut VMContext,
 		compiler: &'a mut Compiler,
 		state: &'a mut FunctionExecutorState,
-	) -> Result<Self>
-	{
+	) -> Result<Self> {
 		let memory = match (*vmctx).lookup_global_export("memory") {
-			Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
-				std::slice::from_raw_parts_mut(
-					(*definition).base,
-					(*definition).current_length,
-				),
+			Some(Export::Memory {
+				definition,
+				vmctx: _,
+				memory: _,
+			}) => std::slice::from_raw_parts_mut((*definition).base, (*definition).current_length),
 			_ => return Err(Error::InvalidMemoryReference),
 		};
 		let table = match (*vmctx).lookup_global_export("__indirect_function_table") {
-			Some(Export::Table { definition, vmctx: _, table: _ }) =>
-				Some(std::slice::from_raw_parts(
-					(*definition).base as *const VMCallerCheckedAnyfunc,
-					(*definition).current_elements as usize,
-				)),
+			Some(Export::Table {
+				definition,
+				vmctx: _,
+				table: _,
+			}) => Some(std::slice::from_raw_parts(
+				(*definition).base as *const VMCallerCheckedAnyfunc,
+				(*definition).current_elements as usize,
+			)),
 			_ => None,
 		};
 		Ok(FunctionExecutor {
@@ -118,9 +117,7 @@ impl<'a> FunctionExecutor<'a> {
 impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = SupervisorFuncRef;
 
-	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
-		&self.sandbox_store
-	}
+	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> { &self.sandbox_store }
 
 	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
 		&mut self.sandbox_store
@@ -151,8 +148,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		invoke_args_len: WordSize,
 		state: u32,
 		func_idx: SupervisorFuncIndex,
-	) -> Result<i64>
-	{
+	) -> Result<i64> {
 		let func_ptr = unsafe { (*dispatch_thunk.0).func_ptr };
 		let vmctx = unsafe { (*dispatch_thunk.0).vmctx };
 
@@ -170,20 +166,17 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 		);
 
 		// Get the trampoline to call for this function.
-		let exec_code_buf = self.compiler
+		let exec_code_buf = self
+			.compiler
 			.get_published_trampoline(func_ptr, &signature, value_size)
 			.map_err(ActionError::Setup)
 			.map_err(Error::Wasmtime)?;
 
 		// Call the trampoline.
 		if let Err(message) = unsafe {
-			wasmtime_call_trampoline(
-				vmctx,
-				exec_code_buf,
-				values_vec.as_mut_ptr() as *mut u8,
-			)
+			wasmtime_call_trampoline(vmctx, exec_code_buf, values_vec.as_mut_ptr() as *mut u8)
 		} {
-			return Err(Error::Other(message));
+			return Err(Error::Other(message))
 		}
 
 		// Load the return value out of `values_vec`.
@@ -201,16 +194,18 @@ impl<'a> FunctionContext for FunctionExecutor<'a> {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		self.heap.allocate(self.memory, size).map_err(|e| e.to_string())
+		self.heap
+			.allocate(self.memory, size)
+			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		self.heap.deallocate(self.memory, ptr).map_err(|e| e.to_string())
+		self.heap
+			.deallocate(self.memory, ptr)
+			.map_err(|e| e.to_string())
 	}
 
-	fn sandbox(&mut self) -> &mut dyn Sandbox {
-		self
-	}
+	fn sandbox(&mut self) -> &mut dyn Sandbox { self }
 }
 
 impl<'a> Sandbox for FunctionExecutor<'a> {
@@ -220,9 +215,10 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
-	) -> WResult<u32>
-	{
-		let sandboxed_memory = self.sandbox_store.memory(memory_id)
+	) -> WResult<u32> {
+		let sandboxed_memory = self
+			.sandbox_store
+			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access(|memory| {
 			let len = buf_len as usize;
@@ -245,9 +241,10 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		offset: WordSize,
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
-	) -> WResult<u32>
-	{
-		let sandboxed_memory = self.sandbox_store.memory(memory_id)
+	) -> WResult<u32> {
+		let sandboxed_memory = self
+			.sandbox_store
+			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
 		sandboxed_memory.with_direct_access_mut(|memory| {
 			let len = val_len as usize;
@@ -264,14 +261,16 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		})
 	}
 
-	fn memory_teardown(&mut self, memory_id: MemoryId)
-		-> WResult<()>
-	{
-		self.sandbox_store.memory_teardown(memory_id).map_err(|e| e.to_string())
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
+		self.sandbox_store
+			.memory_teardown(memory_id)
+			.map_err(|e| e.to_string())
 	}
 
 	fn memory_new(&mut self, initial: u32, maximum: MemoryId) -> WResult<u32> {
-		self.sandbox_store.new_memory(initial, maximum).map_err(|e| e.to_string())
+		self.sandbox_store
+			.new_memory(initial, maximum)
+			.map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -292,7 +291,10 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
+		let instance = self
+			.sandbox_store
+			.instance(instance_id)
+			.map_err(|e| e.to_string())?;
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
@@ -306,23 +308,32 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 					FunctionContext::write_memory(self, return_val, val)?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
-			}
+			},
 			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
 		}
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store.instance_teardown(instance_id).map_err(|e| e.to_string())
+		self.sandbox_store
+			.instance_teardown(instance_id)
+			.map_err(|e| e.to_string())
 	}
 
-	fn instance_new(&mut self, dispatch_thunk_id: u32, wasm: &[u8], raw_env_def: &[u8], state: u32)
-		-> WResult<u32>
-	{
+	fn instance_new(
+		&mut self,
+		dispatch_thunk_id: u32,
+		wasm: &[u8],
+		raw_env_def: &[u8],
+		state: u32,
+	) -> WResult<u32> {
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
-			let table = self.table.as_ref()
+			let table = self
+				.table
+				.as_ref()
 				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-			let func_ref = table.get(dispatch_thunk_id as usize)
+			let func_ref = table
+				.get(dispatch_thunk_id as usize)
 				.ok_or_else(|| "dispatch_thunk_idx is out of the table bounds")?;
 			SupervisorFuncRef(func_ref)
 		};
@@ -330,8 +341,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		let instance_idx_or_err_code =
 			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
 				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) =>
-					sandbox_primitives::ERR_EXECUTION,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
 				Err(_) => sandbox_primitives::ERR_MODULE,
 			};
 
@@ -348,25 +358,20 @@ fn generate_signature_and_args(
 	args: &[Value],
 	result_type: Option<ValueType>,
 	frontend_config: TargetFrontendConfig,
-) -> (ir::Signature, Vec<VMInvokeArgument>)
-{
+) -> (ir::Signature, Vec<VMInvokeArgument>) {
 	// This code is based on the wasmtime_jit::Context::invoke.
 
-	let param_types = args.iter()
-		.map(|arg| arg.value_type())
-		.collect::<Vec<_>>();
+	let param_types = args.iter().map(|arg| arg.value_type()).collect::<Vec<_>>();
 	let signature = translate_signature(
 		cranelift_ir_signature(
 			Signature::new(param_types, result_type),
-			&frontend_config.default_call_conv
+			&frontend_config.default_call_conv,
 		),
-		frontend_config.pointer_type()
+		frontend_config.pointer_type(),
 	);
 
-	let mut values_vec = vec![
-		VMInvokeArgument::default();
-		cmp::max(args.len(), result_type.iter().len())
-	];
+	let mut values_vec =
+		vec![VMInvokeArgument::default(); cmp::max(args.len(), result_type.iter().len())];
 
 	// Store the argument values into `values_vec`.
 	for (index, arg) in args.iter().enumerate() {
@@ -384,4 +389,3 @@ fn generate_signature_and_args(
 
 	(signature, values_vec)
 }
-

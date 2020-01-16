@@ -16,7 +16,12 @@
 
 use crate::write_file_if_changed;
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process, env};
+use std::{
+	borrow::ToOwned,
+	env, fs,
+	path::{Path, PathBuf},
+	process,
+};
 
 use toml::value::Table;
 
@@ -43,9 +48,7 @@ pub struct WasmBinary(PathBuf);
 
 impl WasmBinary {
 	/// Returns the path to the wasm binary.
-	pub fn wasm_binary_path(&self) -> String {
-		self.0.display().to_string().replace('\\', "/")
-	}
+	pub fn wasm_binary_path(&self) -> String { self.0.display().to_string().replace('\\', "/") }
 }
 
 /// A lock for the WASM workspace.
@@ -61,16 +64,15 @@ impl WorkspaceLock {
 			.open(wasm_workspace_root.join("wasm_workspace.lock"))
 			.expect("Opening the lock file does not fail");
 
-		lock.lock_exclusive().expect("Locking `wasm_workspace.lock` failed");
+		lock.lock_exclusive()
+			.expect("Locking `wasm_workspace.lock` failed");
 
 		WorkspaceLock(lock)
 	}
 }
 
 impl Drop for WorkspaceLock {
-	fn drop(&mut self) {
-		let _ = self.0.unlock();
-	}
+	fn drop(&mut self) { let _ = self.0.unlock(); }
 }
 
 /// Creates the WASM project, compiles the WASM binary and compacts the WASM binary.
@@ -91,11 +93,7 @@ pub fn create_and_compile(
 	create_wasm_workspace_project(&wasm_workspace, cargo_manifest);
 
 	build_project(&project, default_rustflags);
-	let (wasm_binary, bloaty) = compact_wasm_file(
-		&project,
-		cargo_manifest,
-		&wasm_workspace,
-	);
+	let (wasm_binary, bloaty) = compact_wasm_file(&project, cargo_manifest, &wasm_workspace);
 
 	copy_wasm_to_target_directory(cargo_manifest, &wasm_binary);
 
@@ -115,17 +113,17 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 			}
 
 			if !path.pop() {
-				return None;
+				return None
 			}
 		}
 	}
 
 	if let Some(path) = find_impl(build_helper::out_dir()) {
-		return Some(path);
+		return Some(path)
 	}
 
 	if let Some(path) = find_impl(cargo_manifest.to_path_buf()) {
-		return Some(path);
+		return Some(path)
 	}
 
 	build_helper::warning!(
@@ -140,15 +138,20 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 /// Extract the crate name from the given `Cargo.toml`.
 fn get_crate_name(cargo_manifest: &Path) -> String {
 	let cargo_toml: Table = toml::from_str(
-		&fs::read_to_string(cargo_manifest).expect("File exists as checked before; qed")
-	).expect("Cargo manifest is a valid toml file; qed");
+		&fs::read_to_string(cargo_manifest).expect("File exists as checked before; qed"),
+	)
+	.expect("Cargo manifest is a valid toml file; qed");
 
 	let package = cargo_toml
 		.get("package")
 		.and_then(|t| t.as_table())
 		.expect("`package` key exists in valid `Cargo.toml`; qed");
 
-	package.get("name").and_then(|p| p.as_str()).map(ToOwned::to_owned).expect("Package name exists; qed")
+	package
+		.get("name")
+		.and_then(|p| p.as_str())
+		.map(ToOwned::to_owned)
+		.expect("Package name exists; qed")
 }
 
 /// Returns the name for the wasm binary.
@@ -163,13 +166,18 @@ fn get_wasm_workspace_root() -> PathBuf {
 	loop {
 		match out_dir.parent() {
 			Some(parent) if out_dir.ends_with("build") => return parent.to_path_buf(),
-			_ => if !out_dir.pop() {
-				break;
-			}
+			_ => {
+				if !out_dir.pop() {
+					break
+				}
+			},
 		}
 	}
 
-	panic!("Could not find target dir in: {}", build_helper::out_dir().display())
+	panic!(
+		"Could not find target dir in: {}",
+		build_helper::out_dir().display()
+	)
 }
 
 fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
@@ -180,7 +188,11 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 		.filter_map(|p| p.ok())
 		.map(|d| d.into_path())
 		.filter(|p| p.is_dir() && !p.ends_with("target"))
-		.filter_map(|p| p.file_name().map(|f| f.to_owned()).and_then(|s| s.into_string().ok()))
+		.filter_map(|p| {
+			p.file_name()
+				.map(|f| f.to_owned())
+				.and_then(|s| s.into_string().ok())
+		})
 		.filter(|f| !f.starts_with("."))
 		.collect::<Vec<_>>();
 
@@ -191,10 +203,10 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	let workspace_root_path = crate_metadata.workspace_root;
 
 	let mut workspace_toml: Table = toml::from_str(
-		&fs::read_to_string(
-			workspace_root_path.join("Cargo.toml"),
-		).expect("Workspace root `Cargo.toml` exists; qed")
-	).expect("Workspace root `Cargo.toml` is a valid toml file; qed");
+		&fs::read_to_string(workspace_root_path.join("Cargo.toml"))
+			.expect("Workspace root `Cargo.toml` exists; qed"),
+	)
+	.expect("Workspace root `Cargo.toml` is a valid toml file; qed");
 
 	let mut wasm_workspace_toml = Table::new();
 
@@ -219,14 +231,19 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	wasm_workspace_toml.insert("workspace".into(), workspace.into());
 
 	// Add patch section from the project root `Cargo.toml`
-	if let Some(mut patch) = workspace_toml.remove("patch").and_then(|p| p.try_into::<Table>().ok()) {
+	if let Some(mut patch) = workspace_toml
+		.remove("patch")
+		.and_then(|p| p.try_into::<Table>().ok())
+	{
 		// Iterate over all patches and make the patch path absolute from the workspace root path.
-		patch.iter_mut()
-			.filter_map(|p|
-				p.1.as_table_mut().map(|t| t.iter_mut().filter_map(|t| t.1.as_table_mut()))
-			)
+		patch
+			.iter_mut()
+			.filter_map(|p| {
+				p.1.as_table_mut()
+					.map(|t| t.iter_mut().filter_map(|t| t.1.as_table_mut()))
+			})
 			.flatten()
-			.for_each(|p|
+			.for_each(|p| {
 				p.iter_mut()
 					.filter(|(k, _)| k == &"path")
 					.for_each(|(_, v)| {
@@ -234,7 +251,7 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 							*v = workspace_root_path.join(path).display().to_string().into();
 						}
 					})
-			);
+			});
 
 		wasm_workspace_toml.insert("patch".into(), patch.into());
 	}
@@ -242,7 +259,8 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	fs::write(
 		wasm_workspace.join("Cargo.toml"),
 		toml::to_string_pretty(&wasm_workspace_toml).expect("Wasm workspace toml is valid; qed"),
-	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
+	)
+	.expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
 /// Create the project used to build the wasm binary.
@@ -255,7 +273,8 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let project_folder = wasm_workspace.join(&crate_name);
 
-	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
+	fs::create_dir_all(project_folder.join("src"))
+		.expect("Wasm project dir create can not fail; qed");
 
 	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
@@ -276,7 +295,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 			crate_name = crate_name,
 			crate_path = crate_path.display(),
 			wasm_binary = wasm_binary,
-		)
+		),
 	);
 
 	write_file_if_changed(
@@ -300,7 +319,8 @@ fn is_release_build() -> bool {
 			"release" => true,
 			"debug" => false,
 			var => panic!(
-				"Unexpected value for `{}` env variable: {}\nOne of the following are expected: `debug` or `release`.",
+				"Unexpected value for `{}` env variable: {}\nOne of the following are expected: \
+				 `debug` or `release`.",
 				crate::WASM_BUILD_TYPE_ENV,
 				var,
 			),
@@ -321,7 +341,8 @@ fn build_project(project: &Path, default_rustflags: &str) {
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
-	build_cmd.args(&["rustc", "--target=wasm32-unknown-unknown"])
+	build_cmd
+		.args(&["rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", rustflags)
 		// We don't want to call ourselves recursively
@@ -350,9 +371,14 @@ fn compact_wasm_file(
 	cargo_manifest: &Path,
 	wasm_workspace: &Path,
 ) -> (WasmBinary, WasmBinaryBloaty) {
-	let target = if is_release_build() { "release" } else { "debug" };
+	let target = if is_release_build() {
+		"release"
+	} else {
+		"debug"
+	};
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
-	let wasm_file = wasm_workspace.join("target/wasm32-unknown-unknown")
+	let wasm_file = wasm_workspace
+		.join("target/wasm32-unknown-unknown")
 		.join(target)
 		.join(format!("{}.wasm", wasm_binary));
 	let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
@@ -381,7 +407,9 @@ fn generate_rerun_if_changed_instructions(
 		.expect("`cargo metadata` can not fail!");
 
 	// Make sure that if any file/folder of a depedency change, we need to rerun the `build.rs`
-	metadata.packages.into_iter()
+	metadata
+		.packages
+		.into_iter()
 		.filter(|package| !package.manifest_path.starts_with(wasm_workspace))
 		.for_each(|package| {
 			let mut manifest_path = package.manifest_path;
@@ -400,12 +428,18 @@ fn generate_rerun_if_changed_instructions(
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_TARGET_DIRECTORY);
+	println!(
+		"cargo:rerun-if-env-changed={}",
+		crate::WASM_BUILD_RUSTFLAGS_ENV
+	);
+	println!(
+		"cargo:rerun-if-env-changed={}",
+		crate::WASM_TARGET_DIRECTORY
+	);
 }
 
-/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment variable.
-/// If the variable is not set, this is a no-op.
+/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment
+/// variable. If the variable is not set, this is a no-op.
 fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary) {
 	let target_dir = match env::var(crate::WASM_TARGET_DIRECTORY) {
 		Ok(path) => PathBuf::from(path),
@@ -425,5 +459,6 @@ fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary
 	fs::copy(
 		wasm_binary.wasm_binary_path(),
 		target_dir.join(format!("{}.wasm", get_wasm_binary_name(cargo_manifest))),
-	).expect("Copies WASM binary to `WASM_TARGET_DIRECTORY`.");
+	)
+	.expect("Copies WASM binary to `WASM_TARGET_DIRECTORY`.");
 }

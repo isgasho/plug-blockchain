@@ -16,16 +16,17 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use futures::executor::block_on;
-use sc_transaction_graph::*;
-use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
-use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+use futures::executor::block_on;
+use primitives::blake2_256;
+use sc_transaction_graph::*;
 use sp_runtime::{
 	generic::BlockId,
-	transaction_validity::{TransactionValidity, TransactionTag as Tag},
+	transaction_validity::{
+		InvalidTransaction, TransactionTag as Tag, TransactionValidity, ValidTransaction,
+	},
 };
-use primitives::blake2_256;
+use test_runtime::{AccountId, Block, Extrinsic, Transfer, H256};
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -34,7 +35,9 @@ struct TestApi {
 
 impl TestApi {
 	fn new_dependant() -> Self {
-		TestApi { nonce_dependant: true }
+		TestApi {
+			nonce_dependant: true,
+		}
 	}
 }
 
@@ -47,8 +50,8 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 
 impl ChainApi for TestApi {
 	type Block = Block;
-	type Hash = H256;
 	type Error = txpool_api::error::Error;
+	type Hash = H256;
 	type ValidationFuture = futures::future::Ready<txpool_api::error::Result<TransactionValidity>>;
 
 	fn validate_transaction(
@@ -61,24 +64,22 @@ impl ChainApi for TestApi {
 
 		match self.block_id_to_number(at) {
 			Ok(Some(num)) if num > 5 => {
-				return futures::future::ready(
-					Ok(Err(InvalidTransaction::Stale.into()))
-				)
+				return futures::future::ready(Ok(Err(InvalidTransaction::Stale.into())))
 			},
 			_ => {},
 		}
 
-		futures::future::ready(
-			Ok(Ok(ValidTransaction {
-				priority: 4,
-				requires: if nonce > 1 && self.nonce_dependant {
-					vec![to_tag(nonce-1, from.clone())]
-				} else { vec![] },
-				provides: vec![to_tag(nonce, from)],
-				longevity: 10,
-				propagate: true,
-			}))
-		)
+		futures::future::ready(Ok(Ok(ValidTransaction {
+			priority: 4,
+			requires: if nonce > 1 && self.nonce_dependant {
+				vec![to_tag(nonce - 1, from.clone())]
+			} else {
+				vec![]
+			},
+			provides: vec![to_tag(nonce, from)],
+			longevity: 10,
+			propagate: true,
+		})))
 	}
 
 	fn block_id_to_number(
@@ -107,9 +108,7 @@ impl ChainApi for TestApi {
 	}
 }
 
-fn uxt(transfer: Transfer) -> Extrinsic {
-	Extrinsic::Transfer(transfer, Default::default())
-}
+fn uxt(transfer: Transfer) -> Extrinsic { Extrinsic::Transfer(transfer, Default::default()) }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let mut futures = Vec::new();
@@ -123,7 +122,10 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 			nonce,
 		});
 
-		tags.push(to_tag(nonce, AccountId::from_h256(H256::from_low_u64_be(1))));
+		tags.push(to_tag(
+			nonce,
+			AccountId::from_h256(H256::from_low_u64_be(1)),
+		));
 		futures.push(pool.submit_one(&BlockId::Number(1), xt));
 	}
 
@@ -135,11 +137,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 
 	// Prune all transactions.
 	let block_num = 6;
-	block_on(pool.prune_tags(
-		&BlockId::Number(block_num),
-		tags,
-		vec![],
-	)).expect("Prune failed");
+	block_on(pool.prune_tags(&BlockId::Number(block_num), tags, vec![])).expect("Prune failed");
 
 	// pool is empty
 	assert_eq!(pool.status().ready, 0);
@@ -147,8 +145,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 }
 
 fn benchmark_main(c: &mut Criterion) {
-
-    c.bench_function("sequential 50 tx", |b| {
+	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
 			bench_configured(Pool::new(Default::default(), TestApi::new_dependant()), 50);
 		});

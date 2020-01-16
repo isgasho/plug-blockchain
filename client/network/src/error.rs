@@ -16,7 +16,7 @@
 
 //! Substrate network possible errors.
 
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{Multiaddr, PeerId};
 
 use std::fmt;
 
@@ -35,7 +35,7 @@ pub enum Error {
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
 		address,
 		first_id,
-		second_id,
+		second_id
 	)]
 	DuplicateBootnode {
 		/// The address of the bootnode.
@@ -49,9 +49,7 @@ pub enum Error {
 
 // Make `Debug` use the `Display` implementation.
 impl fmt::Debug for Error {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		fmt::Display::fmt(self, f)
-	}
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(self, f) }
 }
 
 impl std::error::Error for Error {

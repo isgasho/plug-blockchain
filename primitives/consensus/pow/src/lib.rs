@@ -18,9 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Decode;
 use rstd::vec::Vec;
 use sp_runtime::ConsensusEngineId;
-use codec::Decode;
 
 /// The `ConsensusEngineId` of PoW.
 pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];

@@ -20,7 +20,10 @@
 //! [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner) and [`Enum`](pass_by::Enum) are the
 //! provided strategy implementations.
 
-use crate::{RIType, impls::{pointer_and_len_from_u64, pointer_and_len_to_u64}};
+use crate::{
+	impls::{pointer_and_len_from_u64, pointer_and_len_to_u64},
+	RIType,
+};
 
 #[cfg(feature = "std")]
 use crate::host::*;
@@ -30,12 +33,12 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::{marker::PhantomData, convert::TryFrom};
+use rstd::{convert::TryFrom, marker::PhantomData};
 
 #[cfg(not(feature = "std"))]
 use rstd::{slice, vec::Vec};
 
-pub use sp_runtime_interface_proc_macro::{PassByCodec, PassByInner, PassByEnum};
+pub use sp_runtime_interface_proc_macro::{PassByCodec, PassByEnum, PassByInner};
 
 /// Something that should be passed between wasm and the host using the given strategy.
 ///
@@ -56,18 +59,12 @@ pub trait PassByImpl<T>: RIType {
 	/// Convert the given instance to the ffi value.
 	///
 	/// For more information see: [`crate::host::IntoFFIValue::into_ffi_value`]
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType>;
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType>;
 
 	/// Create `T` from the given ffi value.
 	///
 	/// For more information see: [`crate::host::FromFFIValue::from_ffi_value`]
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T>;
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T>;
 }
 
 /// Something that provides a strategy for passing a type between wasm and the host.
@@ -150,17 +147,14 @@ impl<T: PassBy> FromFFIValue for T {
 /// struct Test;
 ///
 /// impl PassBy for Test {
-///     type PassBy = Codec<Self>;
-/// }
+/// 	type PassBy = Codec<Self>;
+/// 	}
 /// ```
 pub struct Codec<T: codec::Codec>(PhantomData<T>);
 
 #[cfg(feature = "std")]
 impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		let vec = instance.encode();
 		let ptr = context.allocate_memory(vec.len() as u32)?;
 		context.write_memory(ptr, &vec)?;
@@ -168,10 +162,7 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		Ok(pointer_and_len_to_u64(ptr.into(), vec.len() as u32))
 	}
 
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		let (ptr, len) = pointer_and_len_from_u64(arg);
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 		T::decode(&mut &vec[..])
@@ -241,57 +232,47 @@ pub trait PassByInner: Sized {
 /// struct Test([u8; 32]);
 ///
 /// impl PassBy for Test {
-///     type PassBy = Inner<Self, [u8; 32]>;
-/// }
+/// 	type PassBy = Inner<Self, [u8; 32]>;
+/// 	}
 ///
 /// impl PassByInner for Test {
-///     type Inner = [u8; 32];
+/// 	type Inner = [u8; 32];
 ///
-///     fn into_inner(self) -> [u8; 32] {
-///         self.0
-///     }
-///     fn inner(&self) -> &[u8; 32] {
-///         &self.0
-///     }
-///     fn from_inner(inner: [u8; 32]) -> Self {
-///         Self(inner)
-///     }
-/// }
+/// 	fn into_inner(self) -> [u8; 32] { self.0 }
+///
+/// 	fn inner(&self) -> &[u8; 32] { &self.0 }
+///
+/// 	fn from_inner(inner: [u8; 32]) -> Self { Self(inner) }
+/// 	}
 /// ```
 pub struct Inner<T: PassByInner<Inner = I>, I: RIType>(PhantomData<(T, I)>);
 
 #[cfg(feature = "std")]
 impl<T: PassByInner<Inner = I>, I: RIType> PassByImpl<T> for Inner<T, I>
-	where I: IntoFFIValue + FromFFIValue<SelfInstance=I>
+where
+	I: IntoFFIValue + FromFFIValue<SelfInstance = I>,
 {
-	fn into_ffi_value(
-		instance: T,
-		context: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, context: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		instance.into_inner().into_ffi_value(context)
 	}
 
-	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		I::from_ffi_value(context, arg).map(T::from_inner)
 	}
 }
 
 #[cfg(not(feature = "std"))]
 impl<T: PassByInner<Inner = I>, I: RIType> PassByImpl<T> for Inner<T, I>
-	where I: IntoFFIValue + FromFFIValue
+where
+	I: IntoFFIValue + FromFFIValue,
 {
 	type Owned = I::Owned;
 
 	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
- 		instance.inner().into_ffi_value()
+		instance.inner().into_ffi_value()
 	}
 
-	fn from_ffi_value(arg: Self::FFIType) -> T {
- 		T::from_inner(I::from_ffi_value(arg))
-	}
+	fn from_ffi_value(arg: Self::FFIType) -> T { T::from_inner(I::from_ffi_value(arg)) }
 }
 
 /// The type is passed as the inner type.
@@ -314,50 +295,44 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 /// # use sp_runtime_interface::pass_by::{PassBy, Enum};
 /// #[derive(Clone, Copy)]
 /// enum Test {
-///     Test1,
-///     Test2,
-/// }
+/// 	Test1,
+/// 	Test2,
+/// 	}
 ///
 /// impl From<Test> for u8 {
-///     fn from(val: Test) -> u8 {
-///         match val {
-///             Test::Test1 => 0,
-///             Test::Test2 => 1,
-///         }
-///     }
-/// }
+/// 	fn from(val: Test) -> u8 {
+/// 		match val {
+/// 			Test::Test1 => 0,
+/// 			Test::Test2 => 1,
+/// 			}
+/// 		}
+/// 	}
 ///
 /// impl std::convert::TryFrom<u8> for Test {
-///     type Error = ();
+/// 	type Error = ();
 ///
-///     fn try_from(val: u8) -> Result<Test, ()> {
-///         match val {
-///             0 => Ok(Test::Test1),
-///             1 => Ok(Test::Test2),
-///             _ => Err(()),
-///         }
-///     }
-/// }
+/// 	fn try_from(val: u8) -> Result<Test, ()> {
+/// 		match val {
+/// 			0 => Ok(Test::Test1),
+/// 			1 => Ok(Test::Test2),
+/// 			_ => Err(()),
+/// 			}
+/// 		}
+/// 	}
 ///
 /// impl PassBy for Test {
-///     type PassBy = Enum<Self>;
-/// }
+/// 	type PassBy = Enum<Self>;
+/// 	}
 /// ```
 pub struct Enum<T: Copy + Into<u8> + TryFrom<u8>>(PhantomData<T>);
 
 #[cfg(feature = "std")]
 impl<T: Copy + Into<u8> + TryFrom<u8>> PassByImpl<T> for Enum<T> {
-	fn into_ffi_value(
-		instance: T,
-		_: &mut dyn FunctionContext,
-	) -> Result<Self::FFIType> {
+	fn into_ffi_value(instance: T, _: &mut dyn FunctionContext) -> Result<Self::FFIType> {
 		Ok(instance.into())
 	}
 
-	fn from_ffi_value(
-		_: &mut dyn FunctionContext,
-		arg: Self::FFIType,
-	) -> Result<T> {
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: Self::FFIType) -> Result<T> {
 		T::try_from(arg).map_err(|_| format!("Invalid enum discriminant: {}", arg))
 	}
 }

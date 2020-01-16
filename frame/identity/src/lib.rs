@@ -65,20 +65,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::{fmt::Debug, ops::Add, iter::once};
+use codec::{Decode, Encode};
 use enumflags2::BitFlags;
-use codec::{Encode, Decode};
-use sp_runtime::{traits::{StaticLookup, EnsureOrigin, Zero}, RuntimeDebug};
+use rstd::{fmt::Debug, iter::once, ops::Add, prelude::*};
+use sp_runtime::{
+	traits::{EnsureOrigin, StaticLookup, Zero},
+	RuntimeDebug,
+};
 use support::{
-	decl_module, decl_event, decl_storage, ensure, dispatch::Result,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	decl_event, decl_module, decl_storage,
+	dispatch::Result,
+	ensure,
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_signed, ensure_root};
+use system::{ensure_root, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -138,11 +143,11 @@ impl Decode for Data {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
-			n @ 1 ..= 33 => {
+			n @ 1..=33 => {
 				let mut r = vec![0u8; n as usize - 1];
 				input.read(&mut r[..])?;
 				Data::Raw(r)
-			}
+			},
 			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
@@ -161,7 +166,7 @@ impl Encode for Data {
 				let mut r = vec![l as u8 + 1; l + 1];
 				&mut r[1..].copy_from_slice(&x[..l as usize]);
 				r
-			}
+			},
 			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
 			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
 			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
@@ -172,9 +177,7 @@ impl Encode for Data {
 impl codec::EncodeLike for Data {}
 
 impl Default for Data {
-	fn default() -> Self {
-		Self::None
-	}
+	fn default() -> Self { Self::None }
 }
 
 /// An identifier for a single name registrar/identity verification service.
@@ -185,9 +188,7 @@ pub type RegistrarIndex = u32;
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub enum Judgement<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> {
+pub enum Judgement<Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq> {
 	/// The default value; no opinion is held.
 	Unknown,
 	/// No judgement is yet in place, but a deposit is reserved as payment for providing one.
@@ -208,9 +209,7 @@ pub enum Judgement<
 	Erroneous,
 }
 
-impl<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> Judgement<Balance> {
+impl<Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq> Judgement<Balance> {
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	fn has_deposit(&self) -> bool {
@@ -236,13 +235,13 @@ impl<
 #[repr(u64)]
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
 pub enum IdentityField {
-	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
-	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
-	Web            = 0b0000000000000000000000000000000000000000000000000000000000000100,
-	Riot           = 0b0000000000000000000000000000000000000000000000000000000000001000,
-	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
+	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
+	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
+	Web = 0b0000000000000000000000000000000000000000000000000000000000000100,
+	Riot = 0b0000000000000000000000000000000000000000000000000000000000001000,
+	Email = 0b0000000000000000000000000000000000000000000000000000000000010000,
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
-	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
+	Image = 0b0000000000000000000000000000000000000000000000000000000001000000,
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
@@ -251,14 +250,14 @@ pub struct IdentityFields(BitFlags<IdentityField>);
 
 impl Eq for IdentityFields {}
 impl Encode for IdentityFields {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.bits().using_encoded(f)
-	}
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R { self.0.bits().using_encoded(f) }
 }
 impl Decode for IdentityFields {
 	fn decode<I: codec::Input>(input: &mut I) -> rstd::result::Result<Self, codec::Error> {
 		let field = u64::decode(input)?;
-		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
+		Ok(Self(
+			<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?,
+		))
 	}
 }
 
@@ -316,9 +315,7 @@ pub struct IdentityInfo {
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct Registration<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> {
+pub struct Registration<Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq> {
 	/// Judgements from the registrars on this identity. Stored ordered by RegistrarIndex. There
 	/// may be only a single judgement from each registrar.
 	pub judgements: Vec<(RegistrarIndex, Judgement<Balance>)>,
@@ -330,13 +327,22 @@ pub struct Registration<
 	pub info: IdentityInfo,
 }
 
-impl <
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-> Registration<Balance> {
+impl<Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add>
+	Registration<Balance>
+{
 	fn total_deposit(&self) -> Balance {
-		self.deposit + self.judgements.iter()
-			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
-			.fold(Zero::zero(), |a, i| a + i)
+		self.deposit
+			+ self
+				.judgements
+				.iter()
+				.map(|(_, ref j)| {
+					if let Judgement::FeePaid(fee) = j {
+						*fee
+					} else {
+						Zero::zero()
+					}
+				})
+				.fold(Zero::zero(), |a, i| a + i)
 	}
 }
 
@@ -344,7 +350,7 @@ impl <
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
 	/// The account of the registrar.
 	pub account: AccountId,
@@ -377,7 +383,11 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T>
+	where
+		AccountId = <T as system::Trait>::AccountId,
+		Balance = BalanceOf<T>,
+	{
 		/// A name was set or reset (which will remove all judgements).
 		IdentitySet(AccountId),
 		/// A name was cleared, and the given balance returned.
@@ -772,13 +782,15 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
 
 	impl_outer_origin! {
@@ -797,23 +809,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = ();
-		type Hashing = BlakeTwo256;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
+		type BlockNumber = u64;
+		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-        type DelegatedDispatchVerifier = ();
-        type Doughnut = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -822,14 +834,14 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 	parameter_types! {
 		pub const BasicDeposit: u64 = 10;
@@ -840,15 +852,15 @@ mod tests {
 		pub const Two: u64 = 2;
 	}
 	impl Trait for Test {
-		type Event = ();
-		type Currency = Balances;
-		type Slashed = ();
 		type BasicDeposit = BasicDeposit;
+		type Currency = Balances;
+		type Event = ();
 		type FieldDeposit = FieldDeposit;
-		type SubAccountDeposit = SubAccountDeposit;
+		type ForceOrigin = EnsureSignedBy<Two, u64, ()>;
 		type MaximumSubAccounts = MaximumSubAccounts;
 		type RegistrarOrigin = EnsureSignedBy<One, u64, ()>;
-		type ForceOrigin = EnsureSignedBy<Two, u64, ()>;
+		type Slashed = ();
+		type SubAccountDeposit = SubAccountDeposit;
 	}
 	type Balances = balances::Module<Test>;
 	type Identity = Module<Test>;
@@ -856,19 +868,16 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test> {
-			balances: vec![
-				(1, 10),
-				(2, 10),
-				(3, 10),
-				(10, 100),
-				(20, 100),
-				(30, 100),
-			],
+			balances: vec![(1, 10), (2, 10), (3, 10), (10, 100), (20, 100), (30, 100)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -876,7 +885,7 @@ mod tests {
 		IdentityInfo {
 			display: Data::Raw(b"ten".to_vec()),
 			legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
-			.. Default::default()
+			..Default::default()
 		}
 	}
 
@@ -887,9 +896,11 @@ mod tests {
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
 			assert_ok!(Identity::set_fields(Origin::signed(3), 0, fields));
-			assert_eq!(Identity::registrars(), vec![
-				Some(RegistrarInfo { account: 3, fee: 10, fields })
-			]);
+			assert_eq!(Identity::registrars(), vec![Some(RegistrarInfo {
+				account: 3,
+				fee: 10,
+				fields
+			})]);
 		});
 	}
 
@@ -931,8 +942,16 @@ mod tests {
 				"invalid judgement"
 			);
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
-			assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
+			assert_ok!(Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable
+			));
+			assert_eq!(Identity::identity(10).unwrap().judgements, vec![(
+				0,
+				Judgement::Reasonable
+			)]);
 		});
 	}
 
@@ -941,7 +960,12 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_ok!(Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable
+			));
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Identity::identity(10), None);
 		});
@@ -963,7 +987,10 @@ mod tests {
 	fn setting_subaccounts_should_work() {
 		new_test_ext().execute_with(|| {
 			let mut subs = vec![(20, Data::Raw(vec![40; 1]))];
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "not found");
+			assert_noop!(
+				Identity::set_subs(Origin::signed(10), subs.clone()),
+				"not found"
+			);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
@@ -976,7 +1003,10 @@ mod tests {
 
 			subs.push((30, Data::Raw(vec![41; 1])));
 			subs.push((40, Data::Raw(vec![42; 1])));
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), "too many subs");
+			assert_noop!(
+				Identity::set_subs(Origin::signed(10), subs.clone()),
+				"too many subs"
+			);
 		});
 	}
 
@@ -985,15 +1015,26 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "no identity");
+			assert_noop!(
+				Identity::cancel_request(Origin::signed(10), 0),
+				"no identity"
+			);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "not found");
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), "judgement given");
+			assert_ok!(Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable
+			));
+			assert_noop!(
+				Identity::cancel_request(Origin::signed(10), 0),
+				"judgement given"
+			);
 		});
 	}
 
@@ -1003,26 +1044,45 @@ mod tests {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), "fee changed");
+			assert_noop!(
+				Identity::request_judgement(Origin::signed(10), 0, 9),
+				"fee changed"
+			);
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			// 10 for the judgement request, 10 for the identity.
 			assert_eq!(Balances::free_balance(10), 80);
 
 			// Re-requesting won't work as we already paid.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
+			assert_noop!(
+				Identity::request_judgement(Origin::signed(10), 0, 10),
+				"sticky judgement"
+			);
+			assert_ok!(Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Erroneous
+			));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
 			// Re-requesting still won't work as it's erroneous.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), "sticky judgement");
+			assert_noop!(
+				Identity::request_judgement(Origin::signed(10), 0, 10),
+				"sticky judgement"
+			);
 
 			// Requesting from a second registrar still works.
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 			// Re-requesting after the judgement has been reduced works.
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
+			assert_ok!(Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::OutOfDate
+			));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		});
 	}
@@ -1036,7 +1096,8 @@ mod tests {
 				additional: vec![
 					(Data::Raw(b"number".to_vec()), Data::Raw(10u32.encode())),
 					(Data::Raw(b"text".to_vec()), Data::Raw(b"10".to_vec())),
-				], .. Default::default()
+				],
+				..Default::default()
 			}));
 			assert_eq!(Balances::free_balance(10), 70);
 		});

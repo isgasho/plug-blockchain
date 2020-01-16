@@ -16,7 +16,10 @@
 
 //! Provides some utilities to define a piecewise linear function.
 
-use crate::{Perbill, traits::{SimpleArithmetic, SaturatedConversion}};
+use crate::{
+	traits::{SaturatedConversion, SimpleArithmetic},
+	Perbill,
+};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
@@ -28,14 +31,15 @@ pub struct PiecewiseLinear<'a> {
 	pub maximum: Perbill,
 }
 
-fn abs_sub<N: Ord + Sub<Output=N> + Clone>(a: N, b: N) -> N where {
+fn abs_sub<N: Ord + Sub<Output = N> + Clone>(a: N, b: N) -> N where {
 	a.clone().max(b.clone()) - a.min(b)
 }
 
 impl<'a> PiecewiseLinear<'a> {
 	/// Compute `f(n/d)*d` with `n <= d`. This is useful to avoid loss of precision.
-	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N where
-		N: SimpleArithmetic + Clone
+	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
+	where
+		N: SimpleArithmetic + Clone,
 	{
 		let n = n.min(d.clone());
 
@@ -43,19 +47,31 @@ impl<'a> PiecewiseLinear<'a> {
 			return N::zero()
 		}
 
-		let next_point_index = self.points.iter()
-			.position(|p| n < p.0 * d.clone());
+		let next_point_index = self.points.iter().position(|p| n < p.0 * d.clone());
 
 		let (prev, next) = if let Some(next_point_index) = next_point_index {
 			if let Some(previous_point_index) = next_point_index.checked_sub(1) {
-				(self.points[previous_point_index], self.points[next_point_index])
+				(
+					self.points[previous_point_index],
+					self.points[next_point_index],
+				)
 			} else {
 				// There is no previous points, take first point ordinate
-				return self.points.first().map(|p| p.1).unwrap_or_else(Perbill::zero) * d
+				return self
+					.points
+					.first()
+					.map(|p| p.1)
+					.unwrap_or_else(Perbill::zero)
+					* d
 			}
 		} else {
 			// There is no next points, take last point ordinate
-			return self.points.last().map(|p| p.1).unwrap_or_else(Perbill::zero) * d
+			return self
+				.points
+				.last()
+				.map(|p| p.1)
+				.unwrap_or_else(Perbill::zero)
+				* d
 		};
 
 		let delta_y = multiply_by_rational_saturating(
@@ -79,7 +95,8 @@ impl<'a> PiecewiseLinear<'a> {
 // This is guaranteed not to overflow on whatever values nor lose precision.
 // `q` must be superior to zero.
 fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
-	where N: SimpleArithmetic + Clone
+where
+	N: SimpleArithmetic + Clone,
 {
 	let q = q.max(1);
 
@@ -112,16 +129,20 @@ fn test_multiply_by_rational_saturating() {
 		for p in 0..=div {
 			for q in 1..=div {
 				let value: u64 = (value as u128 * u64::max_value() as u128 / div as u128)
-					.try_into().unwrap();
+					.try_into()
+					.unwrap();
 				let p = (p as u64 * u32::max_value() as u64 / div as u64)
-					.try_into().unwrap();
+					.try_into()
+					.unwrap();
 				let q = (q as u64 * u32::max_value() as u64 / div as u64)
-					.try_into().unwrap();
+					.try_into()
+					.unwrap();
 
 				assert_eq!(
 					multiply_by_rational_saturating(value, p, q),
 					(value as u128 * p as u128 / q as u128)
-						.try_into().unwrap_or(u64::max_value())
+						.try_into()
+						.unwrap_or(u64::max_value())
 				);
 			}
 		}
@@ -134,9 +155,18 @@ fn test_calculate_for_fraction_times_denominator() {
 
 	let curve = PiecewiseLinear {
 		points: &[
-			(Perbill::from_parts(0_000_000_000), Perbill::from_parts(0_500_000_000)),
-			(Perbill::from_parts(0_500_000_000), Perbill::from_parts(1_000_000_000)),
-			(Perbill::from_parts(1_000_000_000), Perbill::from_parts(0_000_000_000)),
+			(
+				Perbill::from_parts(0_000_000_000),
+				Perbill::from_parts(0_500_000_000),
+			),
+			(
+				Perbill::from_parts(0_500_000_000),
+				Perbill::from_parts(1_000_000_000),
+			),
+			(
+				Perbill::from_parts(1_000_000_000),
+				Perbill::from_parts(0_000_000_000),
+			),
 		],
 		maximum: Perbill::from_parts(1_000_000_000),
 	};
@@ -153,9 +183,11 @@ fn test_calculate_for_fraction_times_denominator() {
 	for d in 0..=div {
 		for n in 0..=d {
 			let d: u64 = (d as u128 * u64::max_value() as u128 / div as u128)
-				.try_into().unwrap();
+				.try_into()
+				.unwrap();
 			let n: u64 = (n as u128 * u64::max_value() as u128 / div as u128)
-				.try_into().unwrap();
+				.try_into()
+				.unwrap();
 
 			let res = curve.calculate_for_fraction_times_denominator(n, d);
 			let expected = formal_calculate_for_fraction_times_denominator(n, d);

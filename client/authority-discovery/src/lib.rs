@@ -43,33 +43,40 @@
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
-use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
-use std::iter::FromIterator;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+	iter::FromIterator,
+	marker::PhantomData,
+	pin::Pin,
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, Stream, StreamExt};
+use futures::{
+	task::{Context, Poll},
+	Future, FutureExt, Stream, StreamExt,
+};
 use futures_timer::Delay;
 
 use authority_discovery_primitives::{
-	AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair
+	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
 use client_api::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
-use log::{debug, error, log_enabled, warn};
 use libp2p::Multiaddr;
-use network::specialization::NetworkSpecialization;
-use network::{DhtEvent, ExHashT};
-use primitives::crypto::{key_types, Pair};
-use primitives::traits::BareCryptoStorePtr;
+use log::{debug, error, log_enabled, warn};
+use network::{specialization::NetworkSpecialization, DhtEvent, ExHashT};
+use primitives::{
+	crypto::{key_types, Pair},
+	traits::BareCryptoStorePtr,
+};
 use prost::Message;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, ProvideRuntimeApi};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, ProvideRuntimeApi},
+};
 
 type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
@@ -99,13 +106,11 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
-
 {
 	client: Arc<Client>,
 
 	network: Arc<Network>,
 	/// List of sentry node public addresses.
-	//
 	// There are 3 states:
 	//   - None: No addresses were specified.
 	//   - Some(vec![]): Addresses were specified, but none could be parsed as proper
@@ -169,16 +174,19 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
-				Ok(addr) => Some(addr),
-				Err(e) => {
-					error!(
-						target: "sub-authority-discovery",
-						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
-					);
-					None
-				}
-			}).collect::<Vec<Multiaddr>>();
+			let addrs = sentry_nodes
+				.into_iter()
+				.filter_map(|a| match a.parse() {
+					Ok(addr) => Some(addr),
+					Err(e) => {
+						error!(
+							target: "sub-authority-discovery",
+							"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
+						);
+						None
+					},
+				})
+				.collect::<Vec<Multiaddr>>();
 
 			if addrs.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
 				warn!(
@@ -193,7 +201,6 @@ where
 		} else {
 			None
 		};
-
 
 		let address_cache = HashMap::new();
 
@@ -213,14 +220,16 @@ where
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
 		let addresses = match &self.sentry_nodes {
-			Some(addrs) => addrs.clone().into_iter()
-				.map(|a| a.to_vec())
-				.collect(),
-			None => self.network.external_addresses()
+			Some(addrs) => addrs.clone().into_iter().map(|a| a.to_vec()).collect(),
+			None => self
+				.network
+				.external_addresses()
 				.into_iter()
-				.map(|a| a.with(libp2p::core::multiaddr::Protocol::P2p(
-					self.network.local_peer_id().into(),
-				)))
+				.map(|a| {
+					a.with(libp2p::core::multiaddr::Protocol::P2p(
+						self.network.local_peer_id().into(),
+					))
+				})
 				.map(|a| a.to_vec())
 				.collect(),
 		};
@@ -239,12 +248,10 @@ where
 				signature: signature.encode(),
 			}
 			.encode(&mut signed_addresses)
-				.map_err(Error::EncodingProto)?;
+			.map_err(Error::EncodingProto)?;
 
-			self.network.put_value(
-				hash_authority_id(key.public().as_ref())?,
-				signed_addresses,
-			);
+			self.network
+				.put_value(hash_authority_id(key.public().as_ref())?, signed_addresses);
 		}
 
 		Ok(())
@@ -280,7 +287,7 @@ where
 					}
 
 					self.handle_dht_value_found_event(v)?;
-				}
+				},
 				DhtEvent::ValueNotFound(hash) => warn!(
 					target: "sub-authority-discovery",
 					"Value for hash '{:?}' not found on Dht.", hash
@@ -331,16 +338,17 @@ where
 				.map_err(Error::EncodingDecodingScale)?;
 
 			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
-				return Err(Error::VerifyingDhtPayload);
+				return Err(Error::VerifyingDhtPayload)
 			}
 
-			let mut addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
-				.map(|a| a.addresses)
-				.map_err(Error::DecodingProto)?
-				.into_iter()
-				.map(|a| a.try_into())
-				.collect::<std::result::Result<_, _>>()
-				.map_err(Error::ParsingMultiaddress)?;
+			let mut addresses: Vec<libp2p::Multiaddr> =
+				schema::AuthorityAddresses::decode(addresses)
+					.map(|a| a.addresses)
+					.map_err(Error::DecodingProto)?
+					.into_iter()
+					.map(|a| a.try_into())
+					.collect::<std::result::Result<_, _>>()
+					.map_err(Error::ParsingMultiaddress)?;
 
 			if addresses.len() > MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY {
 				warn!(
@@ -349,7 +357,8 @@ where
 					'{:?}' from DHT, dropping the remainder.",
 					MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY,	authority_id,
 				);
-				addresses = addresses.into_iter()
+				addresses = addresses
+					.into_iter()
 					.take(MAX_NUM_SENTRY_ADDRESSES_PER_AUTHORITY)
 					.collect();
 			}
@@ -385,11 +394,14 @@ where
 	/// Retrieve all local authority discovery private keys that are within the current authority
 	/// set.
 	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
-		let keys = self.get_own_public_keys_within_authority_set()?
+		let keys = self
+			.get_own_public_keys_within_authority_set()?
 			.into_iter()
 			.map(std::convert::Into::into)
 			.filter_map(|pub_key| {
-				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
+				self.key_store
+					.read()
+					.sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
 			})
 			.map(std::convert::Into::into)
 			.collect();
@@ -398,13 +410,13 @@ where
 	}
 
 	/// Retrieve our public keys within the current authority set.
-	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
 	// one for the upcoming session. In addition it could be participating in the current authority
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
 	fn get_own_public_keys_within_authority_set(&mut self) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = self.key_store
+		let local_pub_keys = self
+			.key_store
 			.read()
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.into_iter()
@@ -420,7 +432,8 @@ where
 			.map(std::convert::Into::into)
 			.collect::<HashSet<_>>();
 
-		let intersection = local_pub_keys.intersection(&current_authorities)
+		let intersection = local_pub_keys
+			.intersection(&current_authorities)
 			.cloned()
 			.map(std::convert::Into::into)
 			.collect();
@@ -467,7 +480,7 @@ where
 		};
 
 		match inner() {
-			Ok(()) => {}
+			Ok(()) => {},
 			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
 		};
 
@@ -507,12 +520,10 @@ where
 	S: NetworkSpecialization<B>,
 	H: ExHashT,
 {
-	fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
-		self.external_addresses()
-	}
-	fn local_peer_id(&self) -> libp2p::PeerId {
-		self.local_peer_id()
-	}
+	fn external_addresses(&self) -> Vec<libp2p::Multiaddr> { self.external_addresses() }
+
+	fn local_peer_id(&self) -> libp2p::PeerId { self.local_peer_id() }
+
 	fn set_priority_group(
 		&self,
 		group_id: String,
@@ -520,12 +531,12 @@ where
 	) -> std::result::Result<(), String> {
 		self.set_priority_group(group_id, peers)
 	}
+
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
-	fn get_value(&self, key: &libp2p::kad::record::Key) {
-		self.get_value(key)
-	}
+
+	fn get_value(&self, key: &libp2p::kad::record::Key) { self.get_value(key) }
 }
 
 fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
@@ -536,7 +547,7 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {
 	let stream = futures::stream::unfold(start, move |next| {
-		let time_until_next =  next.saturating_duration_since(Instant::now());
+		let time_until_next = next.saturating_duration_since(Instant::now());
 
 		Delay::new(time_until_next).map(move |_| Some(((), next + duration)))
 	});
@@ -547,13 +558,10 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::{channel::mpsc::channel, executor::block_on, future::poll_fn};
+	use primitives::{testing::KeyStore, ExecutionContext, NativeOrEncoded};
 	use sp_api::{ApiExt, Core, RuntimeVersion, StorageProof};
-	use futures::channel::mpsc::channel;
-	use futures::executor::block_on;
-	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
-	use sp_runtime::traits::Zero;
-	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
+	use sp_runtime::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi, Zero};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
@@ -580,10 +588,7 @@ mod tests {
 	fn interval_at_is_queuing_ticks() {
 		let start = Instant::now();
 
-		let interval = interval_at(
-			start,
-			std::time::Duration::from_millis(100),
-		);
+		let interval = interval_at(start, std::time::Duration::from_millis(100));
 
 		// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
 		// at 200ms).
@@ -629,7 +634,10 @@ mod tests {
 		type Api = RuntimeApi;
 
 		fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-			RuntimeApi{authorities: self.authorities.clone()}.into()
+			RuntimeApi {
+				authorities: self.authorities.clone(),
+			}
+			.into()
 		}
 	}
 
@@ -727,9 +735,7 @@ mod tests {
 			unimplemented!("Not required for testing!")
 		}
 
-		fn record_proof(&mut self) {
-			unimplemented!("Not required for testing!")
-		}
+		fn record_proof(&mut self) { unimplemented!("Not required for testing!") }
 
 		fn extract_proof(&mut self) -> Option<StorageProof> {
 			unimplemented!("Not required for testing!")
@@ -744,7 +750,7 @@ mod tests {
 			_: Option<()>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, sp_blockchain::Error> {
-			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
+			return Ok(NativeOrEncoded::Native(self.authorities.clone()))
 		}
 	}
 
@@ -758,12 +764,10 @@ mod tests {
 	}
 
 	impl NetworkProvider for TestNetwork {
-		fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
-			vec![]
-		}
-		fn local_peer_id(&self) -> libp2p::PeerId {
-			libp2p::PeerId::random()
-		}
+		fn external_addresses(&self) -> Vec<libp2p::Multiaddr> { vec![] }
+
+		fn local_peer_id(&self) -> libp2p::PeerId { libp2p::PeerId::random() }
+
 		fn set_priority_group(
 			&self,
 			group_id: String,
@@ -775,9 +779,11 @@ mod tests {
 				.push((group_id, peers));
 			Ok(())
 		}
+
 		fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 			self.put_value_call.lock().unwrap().push((key, value));
 		}
+
 		fn get_value(&self, key: &libp2p::kad::record::Key) {
 			self.get_value_call.lock().unwrap().push(key.clone());
 		}
@@ -788,13 +794,20 @@ mod tests {
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
-		let public = key_store.write()
+		let public = key_store
+			.write()
 			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 			.unwrap();
-		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
+		let test_api = Arc::new(TestApi {
+			authorities: vec![public.into()],
+		});
 
 		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+			test_api,
+			network.clone(),
+			vec![],
+			key_store,
+			dht_event_rx.boxed(),
 		);
 
 		authority_discovery.publish_ext_addresses().unwrap();
@@ -820,7 +833,11 @@ mod tests {
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+			test_api,
+			network.clone(),
+			vec![],
+			key_store,
+			dht_event_rx.boxed(),
 		);
 
 		authority_discovery.request_addresses_of_others().unwrap();
@@ -836,12 +853,18 @@ mod tests {
 
 		let (mut dht_event_tx, dht_event_rx) = channel(1000);
 		let key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
-		let test_api = Arc::new(TestApi {authorities: vec![key_pair.public()]});
+		let test_api = Arc::new(TestApi {
+			authorities: vec![key_pair.public()],
+		});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery = AuthorityDiscovery::new(
-			test_api, network.clone(), vec![], key_store, dht_event_rx.boxed(),
+			test_api,
+			network.clone(),
+			vec![],
+			key_store,
+			dht_event_rx.boxed(),
 		);
 
 		// Create sample dht event.
@@ -860,7 +883,7 @@ mod tests {
 		let mut signed_addresses = vec![];
 		schema::SignedAuthorityAddresses {
 			addresses: serialized_addresses,
-			signature: signature,
+			signature,
 		}
 		.encode(&mut signed_addresses)
 		.unwrap();

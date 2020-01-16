@@ -24,7 +24,7 @@
 /// #[macro_use]
 /// # use substrate_test_utils::{assert_eq_uvec};
 /// # fn main() {
-/// assert_eq_uvec!(vec![1,2], vec![2,1]);
+/// assert_eq_uvec!(vec![1, 2], vec![2, 1]);
 /// # }
 /// ```
 ///
@@ -37,18 +37,20 @@
 /// ```
 #[macro_export]
 macro_rules! assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
+	($x:expr, $y:expr) => {
 		$crate::__assert_eq_uvec!($x, $y);
 		$crate::__assert_eq_uvec!($y, $x);
-	}
+	};
 }
 
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
+	($x:expr, $y:expr) => {
 		$x.iter().for_each(|e| {
-			if !$y.contains(e) { panic!(format!("vectors not equal: {:?} != {:?}", $x, $y)); }
-		});
-	}
+			if !$y.contains(e) {
+				panic!(format!("vectors not equal: {:?} != {:?}", $x, $y));
+				}
+			});
+	};
 }

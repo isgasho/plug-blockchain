@@ -16,39 +16,29 @@
 
 //! Test accounts.
 
-use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
-use node_primitives::{AccountId, Balance, Index};
-use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
-use sp_runtime::generic::Era;
 use codec::Encode;
+use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
+use node_primitives::{AccountId, Balance, Index};
+use node_runtime::{CheckedExtrinsic, SessionKeys, SignedExtra, UncheckedExtrinsic};
+use sp_runtime::generic::Era;
 
 /// Alice's account id.
 pub fn alice() -> AccountId { AccountKeyring::Alice.into() }
 
 /// Bob's account id.
-pub fn bob() -> AccountId {
-	AccountKeyring::Bob.into()
-}
+pub fn bob() -> AccountId { AccountKeyring::Bob.into() }
 
 /// Charlie's account id.
-pub fn charlie() -> AccountId {
-	AccountKeyring::Charlie.into()
-}
+pub fn charlie() -> AccountId { AccountKeyring::Charlie.into() }
 
 /// Dave's account id.
-pub fn dave() -> AccountId {
-	AccountKeyring::Dave.into()
-}
+pub fn dave() -> AccountId { AccountKeyring::Dave.into() }
 
 /// Eve's account id.
-pub fn eve() -> AccountId {
-	AccountKeyring::Eve.into()
-}
+pub fn eve() -> AccountId { AccountKeyring::Eve.into() }
 
 /// Ferdie's account id.
-pub fn ferdie() -> AccountId {
-	AccountKeyring::Ferdie.into()
-}
+pub fn ferdie() -> AccountId { AccountKeyring::Ferdie.into() }
 
 /// Convert keyrings into `SessionKeys`.
 pub fn to_session_keys(
@@ -81,20 +71,28 @@ pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 pub fn sign(xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
 	match xt.signed {
 		Some((signed, extra)) => {
-			let payload = (xt.function, extra.clone(), version, genesis_hash, genesis_hash);
+			let payload = (
+				xt.function,
+				extra.clone(),
+				version,
+				genesis_hash,
+				genesis_hash,
+			);
 			let key = AccountKeyring::from_account_id(&signed).unwrap();
-			let signature = payload.using_encoded(|b| {
-				if b.len() > 256 {
-					key.sign(&runtime_io::hashing::blake2_256(b))
-				} else {
-					key.sign(b)
-				}
-			}).into();
+			let signature = payload
+				.using_encoded(|b| {
+					if b.len() > 256 {
+						key.sign(&runtime_io::hashing::blake2_256(b))
+					} else {
+						key.sign(b)
+					}
+				})
+				.into();
 			UncheckedExtrinsic {
 				signature: Some((indices::address::Address::Id(signed), signature, extra)),
 				function: payload.0,
 			}
-		}
+		},
 		None => UncheckedExtrinsic {
 			signature: None,
 			function: xt.function,

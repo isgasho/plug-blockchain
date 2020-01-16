@@ -14,19 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
-use support::{
-	Parameter, traits::Get, parameter_types,
-	metadata::{
-		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
-		StorageEntryMetadata, StorageHasher,
-	},
-	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
+use inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
+use primitives::{sr25519, H256};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Block as _, Verify},
+	BuildStorage,
 };
-use inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
-use primitives::{H256, sr25519};
+use support::{
+	metadata::{
+		DecodeDifferent, DefaultByteGetter, StorageEntryMetadata, StorageEntryModifier,
+		StorageEntryType, StorageHasher, StorageMetadata,
+	},
+	parameter_types,
+	traits::Get,
+	Parameter, StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue,
+};
 
 mod system;
 
@@ -39,7 +44,10 @@ pub trait Currency {}
 mod module1 {
 	use super::*;
 
-	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
+	pub trait Trait<I>: system::Trait
+	where
+		<Self as system::Trait>::BlockNumber: From<u32>,
+	{
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
@@ -87,25 +95,33 @@ mod module1 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
-	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
+	pub enum Origin<T: Trait<I>, I>
+	where
+		T::BlockNumber: From<u32>,
+	{
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> where
-		T::BlockNumber: From<u32>
+	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I>
+	where
+		T::BlockNumber: From<u32>,
 	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<inherents::Error>;
+
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
-		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(
+			_: &Self::Call,
+			_: &InherentData,
+		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 	}
@@ -117,7 +133,7 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<I=DefaultInstance>: system::Trait {
+	pub trait Trait<I = DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
@@ -149,7 +165,7 @@ mod module2 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
-	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
+	pub enum Origin<T: Trait<I>, I = DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
@@ -159,13 +175,17 @@ mod module2 {
 	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<inherents::Error>;
+
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(
+			_call: &Self::Call,
+			_data: &InherentData,
+		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 	}
@@ -192,15 +212,15 @@ parameter_types! {
 
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
+	type GenericType = u32;
 	type Origin = Origin;
 	type SomeParameter = SomeValue;
-	type GenericType = u32;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
+	type GenericType = u32;
 	type Origin = Origin;
 	type SomeParameter = SomeValue;
-	type GenericType = u32;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
@@ -233,13 +253,13 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Trait for Runtime {
-	type Hash = H256;
-	type Origin = Origin;
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type BlockNumber = BlockNumber;
 	type DelegatedDispatchVerifier = ();
 	type Doughnut = ();
+	type Event = Event;
+	type Hash = H256;
+	type Origin = Origin;
 }
 
 support::construct_runtime!(
@@ -274,15 +294,9 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> runtime_io::TestExternalities {
-	GenesisConfig{
-		module1_Instance1: Some(module1::GenesisConfig {
-			value: 3,
-			test: 2,
-		}),
-		module1_Instance2: Some(module1::GenesisConfig {
-			value: 4,
-			test: 5,
-		}),
+	GenesisConfig {
+		module1_Instance1: Some(module1::GenesisConfig { value: 3, test: 2 }),
+		module1_Instance2: Some(module1::GenesisConfig { value: 4, test: 5 }),
 		module2: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
@@ -297,7 +311,10 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 		}),
 		module2_Instance2: None,
 		module2_Instance3: None,
-	}.build_storage().unwrap().into()
+	}
+	.build_storage()
+	.unwrap()
+	.into()
 }
 
 #[test]
@@ -339,7 +356,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Value::take(), 1);
 		assert_eq!(Value::get(), 0);
-		Value::mutate(|a| *a=2);
+		Value::mutate(|a| *a = 2);
 		assert_eq!(Value::get(), 2);
 		Value::kill();
 		assert_eq!(Value::exists(), false);
@@ -352,7 +369,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Map::get(key), 1);
 		assert_eq!(Map::take(key), 1);
 		assert_eq!(Map::get(key), 0);
-		Map::mutate(key, |a| *a=2);
+		Map::mutate(key, |a| *a = 2);
 		assert_eq!(Map::get(key), 2);
 		Map::remove(key);
 		assert_eq!(Map::exists(key), false);
@@ -366,7 +383,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(LinkedMap::take(key), vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
 		assert_eq!(LinkedMap::get(key), vec![]);
-		LinkedMap::mutate(key, |a| *a=vec![2]);
+		LinkedMap::mutate(key, |a| *a = vec![2]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 		assert_eq!(LinkedMap::get(key), vec![2]);
 		LinkedMap::remove(key);
@@ -386,7 +403,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(DoubleMap::get(&key1, &key2), 1);
 		assert_eq!(DoubleMap::take(&key1, &key2), 1);
 		assert_eq!(DoubleMap::get(&key1, &key2), 0);
-		DoubleMap::mutate(&key1, &key2, |a| *a=2);
+		DoubleMap::mutate(&key1, &key2, |a| *a = 2);
 		assert_eq!(DoubleMap::get(&key1, &key2), 2);
 		DoubleMap::remove(&key1, &key2);
 		assert_eq!(DoubleMap::get(&key1, &key2), 0);
@@ -395,78 +412,64 @@ fn storage_with_instance_basic_operation() {
 
 const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 	prefix: DecodeDifferent::Encode("Instance2Module2"),
-	entries: DecodeDifferent::Encode(
-		&[
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("Value"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructValue(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
+	entries: DecodeDifferent::Encode(&[
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("Value"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
+			default: DecodeDifferent::Encode(DefaultByteGetter(&module2::__GetByteStructValue(
+				std::marker::PhantomData::<(Runtime, module2::Instance2)>,
+			))),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("Map"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::Map {
+				hasher: StorageHasher::Blake2_256,
+				key: DecodeDifferent::Encode("u64"),
+				value: DecodeDifferent::Encode("u64"),
+				is_linked: false,
 			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("Map"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_256,
-					key: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("u64"),
-					is_linked: false,
-				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
+			default: DecodeDifferent::Encode(DefaultByteGetter(&module2::__GetByteStructMap(
+				std::marker::PhantomData::<(Runtime, module2::Instance2)>,
+			))),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("LinkedMap"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::Map {
+				hasher: StorageHasher::Blake2_256,
+				key: DecodeDifferent::Encode("u64"),
+				value: DecodeDifferent::Encode("Vec<u8>"),
+				is_linked: true,
 			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("LinkedMap"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hasher: StorageHasher::Blake2_256,
-					key: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("Vec<u8>"),
-					is_linked: true,
-				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructLinkedMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
+			default: DecodeDifferent::Encode(DefaultByteGetter(
+				&module2::__GetByteStructLinkedMap(
+					std::marker::PhantomData::<(Runtime, module2::Instance2)>,
 				),
-				documentation: DecodeDifferent::Encode(&[]),
+			)),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("DoubleMap"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::DoubleMap {
+				hasher: StorageHasher::Blake2_256,
+				key2_hasher: StorageHasher::Blake2_256,
+				key1: DecodeDifferent::Encode("u64"),
+				key2: DecodeDifferent::Encode("u64"),
+				value: DecodeDifferent::Encode("u64"),
 			},
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("DoubleMap"),
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::DoubleMap {
-					hasher: StorageHasher::Blake2_256,
-					key2_hasher: StorageHasher::Blake2_256,
-					key1: DecodeDifferent::Encode("u64"),
-					key2: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("u64"),
-				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructDoubleMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
+			default: DecodeDifferent::Encode(DefaultByteGetter(
+				&module2::__GetByteStructDoubleMap(
+					std::marker::PhantomData::<(Runtime, module2::Instance2)>,
 				),
-				documentation: DecodeDifferent::Encode(&[]),
-			}
-		]
-	)
+			)),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+	]),
 };
 
 #[test]

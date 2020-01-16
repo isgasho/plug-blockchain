@@ -16,12 +16,12 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use test_client::{
-	prelude::*,
-	consensus::BlockOrigin,
-	runtime::{H256, Block, Header},
-};
 use rpc_primitives::list::ListOrValue;
+use test_client::{
+	consensus::BlockOrigin,
+	prelude::*,
+	runtime::{Block, Header, H256},
+};
 
 #[test]
 fn should_return_header() {
@@ -67,7 +67,11 @@ fn should_return_a_block() {
 	let client = Arc::new(test_client::new());
 	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+	let block = client
+		.new_block(Default::default())
+		.unwrap()
+		.bake()
+		.unwrap();
 	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).unwrap();
 
@@ -124,7 +128,6 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
 
-
 	assert_matches!(
 		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
 		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
@@ -135,7 +138,11 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::Value(None))
 	);
 
-	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+	let block = client
+		.new_block(Default::default())
+		.unwrap()
+		.bake()
+		.unwrap();
 	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
@@ -157,7 +164,6 @@ fn should_return_block_hash() {
 	);
 }
 
-
 #[test]
 fn should_return_finalized_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
@@ -173,7 +179,9 @@ fn should_return_finalized_hash() {
 
 	// import new block
 	let builder = client.new_block(Default::default()).unwrap();
-	client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	client
+		.import(BlockOrigin::Own, builder.bake().unwrap())
+		.unwrap();
 	// no finalization yet
 	assert_matches!(
 		api.finalized_head(),
@@ -204,7 +212,9 @@ fn should_notify_about_latest_block() {
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let builder = client.new_block(Default::default()).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client
+			.import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 	}
 
 	// assert initial head sent.
@@ -233,7 +243,9 @@ fn should_notify_about_finalized_block() {
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let builder = client.new_block(Default::default()).unwrap();
-		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client
+			.import(BlockOrigin::Own, builder.bake().unwrap())
+			.unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 

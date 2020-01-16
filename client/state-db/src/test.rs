@@ -16,9 +16,9 @@
 
 //! Test utils
 
-use std::collections::HashMap;
+use crate::{ChangeSet, CommitSet, DBValue, MetaDb, NodeDb};
 use primitives::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
+use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -38,9 +38,7 @@ impl NodeDb for TestDb {
 	type Error = ();
 	type Key = H256;
 
-	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> {
-		Ok(self.data.get(key).cloned())
-	}
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, ()> { Ok(self.data.get(key).cloned()) }
 }
 
 impl TestDb {
@@ -56,9 +54,7 @@ impl TestDb {
 		}
 	}
 
-	pub fn data_eq(&self, other: &TestDb) -> bool {
-		self.data == other.data
-	}
+	pub fn data_eq(&self, other: &TestDb) -> bool { self.data == other.data }
 }
 
 pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
@@ -66,7 +62,10 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 		inserted: inserted
 			.iter()
 			.map(|v| {
-				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+				(
+					H256::from_low_u64_be(*v),
+					H256::from_low_u64_be(*v).as_bytes().to_vec(),
+				)
 			})
 			.collect(),
 		deleted: deleted.iter().map(|v| H256::from_low_u64_be(*v)).collect(),
@@ -85,10 +84,12 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 		data: inserted
 			.iter()
 			.map(|v| {
-				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+				(
+					H256::from_low_u64_be(*v),
+					H256::from_low_u64_be(*v).as_bytes().to_vec(),
+				)
 			})
 			.collect(),
 		meta: Default::default(),
 	}
 }
-

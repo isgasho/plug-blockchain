@@ -17,8 +17,8 @@
 use super::Runtime;
 use crate::exec::Ext;
 
-use sandbox::{self, TypedValue};
 use parity_wasm::elements::{FunctionType, ValueType};
+use sandbox::{self, TypedValue};
 
 #[macro_use]
 pub(crate) mod macros;
@@ -31,20 +31,20 @@ pub trait ConvertibleToWasm: Sized {
 }
 impl ConvertibleToWasm for i32 {
 	type NativeType = i32;
+
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I32(self)
-	}
-	fn from_typed_value(v: TypedValue) -> Option<Self> {
-		v.as_i32()
-	}
+
+	fn to_typed_value(self) -> TypedValue { TypedValue::I32(self) }
+
+	fn from_typed_value(v: TypedValue) -> Option<Self> { v.as_i32() }
 }
 impl ConvertibleToWasm for u32 {
 	type NativeType = u32;
+
 	const VALUE_TYPE: ValueType = ValueType::I32;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I32(self as i32)
-	}
+
+	fn to_typed_value(self) -> TypedValue { TypedValue::I32(self as i32) }
+
 	fn from_typed_value(v: TypedValue) -> Option<Self> {
 		match v {
 			TypedValue::I32(v) => Some(v as u32),
@@ -54,10 +54,11 @@ impl ConvertibleToWasm for u32 {
 }
 impl ConvertibleToWasm for u64 {
 	type NativeType = u64;
+
 	const VALUE_TYPE: ValueType = ValueType::I64;
-	fn to_typed_value(self) -> TypedValue {
-		TypedValue::I64(self as i64)
-	}
+
+	fn to_typed_value(self) -> TypedValue { TypedValue::I64(self as i64) }
+
 	fn from_typed_value(v: TypedValue) -> Option<Self> {
 		match v {
 			TypedValue::I64(v) => Some(v as u64),
@@ -67,10 +68,7 @@ impl ConvertibleToWasm for u64 {
 }
 
 pub(crate) type HostFunc<E> =
-	fn(
-		&mut Runtime<E>,
-		&[sandbox::TypedValue]
-	) -> Result<sandbox::ReturnValue, sandbox::HostError>;
+	fn(&mut Runtime<E>, &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError>;
 
 pub(crate) trait FunctionImplProvider<E: Ext> {
 	fn impls<F: FnMut(&[u8], HostFunc<E>)>(f: &mut F);

@@ -16,36 +16,28 @@
 
 //! Methods that light client could use to execute runtime calls.
 
-use std::{
-	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
-};
+use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
-use codec::{Encode, Decode};
-use primitives::{
-	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
-	traits::CodeExecutor,
-};
-use sp_runtime::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
-};
+use codec::{Decode, Encode};
 use externalities::Extensions;
-use state_machine::{
-	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction, StorageProof,
-	merge_storage_proofs,
-};
 use hash_db::Hasher;
+use primitives::{convert_hash, traits::CodeExecutor, Blake2Hasher, NativeOrEncoded, H256};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, One},
+};
+use state_machine::{
+	self, create_proof_check_backend, execution_proof_check_on_trie_backend, merge_storage_proofs,
+	Backend as StateBackend, ChangesTrieTransaction, ExecutionManager, ExecutionStrategy,
+	OverlayedChanges, StorageProof,
+};
 
-use sp_api::{ProofRecorder, InitializeBlock};
+use sp_api::{InitializeBlock, ProofRecorder};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
-use client_api::{
-	backend::RemoteBackend,
-	light::RemoteCallRequest,
-	call_executor::CallExecutor
-};
-use executor::{RuntimeVersion, NativeVersion};
+use client_api::{backend::RemoteBackend, call_executor::CallExecutor, light::RemoteCallRequest};
+use executor::{NativeVersion, RuntimeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -57,9 +49,7 @@ pub struct GenesisCallExecutor<B, L> {
 
 impl<B, L> GenesisCallExecutor<B, L> {
 	/// Create new genesis call executor.
-	pub fn new(backend: Arc<B>, local: L) -> Self {
-		Self { backend, local }
-	}
+	pub fn new(backend: Arc<B>, local: L) -> Self { Self { backend, local } }
 }
 
 impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
@@ -71,12 +61,11 @@ impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
 	}
 }
 
-impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
-	GenesisCallExecutor<B, Local>
-	where
-		Block: BlockT<Hash=H256>,
-		B: RemoteBackend<Block, Blake2Hasher>,
-		Local: CallExecutor<Block, Blake2Hasher>,
+impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for GenesisCallExecutor<B, Local>
+where
+	Block: BlockT<Hash = H256>,
+	B: RemoteBackend<Block, Blake2Hasher>,
+	Local: CallExecutor<Block, Blake2Hasher>,
 {
 	type Error = ClientError;
 
@@ -99,7 +88,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
@@ -115,7 +104,10 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+	) -> ClientResult<NativeOrEncoded<R>>
+	where
+		ExecutionManager<EM>: Clone,
+	{
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
@@ -127,7 +119,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 					Result<NativeOrEncoded<R>, Local::Error>,
 				) -> Result<NativeOrEncoded<R>, Local::Error>,
 				_,
-				NC
+				NC,
 			>(
 				&self.local,
 				initialize_block_fn,
@@ -140,7 +132,8 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 				native_call,
 				recorder,
 				extensions,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
+			)
+			.map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -156,11 +149,12 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
+	>(
+		&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
@@ -181,14 +175,12 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
-		_call_data: &[u8]
+		_call_data: &[u8],
 	) -> ClientResult<(Vec<u8>, StorageProof)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
-		None
-	}
+	fn native_runtime_version(&self) -> Option<&NativeVersion> { None }
 }
 
 /// Prove contextual execution using given block header in environment.
@@ -202,13 +194,15 @@ pub fn prove_execution<Block, S, E>(
 	method: &str,
 	call_data: &[u8],
 ) -> ClientResult<(Vec<u8>, StorageProof)>
-	where
-		Block: BlockT<Hash=H256>,
-		S: StateBackend<Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
+where
+	Block: BlockT<Hash = H256>,
+	S: StateBackend<Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
 {
-	let trie_state = state.as_trie_backend()
-		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
+	let trie_state = state.as_trie_backend().ok_or_else(|| {
+		Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+			as Box<dyn state_machine::Error>
+	})?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
@@ -220,7 +214,8 @@ pub fn prove_execution<Block, S, E>(
 	)?;
 
 	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
+	let (result, exec_proof) =
+		executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
 	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
@@ -235,22 +230,24 @@ pub fn check_execution_proof<Header, E, H>(
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
-	where
-		Header: HeaderT,
-		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+where
+	Header: HeaderT,
+	E: CodeExecutor,
+	H: Hasher<Out = H256>,
 {
 	check_execution_proof_with_make_header::<Header, E, H, _>(
 		executor,
 		request,
 		remote_proof,
-		|header| <Header as HeaderT>::new(
-			*header.number() + One::one(),
-			Default::default(),
-			Default::default(),
-			header.hash(),
-			Default::default(),
-		),
+		|header| {
+			<Header as HeaderT>::new(
+				*header.number() + One::one(),
+				Default::default(),
+				Default::default(),
+				header.hash(),
+				Default::default(),
+			)
+		},
 	)
 }
 
@@ -260,10 +257,10 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	remote_proof: StorageProof,
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
-	where
-		Header: HeaderT,
-		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+where
+	Header: HeaderT,
+	E: CodeExecutor,
+	H: Hasher<Out = H256>,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
@@ -287,18 +284,23 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		&request.method,
 		&request.call_data,
-	).map_err(Into::into)
+	)
+	.map_err(Into::into)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::in_mem::Backend as InMemBackend;
+	use client_api::backend::{Backend, NewBlockState};
 	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
 	use executor::{NativeExecutor, WasmExecutionMethod};
 	use primitives::Blake2Hasher;
-	use client_api::backend::{Backend, NewBlockState};
-	use crate::in_mem::Backend as InMemBackend;
+	use test_client::{
+		self,
+		runtime::{Block, Digest, Header},
+		ClientExt, TestClient,
+	};
 
 	struct DummyCallExecutor;
 
@@ -321,7 +323,7 @@ mod tests {
 			IB: Fn() -> ClientResult<()>,
 			EM: Fn(
 				Result<NativeOrEncoded<R>, Self::Error>,
-				Result<NativeOrEncoded<R>, Self::Error>
+				Result<NativeOrEncoded<R>, Self::Error>,
 			) -> Result<NativeOrEncoded<R>, Self::Error>,
 			R: Encode + Decode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
@@ -337,7 +339,10 @@ mod tests {
 			_native_call: Option<NC>,
 			_proof_recorder: &Option<ProofRecorder<Block>>,
 			_extensions: Option<Extensions>,
-		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+		) -> ClientResult<NativeOrEncoded<R>>
+		where
+			ExecutionManager<EM>: Clone,
+		{
 			unreachable!()
 		}
 
@@ -349,11 +354,12 @@ mod tests {
 			S: state_machine::Backend<Blake2Hasher>,
 			F: FnOnce(
 				Result<NativeOrEncoded<R>, Self::Error>,
-				Result<NativeOrEncoded<R>, Self::Error>
+				Result<NativeOrEncoded<R>, Self::Error>,
 			) -> Result<NativeOrEncoded<R>, Self::Error>,
 			R: Encode + Decode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		>(&self,
+		>(
+			&self,
 			_state: &S,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
@@ -377,14 +383,12 @@ mod tests {
 			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
-			_call_data: &[u8]
+			_call_data: &[u8],
 		) -> Result<(Vec<u8>, StorageProof), ClientError> {
 			unreachable!()
 		}
 
-		fn native_runtime_version(&self) -> Option<&NativeVersion> {
-			unreachable!()
-		}
+		fn native_runtime_version(&self) -> Option<&NativeVersion> { unreachable!() }
 	}
 
 	fn local_executor() -> NativeExecutor<test_client::LocalExecutor> {
@@ -393,16 +397,18 @@ mod tests {
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
-		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
+		fn execute(
+			remote_client: &TestClient,
+			at: u64,
+			method: &'static str,
+		) -> (Vec<u8>, Vec<u8>) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 
 			// 'fetch' execution proof from remote node
-			let (remote_result, remote_execution_proof) = remote_client.execution_proof(
-				&remote_block_id,
-				method,
-				&[]
-			).unwrap();
+			let (remote_result, remote_execution_proof) = remote_client
+				.execution_proof(&remote_block_id, method, &[])
+				.unwrap();
 
 			// check remote execution proof locally
 			let local_result = check_execution_proof::<_, _, Blake2Hasher>(
@@ -415,7 +421,8 @@ mod tests {
 					retry_count: None,
 				},
 				remote_execution_proof,
-			).unwrap();
+			)
+			.unwrap();
 
 			(remote_result, local_result)
 		}
@@ -425,11 +432,9 @@ mod tests {
 			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 
 			// 'fetch' execution proof from remote node
-			let (_, remote_execution_proof) = remote_client.execution_proof(
-				&remote_block_id,
-				method,
-				&[]
-			).unwrap();
+			let (_, remote_execution_proof) = remote_client
+				.execution_proof(&remote_block_id, method, &[])
+				.unwrap();
 
 			// check remote execution proof locally
 			let execution_result = check_execution_proof_with_make_header::<_, _, Blake2Hasher, _>(
@@ -442,13 +447,15 @@ mod tests {
 					retry_count: None,
 				},
 				remote_execution_proof,
-				|header| <Header as HeaderT>::new(
-					at + 1,
-					Default::default(),
-					Default::default(),
-					header.hash(),
-					header.digest().clone(), // this makes next header wrong
-				),
+				|header| {
+					<Header as HeaderT>::new(
+						at + 1,
+						Default::default(),
+						Default::default(),
+						header.hash(),
+						header.digest().clone(), // this makes next header wrong
+					)
+				},
 			);
 			match execution_result {
 				Err(sp_blockchain::Error::Execution(_)) => (),
@@ -460,12 +467,16 @@ mod tests {
 		let remote_client = test_client::new();
 		for i in 1u32..3u32 {
 			let mut digest = Digest::default();
-			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
-			remote_client.import_justified(
-				BlockOrigin::Own,
-				remote_client.new_block(digest).unwrap().bake().unwrap(),
-				Default::default(),
-			).unwrap();
+			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(
+				i.to_le_bytes().to_vec(),
+			));
+			remote_client
+				.import_justified(
+					BlockOrigin::Own,
+					remote_client.new_block(digest).unwrap().bake().unwrap(),
+					Default::default(),
+				)
+				.unwrap();
 		}
 
 		// check method that doesn't requires environment
@@ -484,7 +495,8 @@ mod tests {
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 3);
 
-		// check that proof check doesn't panic even if proof is incorrect AND no panic handler is set
+		// check that proof check doesn't panic even if proof is incorrect AND no panic handler is
+		// set
 		execute_with_proof_failure(&remote_client, 2, "Core_version");
 
 		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
@@ -500,18 +512,26 @@ mod tests {
 		let hash0 = header0.hash();
 		let header1 = test_client::runtime::Header::new(1, def, def, hash0, Default::default());
 		let hash1 = header1.hash();
-		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
-		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();
+		backend
+			.blockchain()
+			.insert(hash0, header0, None, None, NewBlockState::Final)
+			.unwrap();
+		backend
+			.blockchain()
+			.insert(hash1, header1, None, None, NewBlockState::Final)
+			.unwrap();
 
 		let genesis_executor = GenesisCallExecutor::new(backend, DummyCallExecutor);
 		assert_eq!(
-			genesis_executor.call(
-				&BlockId::Number(0),
-				"test_method",
-				&[],
-				ExecutionStrategy::NativeElseWasm,
-				None,
-			).unwrap(),
+			genesis_executor
+				.call(
+					&BlockId::Number(0),
+					"test_method",
+					&[],
+					ExecutionStrategy::NativeElseWasm,
+					None,
+				)
+				.unwrap(),
 			vec![42],
 		);
 

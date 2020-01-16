@@ -17,9 +17,9 @@
 //! Implementation of the trait instance and the instance structures implementing it.
 //! (For not instantiable traits there is still the inherent instance implemented).
 
-use proc_macro2::{TokenStream, Span};
-use quote::quote;
 use super::DeclStorageDefExt;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 
 const NUMBER_OF_INSTANCE: usize = 16;
 pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
@@ -49,11 +49,14 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				}
 			})
 			.chain(
-				module_instance.instance_default.as_ref().map(|ident| InstanceDef {
-					prefix: String::new(),
-					instance_struct: ident.clone(),
-					doc: quote!(#[doc=r"Default module instance"]),
-				})
+				module_instance
+					.instance_default
+					.as_ref()
+					.map(|ident| InstanceDef {
+						prefix: String::new(),
+						instance_struct: ident.clone(),
+						doc: quote!(#[doc=r"Default module instance"]),
+					}),
 			);
 
 		for instance_def in instance_defs {
@@ -65,7 +68,9 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	let inherent_instance = syn::Ident::new(INHERENT_INSTANCE_NAME, Span::call_site());
 
 	// Implementation of inherent instance.
-	if let Some(default_instance) = def.module_instance.as_ref()
+	if let Some(default_instance) = def
+		.module_instance
+		.as_ref()
 		.and_then(|i| i.instance_default.as_ref())
 	{
 		impls.extend(quote! {
@@ -84,10 +89,11 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	impls
 }
 
-fn create_instance_trait(
-	def: &DeclStorageDefExt,
-) -> TokenStream {
-	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
+fn create_instance_trait(def: &DeclStorageDefExt) -> TokenStream {
+	let instance_trait = def
+		.module_instance
+		.as_ref()
+		.map(|i| i.instance_trait.clone())
 		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
 
 	let optional_hide = if def.module_instance.is_some() {
@@ -113,7 +119,10 @@ fn create_and_impl_instance_struct(
 	instance_def: &InstanceDef,
 	def: &DeclStorageDefExt,
 ) -> TokenStream {
-	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
+	let instance_trait = def
+		.module_instance
+		.as_ref()
+		.map(|i| i.instance_trait.clone())
 		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
 
 	let instance_struct = &instance_def.instance_struct;

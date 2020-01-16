@@ -23,25 +23,36 @@
 #![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
-mod slots;
 mod aux_schema;
+mod slots;
 
-pub use slots::{SignedDuration, SlotInfo};
-use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
+use slots::Slots;
+pub use slots::{SignedDuration, SlotInfo};
 
+use client_api;
 use codec::{Decode, Encode};
-use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
-use futures::{prelude::*, future::{self, Either}};
+use consensus_common::{BlockImport, CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
+use futures::{
+	future::{self, Either},
+	prelude::*,
+};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
-use client_api;
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi},
+};
+use std::{
+	fmt::Debug,
+	ops::Deref,
+	pin::Pin,
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -80,7 +91,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
 	/// use the provided slot number as a canonical source of time.
-	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error>;
+	fn epoch_data(
+		&self,
+		header: &B::Header,
+		slot_number: u64,
+	) -> Result<Self::EpochData, consensus_common::Error>;
 
 	/// Returns the number of authorities given the epoch data.
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
@@ -94,15 +109,24 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	) -> Option<Self::Claim>;
 
 	/// Return the pre digest data to include in a block authored with the given claim.
-	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem<B::Hash>>;
+	fn pre_digest_data(
+		&self,
+		slot_number: u64,
+		claim: &Self::Claim,
+	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
-	fn block_import_params(&self) -> Box<dyn Fn(
-		B::Header,
-		&B::Hash,
-		Vec<B::Extrinsic>,
-		Self::Claim,
-	) -> consensus_common::BlockImportParams<B> + Send>;
+	fn block_import_params(
+		&self,
+	) -> Box<
+		dyn Fn(
+				B::Header,
+				&B::Hash,
+				Vec<B::Extrinsic>,
+				Self::Claim,
+			) -> consensus_common::BlockImportParams<B>
+			+ Send,
+	>;
 
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
@@ -127,14 +151,18 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposing_remaining_duration(
 		&self,
 		_head: &B::Header,
-		slot_info: &SlotInfo
+		slot_info: &SlotInfo,
 	) -> Option<Duration> {
 		Some(self.slot_remaining_duration(slot_info))
 	}
 
 	/// Implements the `on_slot` functionality from `SlotWorker`.
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo)
-		-> Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>> where
+	fn on_slot(
+		&mut self,
+		chain_head: B::Header,
+		slot_info: SlotInfo,
+	) -> Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>
+	where
 		Self: Send + Sync,
 		<Self::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	{
@@ -150,14 +178,18 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					slot_number, slot_now,
 				);
 
-				return Box::pin(future::ready(Ok(())));
+				return Box::pin(future::ready(Ok(())))
 			}
 		}
 
 		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
-				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
+				warn!(
+					"Unable to fetch epoch data at block {:?}: {:?}",
+					chain_head.hash(),
+					err
+				);
 
 				telemetry!(
 					CONSENSUS_WARN; "slots.unable_fetching_authorities";
@@ -165,8 +197,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					"err" => ?err,
 				);
 
-				return Box::pin(future::ready(Ok(())));
-			}
+				return Box::pin(future::ready(Ok(())))
+			},
 		};
 
 		let authorities_len = self.authorities_len(&epoch_data);
@@ -179,7 +211,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"authorities_len" => authorities_len,
 			);
 
-			return Box::pin(future::ready(Ok(())));
+			return Box::pin(future::ready(Ok(())))
 		}
 
 		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
@@ -201,47 +233,59 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let mut proposer = match self.proposer(&chain_head) {
 			Ok(proposer) => proposer,
 			Err(err) => {
-				warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+				warn!(
+					"Unable to author block in slot {:?}: {:?}",
+					slot_number, err
+				);
 
 				telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
 					"slot" => slot_number, "err" => ?err
 				);
 
-				return Box::pin(future::ready(Ok(())));
+				return Box::pin(future::ready(Ok(())))
 			},
 		};
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
-		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
+		let proposing_remaining_duration =
+			self.proposing_remaining_duration(&chain_head, &slot_info);
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = proposer.propose(
-			slot_info.inherent_data,
-			sp_runtime::generic::Digest {
-				logs,
-			},
-			slot_remaining_duration,
-		).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)));
-		let delay: Box<dyn Future<Output=()> + Unpin + Send> = match proposing_remaining_duration {
+		let proposing = proposer
+			.propose(
+				slot_info.inherent_data,
+				sp_runtime::generic::Digest { logs },
+				slot_remaining_duration,
+			)
+			.map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)));
+		let delay: Box<dyn Future<Output = ()> + Unpin + Send> = match proposing_remaining_duration
+		{
 			Some(r) => Box::new(Delay::new(r)),
 			None => Box::new(future::pending()),
 		};
 
-		let proposal_work =
-			Box::new(futures::future::select(proposing, delay).map(move |v| match v {
+		let proposal_work = Box::new(futures::future::select(proposing, delay).map(
+			move |v| match v {
 				futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 				futures::future::Either::Right(_) => {
-					info!("Discarding proposal for slot {}; block production took too long", slot_number);
-					// If the node was compiled with debug, tell the user to use release optimizations.
-					#[cfg(build_type="debug")]
+					info!(
+						"Discarding proposal for slot {}; block production took too long",
+						slot_number
+					);
+					// If the node was compiled with debug, tell the user to use release
+					// optimizations.
+					#[cfg(build_type = "debug")]
 					info!("Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
-					Err(consensus_common::Error::ClientImport("Timeout in the Slots proposer".into()))
+					Err(consensus_common::Error::ClientImport(
+						"Timeout in the Slots proposer".into(),
+					))
 				},
-			}));
+			},
+		));
 
 		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
@@ -253,17 +297,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let header_hash = header.hash();
 			let parent_hash = *header.parent_hash();
 
-			let block_import_params = block_import_params_maker(
-				header,
-				&header_hash,
-				body,
-				claim,
-			);
+			let block_import_params = block_import_params_maker(header, &header_hash, body, claim);
 
-			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
-					header_num,
-					block_import_params.post_header().hash(),
-					header_hash,
+			info!(
+				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+				header_num,
+				block_import_params.post_header().hash(),
+				header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
@@ -272,11 +312,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
-				warn!(target: logging_target,
-					"Error with block built on {:?}: {:?}",
-					parent_hash,
-					err,
+			if let Err(err) = block_import
+				.lock()
+				.import_block(block_import_params, Default::default())
+			{
+				warn!(
+					target: logging_target,
+					"Error with block built on {:?}: {:?}", parent_hash, err,
 				);
 
 				telemetry!(CONSENSUS_WARN; "slots.err_with_block_built_on";
@@ -330,48 +372,51 @@ where
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
-	).inspect_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
-		.try_for_each(move |slot_info| {
-			// only propose when we are not syncing.
-			if sync_oracle.is_major_syncing() {
-				debug!(target: "slots", "Skipping proposal slot due to sync.");
-				return Either::Right(future::ready(Ok(())));
-			}
+	)
+	.inspect_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
+	.try_for_each(move |slot_info| {
+		// only propose when we are not syncing.
+		if sync_oracle.is_major_syncing() {
+			debug!(target: "slots", "Skipping proposal slot due to sync.");
+			return Either::Right(future::ready(Ok(())))
+		}
 
-			let slot_num = slot_info.number;
-			let chain_head = match client.best_chain() {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "slots", "Unable to author block in slot {}. \
+		let slot_num = slot_info.number;
+		let chain_head = match client.best_chain() {
+			Ok(x) => x,
+			Err(e) => {
+				warn!(target: "slots", "Unable to author block in slot {}. \
 					no best block header: {:?}", slot_num, e);
-					return Either::Right(future::ready(Ok(())));
-				}
-			};
+				return Either::Right(future::ready(Ok(())))
+			},
+		};
 
-			if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
-				warn!(
-					target: "slots",
-					"Unable to author block in slot {},. `can_author_with` returned: {} \
-					Probably a node update is required!",
-					slot_num,
-					err,
-				);
-				Either::Right(future::ready(Ok(())))
-			} else {
-				Either::Left(
-					worker.on_slot(chain_head, slot_info)
-						.map_err(|e| {
-							warn!(target: "slots", "Encountered consensus error: {:?}", e);
-						})
-						.or_else(|_| future::ready(Ok(())))
-				)
-			}
-		}).then(|res| {
-			if let Err(err) = res {
-				warn!(target: "slots", "Slots stream terminated with an error: {:?}", err);
-			}
-			future::ready(())
-		})
+		if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+			warn!(
+				target: "slots",
+				"Unable to author block in slot {},. `can_author_with` returned: {} \
+				Probably a node update is required!",
+				slot_num,
+				err,
+			);
+			Either::Right(future::ready(Ok(())))
+		} else {
+			Either::Left(
+				worker
+					.on_slot(chain_head, slot_info)
+					.map_err(|e| {
+						warn!(target: "slots", "Encountered consensus error: {:?}", e);
+					})
+					.or_else(|_| future::ready(Ok(()))),
+			)
+		}
+	})
+	.then(|res| {
+		if let Err(err) = res {
+			warn!(target: "slots", "Slots stream terminated with an error: {:?}", err);
+		}
+		future::ready(())
+	})
 }
 
 /// A header which has been checked
@@ -394,20 +439,20 @@ pub struct SlotDuration<T>(T);
 
 impl<T> Deref for SlotDuration<T> {
 	type Target = T;
-	fn deref(&self) -> &T {
-		&self.0
-	}
+
+	fn deref(&self) -> &T { &self.0 }
 }
 
 impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
+	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
+
 	/// Get the slot duration in milliseconds.
 	fn slot_duration(&self) -> u64
-		where T: SlotData,
+	where
+		T: SlotData,
 	{
 		self.0.slot_duration()
 	}
-
-	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
 impl<T: Clone> SlotDuration<T> {
@@ -416,7 +461,8 @@ impl<T: Clone> SlotDuration<T> {
 	///
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
-	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
+	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self>
+	where
 		C: client_api::backend::AuxStore,
 		C: ProvideRuntimeApi,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
@@ -445,12 +491,10 @@ impl<T: Clone> SlotDuration<T> {
 					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
 
 				Ok(SlotDuration(genesis_slot_duration))
-			}
+			},
 		}
 	}
 
 	/// Returns slot data value.
-	pub fn get(&self) -> T {
-		self.0.clone()
-	}
+	pub fn get(&self) -> T { self.0.clone() }
 }

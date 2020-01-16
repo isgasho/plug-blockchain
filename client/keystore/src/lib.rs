@@ -18,13 +18,20 @@
 
 #![warn(missing_docs)]
 
-use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
-
-use primitives::{
-	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
+use std::{
+	collections::HashMap,
+	fs::{self, File},
+	io::{self, Write},
+	path::PathBuf,
+	sync::Arc,
 };
 
-use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+use primitives::{
+	crypto::{IsWrappedBy, KeyTypeId, Pair as PairT, Protected, Public},
+	traits::BareCryptoStore,
+};
+
+use app_crypto::{ed25519, sr25519, AppKey, AppPair, AppPublic};
 
 use parking_lot::RwLock;
 
@@ -39,16 +46,16 @@ pub enum Error {
 	/// JSON error.
 	Json(serde_json::Error),
 	/// Invalid password.
-	#[display(fmt="Invalid password")]
+	#[display(fmt = "Invalid password")]
 	InvalidPassword,
 	/// Invalid BIP39 phrase
-	#[display(fmt="Invalid recovery phrase (BIP39) data")]
+	#[display(fmt = "Invalid recovery phrase (BIP39) data")]
 	InvalidPhrase,
 	/// Invalid seed
-	#[display(fmt="Invalid seed")]
+	#[display(fmt = "Invalid seed")]
 	InvalidSeed,
 	/// Keystore unavailable
-	#[display(fmt="Keystore unavailable")]
+	#[display(fmt = "Keystore unavailable")]
 	Unavailable,
 }
 
@@ -80,11 +87,18 @@ impl Store {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<KeyStorePtr> {
+	pub fn open<T: Into<PathBuf>>(
+		path: T,
+		password: Option<Protected<String>>,
+	) -> Result<KeyStorePtr> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
-		let instance = Self { path, additional: HashMap::new(), password };
+		let instance = Self {
+			path,
+			additional: HashMap::new(),
+			password,
+		};
 		Ok(Arc::new(RwLock::new(instance)))
 	}
 
@@ -123,10 +137,8 @@ impl Store {
 	///
 	/// Places it into the file system store.
 	pub fn insert_by_type<Pair: PairT>(&self, key_type: KeyTypeId, suri: &str) -> Result<Pair> {
-		let pair = Pair::from_string(
-			suri,
-			self.password.as_ref().map(|p| &***p)
-		).map_err(|_| Error::InvalidSeed)?;
+		let pair = Pair::from_string(suri, self.password.as_ref().map(|p| &***p))
+			.map_err(|_| Error::InvalidSeed)?;
 		self.insert_unknown(key_type, suri, pair.public().as_slice())
 			.map_err(|_| Error::Unavailable)?;
 		Ok(pair)
@@ -136,7 +148,8 @@ impl Store {
 	///
 	/// Places it into the file system store.
 	pub fn insert<Pair: AppPair>(&self, suri: &str) -> Result<Pair> {
-		self.insert_by_type::<Pair::Generic>(Pair::ID, suri).map(Into::into)
+		self.insert_by_type::<Pair::Generic>(Pair::ID, suri)
+			.map(Into::into)
 	}
 
 	/// Generate a new key.
@@ -154,7 +167,8 @@ impl Store {
 	///
 	/// Places it into the file system store.
 	pub fn generate<Pair: AppPair>(&self) -> Result<Pair> {
-		self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
+		self.generate_by_type::<Pair::Generic>(Pair::ID)
+			.map(Into::into)
 	}
 
 	/// Create a new key from seed.
@@ -174,11 +188,13 @@ impl Store {
 	///
 	/// Does not place it into the file system store.
 	pub fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
-		self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
+		self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID)
+			.map(Into::into)
 	}
 
 	/// Get a key pair for the given public key and key type.
-	pub fn key_pair_by_type<Pair: PairT>(&self,
+	pub fn key_pair_by_type<Pair: PairT>(
+		&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
 	) -> Result<Pair> {
@@ -190,10 +206,8 @@ impl Store {
 		let file = File::open(path)?;
 
 		let phrase: String = serde_json::from_reader(&file)?;
-		let pair = Pair::from_string(
-			&phrase,
-			self.password.as_ref().map(|p| &***p),
-		).map_err(|_| Error::InvalidPhrase)?;
+		let pair = Pair::from_string(&phrase, self.password.as_ref().map(|p| &***p))
+			.map_err(|_| Error::InvalidPhrase)?;
 
 		if &pair.public() == public {
 			Ok(pair)
@@ -204,12 +218,18 @@ impl Store {
 
 	/// Get a key pair for the given public key.
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
-		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID)
+			.map(Into::into)
 	}
 
 	/// Get public keys of all stored keys that match the given key type.
-	pub fn public_keys_by_type<TPublic: Public>(&self, key_type: KeyTypeId) -> Result<Vec<TPublic>> {
-		let mut public_keys: Vec<TPublic> = self.additional.keys()
+	pub fn public_keys_by_type<TPublic: Public>(
+		&self,
+		key_type: KeyTypeId,
+	) -> Result<Vec<TPublic>> {
+		let mut public_keys: Vec<TPublic> = self
+			.additional
+			.keys()
 			.filter_map(|(ty, public)| {
 				if *ty == key_type {
 					Some(TPublic::from_slice(public))
@@ -227,10 +247,12 @@ impl Store {
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 				match hex::decode(name) {
 					Ok(ref hex) if hex.len() > 4 => {
-						if &hex[0..4] != &key_type.0 { continue	}
+						if &hex[0..4] != &key_type.0 {
+							continue
+						}
 						let public = TPublic::from_slice(&hex[4..]);
 						public_keys.push(public);
-					}
+					},
 					_ => continue,
 				}
 			}
@@ -262,7 +284,8 @@ impl Store {
 
 impl BareCryptoStore for Store {
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.public_keys_by_type::<sr25519::Public>(key_type).unwrap_or_default()
+		self.public_keys_by_type::<sr25519::Public>(key_type)
+			.unwrap_or_default()
 	}
 
 	fn sr25519_generate_new(
@@ -273,7 +296,8 @@ impl BareCryptoStore for Store {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.generate_by_type::<sr25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}
+		.map_err(|e| e.to_string())?;
 
 		Ok(pair.public())
 	}
@@ -283,7 +307,8 @@ impl BareCryptoStore for Store {
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
-		self.public_keys_by_type::<ed25519::Public>(key_type).unwrap_or_default()
+		self.public_keys_by_type::<ed25519::Public>(key_type)
+			.unwrap_or_default()
 	}
 
 	fn ed25519_generate_new(
@@ -294,7 +319,8 @@ impl BareCryptoStore for Store {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}
+		.map_err(|e| e.to_string())?;
 
 		Ok(pair.public())
 	}
@@ -303,36 +329,44 @@ impl BareCryptoStore for Store {
 		self.key_pair_by_type::<ed25519::Pair>(pub_key, id).ok()
 	}
 
-	fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
-		-> std::result::Result<(), ()>
-	{
+	fn insert_unknown(
+		&mut self,
+		key_type: KeyTypeId,
+		suri: &str,
+		public: &[u8],
+	) -> std::result::Result<(), ()> {
 		Store::insert_unknown(self, key_type, suri, public).map_err(|_| ())
 	}
 
-	fn password(&self) -> Option<&str> {
-		self.password.as_ref().map(|x| x.as_str())
-	}
+	fn password(&self) -> Option<&str> { self.password.as_ref().map(|x| x.as_str()) }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::{crypto::Ss58Codec, testing::SR25519};
 	use tempfile::TempDir;
-	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {
 		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
-		assert!(store.read().public_keys::<ed25519::AppPublic>().unwrap().is_empty());
+		assert!(store
+			.read()
+			.public_keys::<ed25519::AppPublic>()
+			.unwrap()
+			.is_empty());
 
 		let key: ed25519::AppPair = store.write().generate().unwrap();
 		let key2: ed25519::AppPair = store.read().key_pair(&key.public()).unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(store.read().public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+		assert_eq!(
+			store.read().public_keys::<ed25519::AppPublic>().unwrap()[0],
+			key.public()
+		);
 	}
 
 	#[test]
@@ -342,7 +376,9 @@ mod tests {
 
 		let pair: ed25519::AppPair = store
 			.write()
-			.insert_ephemeral_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
+			.insert_ephemeral_from_seed(
+				"0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc",
+			)
 			.unwrap();
 		assert_eq!(
 			"5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA",
@@ -352,7 +388,10 @@ mod tests {
 		drop(store);
 		let store = Store::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store
+			.read()
+			.key_pair::<ed25519::AppPair>(&pair.public())
+			.is_err());
 	}
 
 	#[test]
@@ -364,17 +403,28 @@ mod tests {
 		let pair: ed25519::AppPair = store.write().generate().unwrap();
 		assert_eq!(
 			pair.public(),
-			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store
+				.read()
+				.key_pair::<ed25519::AppPair>(&pair.public())
+				.unwrap()
+				.public(),
 		);
 
 		// Without the password the key should not be retrievable
 		let store = Store::open(temp_dir.path(), None).unwrap();
-		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store
+			.read()
+			.key_pair::<ed25519::AppPair>(&pair.public())
+			.is_err());
 
 		let store = Store::open(temp_dir.path(), Some(password.into())).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store
+				.read()
+				.key_pair::<ed25519::AppPair>(&pair.public())
+				.unwrap()
+				.public(),
 		);
 	}
 
@@ -385,10 +435,23 @@ mod tests {
 
 		let mut public_keys = Vec::new();
 		for i in 0..10 {
-			public_keys.push(store.write().generate::<ed25519::AppPair>().unwrap().public());
-			public_keys.push(store.write().insert_ephemeral_from_seed::<ed25519::AppPair>(
-				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
-			).unwrap().public());
+			public_keys.push(
+				store
+					.write()
+					.generate::<ed25519::AppPair>()
+					.unwrap()
+					.public(),
+			);
+			public_keys.push(
+				store
+					.write()
+					.insert_ephemeral_from_seed::<ed25519::AppPair>(&format!(
+						"0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc",
+						i
+					))
+					.unwrap()
+					.public(),
+			);
 		}
 
 		// Generate a key of a different type
@@ -409,16 +472,15 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
 
-		store.write().insert_unknown(
-			SR25519,
-			secret_uri,
-			key_pair.public().as_ref(),
-		).expect("Inserts unknown key");
+		store
+			.write()
+			.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+			.expect("Inserts unknown key");
 
-		let store_key_pair = store.read().key_pair_by_type::<sr25519::AppPair>(
-			&key_pair.public(),
-			SR25519,
-		).expect("Gets key pair from keystore");
+		let store_key_pair = store
+			.read()
+			.key_pair_by_type::<sr25519::AppPair>(&key_pair.public(), SR25519)
+			.expect("Gets key pair from keystore");
 
 		assert_eq!(key_pair.public(), store_key_pair.public());
 	}
@@ -431,8 +493,10 @@ mod tests {
 		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(
-			store.read().public_keys_by_type::<sr25519::AppPublic>(SR25519).unwrap().is_empty(),
-		);
+		assert!(store
+			.read()
+			.public_keys_by_type::<sr25519::AppPublic>(SR25519)
+			.unwrap()
+			.is_empty(),);
 	}
 }

@@ -14,27 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Definition and implementation of the old and deprecated Substrate runtime interface for the host.
+//! Definition and implementation of the old and deprecated Substrate runtime interface for the
+//! host.
 
 use codec::Encode;
-use std::{convert::TryFrom, str};
 use primitives::{
-	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, keccak_256, Blake2Hasher, Pair,
-	crypto::KeyTypeId, offchain,
+	blake2_128, blake2_256, crypto::KeyTypeId, ed25519, keccak_256, offchain, sr25519, twox_128,
+	twox_256, twox_64, Blake2Hasher, Pair,
 };
-use trie::{TrieConfiguration, trie_types::Layout};
+use std::{convert::TryFrom, str};
+use trie::{trie_types::Layout, TrieConfiguration};
 use wasm_interface::{
-	Pointer, WordSize, WritePrimitive, ReadPrimitive, FunctionContext, Result as WResult,
+	FunctionContext, Pointer, ReadPrimitive, Result as WResult, WordSize, WritePrimitive,
 };
 
-#[cfg(feature="wasm-extern-trace")]
+#[cfg(feature = "wasm-extern-trace")]
 macro_rules! debug_trace {
 	( $( $x:tt )* ) => ( trace!( $( $x )* ) )
 }
 
-#[cfg(not(feature="wasm-extern-trace"))]
+#[cfg(not(feature = "wasm-extern-trace"))]
 macro_rules! debug_trace {
-	( $( $x:tt )* ) => ()
+	($($x:tt)*) => {};
 }
 
 /// The old and deprecated Substrate externals. These are still required for backwards compatibility
@@ -52,7 +53,8 @@ fn secp256k1_recover(
 	sig_data: Pointer<u8>,
 ) -> WResult<RecoverResult> {
 	let mut sig = [0u8; 65];
-	context.read_memory_into(sig_data, &mut sig[..])
+	context
+		.read_memory_into(sig_data, &mut sig[..])
 		.map_err(|_| "Invalid attempt to get signature in ext_secp256k1_ecdsa_recover")?;
 	let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
 		Ok(rs) => rs,
@@ -66,13 +68,16 @@ fn secp256k1_recover(
 	};
 
 	let mut msg = [0u8; 32];
-	context.read_memory_into(msg_data, &mut msg[..])
+	context
+		.read_memory_into(msg_data, &mut msg[..])
 		.map_err(|_| "Invalid attempt to get message in ext_secp256k1_ecdsa_recover")?;
 
-	Ok(match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
-		Ok(pubkey) => RecoverResult::Valid(pubkey),
-		Err(_) => RecoverResult::Invalid(3),
-	})
+	Ok(
+		match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+			Ok(pubkey) => RecoverResult::Valid(pubkey),
+			Err(_) => RecoverResult::Invalid(3),
+		},
+	)
 }
 
 impl_wasm_host_interface! {

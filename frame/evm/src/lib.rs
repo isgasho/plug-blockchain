@@ -21,25 +21,28 @@
 
 mod backend;
 
-pub use crate::backend::{Account, Log, Vicinity, Backend};
+pub use crate::backend::{Account, Backend, Log, Vicinity};
 
-use rstd::{vec::Vec, marker::PhantomData};
-use support::{dispatch::Result, decl_module, decl_storage, decl_event};
-use support::weights::{Weight, WeighData, ClassifyDispatch, DispatchClass, PaysFee};
-use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
+use evm::{backend::ApplyBackend, executor::StackExecutor, ExitError, ExitReason, ExitSucceed};
+use primitives::{H160, H256, U256};
+use rstd::{marker::PhantomData, vec::Vec};
+use sp_runtime::{
+	traits::{AccountIdConversion, SaturatedConversion, UniqueSaturatedInto},
+	ModuleId,
+};
+use support::{
+	decl_event, decl_module, decl_storage,
+	dispatch::Result,
+	traits::{Currency, ExistenceRequirement, WithdrawReason},
+	weights::{ClassifyDispatch, DispatchClass, PaysFee, SimpleDispatchInfo, WeighData, Weight},
+};
 use system::ensure_signed;
-use sp_runtime::ModuleId;
-use support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion};
-use primitives::{U256, H256, H160};
-use evm::{ExitReason, ExitSucceed, ExitError};
-use evm::executor::StackExecutor;
-use evm::backend::ApplyBackend;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
 
 /// Type alias for currency balance.
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 /// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
@@ -69,7 +72,7 @@ pub trait Precompiles {
 	fn execute(
 		address: H160,
 		input: &[u8],
-		target_gas: Option<usize>
+		target_gas: Option<usize>,
 	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>>;
 }
 
@@ -77,7 +80,7 @@ impl Precompiles for () {
 	fn execute(
 		_address: H160,
 		_input: &[u8],
-		_target_gas: Option<usize>
+		_target_gas: Option<usize>,
 	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
 		None
 	}
@@ -86,33 +89,31 @@ impl Precompiles for () {
 struct WeightForCallCreate<F>(PhantomData<F>);
 
 impl<F> Default for WeightForCallCreate<F> {
-	fn default() -> Self {
-		Self(PhantomData)
-	}
+	fn default() -> Self { Self(PhantomData) }
 }
 
 impl<F: FeeCalculator> WeighData<(&H160, &Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
 	fn weigh_data(&self, (_, _, _, gas_provided): (&H160, &Vec<u8>, &U256, &u32)) -> Weight {
-		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+		F::gas_price()
+			.saturated_into::<Weight>()
+			.saturating_mul(*gas_provided)
 	}
 }
 
 impl<F: FeeCalculator> WeighData<(&Vec<u8>, &U256, &u32)> for WeightForCallCreate<F> {
 	fn weigh_data(&self, (_, _, gas_provided): (&Vec<u8>, &U256, &u32)) -> Weight {
-		F::gas_price().saturated_into::<Weight>().saturating_mul(*gas_provided)
+		F::gas_price()
+			.saturated_into::<Weight>()
+			.saturating_mul(*gas_provided)
 	}
 }
 
 impl<F: FeeCalculator, T> ClassifyDispatch<T> for WeightForCallCreate<F> {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
+	fn classify_dispatch(&self, _: T) -> DispatchClass { DispatchClass::Normal }
 }
 
 impl<F: FeeCalculator> PaysFee for WeightForCallCreate<F> {
-	fn pays_fee(&self) -> bool {
-		true
-	}
+	fn pays_fee(&self) -> bool { true }
 }
 
 /// EVM module trait
@@ -302,18 +303,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
-	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
-	}
+	pub fn account_id() -> T::AccountId { MODULE_ID.into_account() }
 
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
 		let account = Accounts::get(address);
 		let code_len = AccountCodes::decode_len(address).unwrap_or(0);
 
-		account.nonce == U256::zero() &&
-			account.balance == U256::zero() &&
-			code_len == 0
+		account.nonce == U256::zero() && account.balance == U256::zero() && code_len == 0
 	}
 
 	/// Remove an account if its empty.

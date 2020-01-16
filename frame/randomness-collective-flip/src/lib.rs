@@ -40,23 +40,23 @@
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn random_module_example(origin) -> Result {
-//! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
+//! pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub fn random_module_example(origin) -> Result {
+//! 		let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
+//! 		Ok(())
+//! 			}
+//! 			}
+//! 			}
 //! # fn main() { }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, convert::TryInto};
+use codec::Encode;
+use rstd::{convert::TryInto, prelude::*};
+use safe_mix::TripletMix;
 use sp_runtime::traits::Hash;
 use support::{decl_module, decl_storage, traits::Randomness};
-use safe_mix::TripletMix;
-use codec::Encode;
 use system::Trait;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
@@ -64,7 +64,10 @@ const RANDOM_MATERIAL_LEN: u32 = 81;
 fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 	// on_initialize is called on the first block after genesis
 	let index = (block_number - 1.into()) % RANDOM_MATERIAL_LEN.into();
-	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
+	index
+		.try_into()
+		.ok()
+		.expect("Something % 81 is always smaller than usize; qed")
 }
 
 decl_module! {
@@ -122,9 +125,9 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 	///   order to obviate the ability of your user to look up the parent hash and choose when to
 	///   transact based upon it.
 	/// - Require your user to first commit to an additional value by first posting its hash.
-	///   Require them to reveal the value to determine the final result, hashing it with the
-	///   output of this random function. This reduces the ability of a cabal of block producers
-	///   from conspiring against individuals.
+	///   Require them to reveal the value to determine the final result, hashing it with the output
+	///   of this random function. This reduces the ability of a cabal of block producers from
+	///   conspiring against individuals.
 	///
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
@@ -136,7 +139,8 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 		let hash_series = <RandomMaterial<T>>::get();
 		if !hash_series.is_empty() {
 			// Always the case after block 1 is initialised.
-			hash_series.iter()
+			hash_series
+				.iter()
 				.cycle()
 				.skip(index)
 				.take(RANDOM_MATERIAL_LEN as usize)
@@ -154,9 +158,11 @@ mod tests {
 	use super::*;
 	use primitives::H256;
 	use sp_runtime::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
+		testing::Header,
+		traits::{BlakeTwo256, Header as _, IdentityLookup, OnInitialize},
+		Perbill,
 	};
-	use support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
+	use support::{impl_outer_origin, parameter_types, traits::Randomness, weights::Weight};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
@@ -173,36 +179,38 @@ mod tests {
 	}
 
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = ();
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
 		type DelegatedDispatchVerifier = ();
 		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
+		type Version = ();
 	}
 
 	type System = system::Module<Test>;
 	type CollectiveFlip = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		t.into()
 	}
 
 	#[test]
 	fn test_block_number_to_index() {
-		for i in 1 .. 1000 {
+		for i in 1..1000 {
 			assert_eq!((i - 1) as usize % 81, block_number_to_index::<Test>(i));
 		}
 	}
@@ -210,7 +218,7 @@ mod tests {
 	fn setup_blocks(blocks: u64) {
 		let mut parent_hash = System::parent_hash();
 
-		for i in 1 .. (blocks + 1) {
+		for i in 1..(blocks + 1) {
 			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
 			CollectiveFlip::on_initialize(i);
 
@@ -271,7 +279,10 @@ mod tests {
 
 			assert_eq!(System::block_number(), 162);
 			assert_eq!(CollectiveFlip::random_seed(), CollectiveFlip::random_seed());
-			assert_ne!(CollectiveFlip::random(b"random_1"), CollectiveFlip::random(b"random_2"));
+			assert_ne!(
+				CollectiveFlip::random(b"random_1"),
+				CollectiveFlip::random(b"random_2")
+			);
 
 			let random = CollectiveFlip::random_seed();
 

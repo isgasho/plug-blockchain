@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, criterion_group, criterion_main, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use frame_system as system;
-use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event, weights::Weight};
 use primitives::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
+use support::{decl_event, decl_module, impl_outer_event, impl_outer_origin, weights::Weight};
 
 mod module {
 	use super::*;
@@ -40,7 +44,7 @@ mod module {
 	);
 }
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime {}
 }
 
@@ -59,20 +63,20 @@ support::parameter_types! {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type Event = Event;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
 }
 
@@ -81,16 +85,22 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
+	system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap()
+		.into()
 }
 
 fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 		for _ in 0..n {
-			module::Module::<Runtime>::deposit_event(
-				module::Event::Complex(vec![1, 2, 3], 2, 3, 899)
-			);
+			module::Module::<Runtime>::deposit_event(module::Event::Complex(
+				vec![1, 2, 3],
+				2,
+				3,
+				899,
+			));
 		}
 	});
 }

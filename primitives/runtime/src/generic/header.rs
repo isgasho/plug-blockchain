@@ -16,19 +16,18 @@
 
 //! Generic implementation of a block header.
 
+use crate::{
+	codec::{Codec, Decode, Encode, EncodeAsRef, Error, HasCompact, Input, Output},
+	generic::Digest,
+	traits::{
+		self, Hash as HashT, MaybeDisplay, MaybeSerialize, MaybeSerializeDeserialize, Member,
+		SimpleArithmetic, SimpleBitOps,
+	},
+};
+use primitives::U256;
+use rstd::{convert::TryFrom, fmt::Debug};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
-use crate::traits::{
-	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
-	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
-};
-use crate::generic::Digest;
-use primitives::U256;
-use rstd::{
-	convert::TryFrom,
-	fmt::Debug,
-};
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
@@ -39,9 +38,13 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// The parent hash.
 	pub parent_hash: Hash::Output,
 	/// The block number.
-	#[cfg_attr(feature = "std", serde(
-		serialize_with = "serialize_number",
-		deserialize_with = "deserialize_number"))]
+	#[cfg_attr(
+		feature = "std",
+		serde(
+			serialize_with = "serialize_number",
+			deserialize_with = "deserialize_number"
+		)
+	)]
 	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: Hash::Output,
@@ -53,21 +56,27 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 
 #[cfg(feature = "std")]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
-	val: &T, s: S,
-) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+	val: &T,
+	s: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
 	let u256: U256 = (*val).into();
 	serde::Serialize::serialize(&u256, s)
 }
 
 #[cfg(feature = "std")]
-pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(
-	d: D,
-) -> Result<T, D::Error> where D: serde::Deserializer<'a> {
+pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(d: D) -> Result<T, D::Error>
+where
+	D: serde::Deserializer<'a>,
+{
 	let u256: U256 = serde::Deserialize::deserialize(d)?;
 	TryFrom::try_from(u256).map_err(|_| serde::de::Error::custom("Try from failed"))
 }
 
-impl<Number, Hash> Decode for Header<Number, Hash> where
+impl<Number, Hash> Decode for Header<Number, Hash>
+where
 	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Decode,
@@ -83,7 +92,8 @@ impl<Number, Hash> Decode for Header<Number, Hash> where
 	}
 }
 
-impl<Number, Hash> Encode for Header<Number, Hash> where
+impl<Number, Hash> Encode for Header<Number, Hash>
+where
 	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Encode,
@@ -97,33 +107,55 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	}
 }
 
-impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
+impl<Number, Hash> codec::EncodeLike for Header<Number, Hash>
+where
 	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Encode,
-{}
-
-impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + MaybeDisplay +
-		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
-	Hash: HashT,
-	Hash::Output: Default + rstd::hash::Hash + Copy + Member +
-		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
-	type Number = Number;
+}
+
+impl<Number, Hash> traits::Header for Header<Number, Hash>
+where
+	Number: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ rstd::hash::Hash
+		+ MaybeDisplay
+		+ SimpleArithmetic
+		+ Codec
+		+ Copy
+		+ Into<U256>
+		+ TryFrom<U256>,
+	Hash: HashT,
+	Hash::Output: Default
+		+ rstd::hash::Hash
+		+ Copy
+		+ Member
+		+ MaybeSerialize
+		+ Debug
+		+ MaybeDisplay
+		+ SimpleBitOps
+		+ Codec,
+{
 	type Hash = <Hash as HashT>::Output;
 	type Hashing = Hash;
+	type Number = Number;
 
 	fn number(&self) -> &Self::Number { &self.number }
+
 	fn set_number(&mut self, num: Self::Number) { self.number = num }
 
 	fn extrinsics_root(&self) -> &Self::Hash { &self.extrinsics_root }
+
 	fn set_extrinsics_root(&mut self, root: Self::Hash) { self.extrinsics_root = root }
 
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
+
 	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
 
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
+
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
 	fn digest(&self) -> &Digest<Self::Hash> { &self.digest }
@@ -151,16 +183,22 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	}
 }
 
-impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
+impl<Number, Hash> Header<Number, Hash>
+where
+	Number: Member
+		+ rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ SimpleArithmetic
+		+ Codec
+		+ Into<U256>
+		+ TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Default + rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
- {
+{
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.
-	pub fn hash(&self) -> Hash::Output {
-		Hash::hash_of(self)
-	}
+	pub fn hash(&self) -> Hash::Output { Hash::hash_of(self) }
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -180,8 +218,14 @@ mod tests {
 
 		assert_eq!(serialize(0), "\"0x0\"".to_owned());
 		assert_eq!(serialize(1), "\"0x1\"".to_owned());
-		assert_eq!(serialize(u64::max_value() as u128), "\"0xffffffffffffffff\"".to_owned());
-		assert_eq!(serialize(u64::max_value() as u128 + 1), "\"0x10000000000000000\"".to_owned());
+		assert_eq!(
+			serialize(u64::max_value() as u128),
+			"\"0xffffffffffffffff\"".to_owned()
+		);
+		assert_eq!(
+			serialize(u64::max_value() as u128 + 1),
+			"\"0x10000000000000000\"".to_owned()
+		);
 	}
 
 	#[test]
@@ -193,7 +237,13 @@ mod tests {
 
 		assert_eq!(deserialize("\"0x0\""), 0);
 		assert_eq!(deserialize("\"0x1\""), 1);
-		assert_eq!(deserialize("\"0xffffffffffffffff\""), u64::max_value() as u128);
-		assert_eq!(deserialize("\"0x10000000000000000\""), u64::max_value() as u128 + 1);
+		assert_eq!(
+			deserialize("\"0xffffffffffffffff\""),
+			u64::max_value() as u128
+		);
+		assert_eq!(
+			deserialize("\"0x10000000000000000\""),
+			u64::max_value() as u128 + 1
+		);
 	}
 }

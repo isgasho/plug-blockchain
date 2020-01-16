@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use support::sp_runtime::generic;
-use support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
-use support::codec::{Encode, Decode};
-use primitives::{H256, sr25519};
-use serde::{Serialize, Deserialize};
+use primitives::{sr25519, H256};
+use serde::{Deserialize, Serialize};
+use support::{
+	codec::{Decode, Encode},
+	sp_runtime::{
+		generic,
+		traits::{BlakeTwo256, Block as _, Verify},
+	},
+};
 
 mod system;
 
@@ -88,7 +92,7 @@ mod module {
 
 	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
 	pub struct Data<T: Trait> {
-		pub	data: T::BlockNumber,
+		pub data: T::BlockNumber,
 	}
 
 	impl<T: Trait> Default for Data<T> {
@@ -155,13 +159,13 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 impl system::Trait for Runtime {
-	type Hash = H256;
-	type Origin = Origin;
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type BlockNumber = BlockNumber;
 	type DelegatedDispatchVerifier = ();
 	type Doughnut = ();
+	type Event = Event;
+	type Hash = H256;
+	type Origin = Origin;
 }
 
 impl module::Trait for Runtime {}
@@ -183,6 +187,6 @@ fn create_genesis_config() {
 		module: Some(module::GenesisConfig {
 			request_life_time: 0,
 			enable_storage_role: true,
-		})
+		}),
 	};
 }

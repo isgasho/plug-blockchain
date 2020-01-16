@@ -21,9 +21,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
-use system::ensure_root;
 use sp_runtime::{traits::Dispatchable, DispatchError};
+use support::{decl_event, decl_module, weights::SimpleDispatchInfo, Parameter};
+use system::ensure_root;
 
 /// Configuration trait.
 pub trait Trait: system::Trait {
@@ -31,7 +31,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Call: Parameter + Dispatchable<Origin = Self::Origin>;
 }
 
 decl_event!(
@@ -63,12 +63,16 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-		weights::Weight
-	};
 	use primitives::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
+	};
+	use support::{
+		assert_noop, assert_ok, impl_outer_dispatch, impl_outer_origin, parameter_types,
+		weights::Weight,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -93,23 +97,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = Call;
-		type Hashing = BlakeTwo256;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
-		type Version = ();
+		type BlockHashCount = BlockHashCount;
+		type BlockNumber = u64;
+		type Call = Call;
 		type DelegatedDispatchVerifier = ();
 		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -118,28 +122,32 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 	impl Trait for Test {
-		type Event = ();
 		type Call = Call;
+		type Event = ();
 	}
 	type Balances = balances::Module<Test>;
 	type Utility = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -148,10 +156,13 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
-			assert_noop!(Utility::batch(Origin::signed(1), vec![
-				Call::Balances(balances::Call::force_transfer(1, 2, 5)),
-				Call::Balances(balances::Call::force_transfer(1, 2, 5))
-			]), "RequireRootOrigin");
+			assert_noop!(
+				Utility::batch(Origin::signed(1), vec![
+					Call::Balances(balances::Call::force_transfer(1, 2, 5)),
+					Call::Balances(balances::Call::force_transfer(1, 2, 5))
+				]),
+				"RequireRootOrigin"
+			);
 			assert_ok!(Utility::batch(Origin::ROOT, vec![
 				Call::Balances(balances::Call::force_transfer(1, 2, 5)),
 				Call::Balances(balances::Call::force_transfer(1, 2, 5))

@@ -23,15 +23,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
+use sp_runtime::traits::EnsureOrigin;
 use support::{
-	decl_module, decl_storage, decl_event,
+	decl_event, decl_module, decl_storage,
 	traits::{ChangeMembers, InitializeMembers},
 	weights::SimpleDispatchInfo,
 };
 use system::{ensure_root, ensure_signed};
-use sp_runtime::traits::EnsureOrigin;
 
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Trait<I = DefaultInstance>: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 
@@ -220,12 +220,16 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
+	use std::cell::RefCell;
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
+	};
 	use system::EnsureSignedBy;
 
 	impl_outer_origin! {
@@ -244,23 +248,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = ();
-		type Hashing = BlakeTwo256;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
-		type Version = ();
-		type Doughnut = ();
+		type BlockHashCount = BlockHashCount;
+		type BlockNumber = u64;
+		type Call = ();
 		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const One: u64 = 1;
@@ -295,13 +299,13 @@ mod tests {
 	}
 
 	impl Trait for Test {
-		type Event = ();
 		type AddOrigin = EnsureSignedBy<One, u64, ()>;
-		type RemoveOrigin = EnsureSignedBy<Two, u64, ()>;
-		type SwapOrigin = EnsureSignedBy<Three, u64, ()>;
-		type ResetOrigin = EnsureSignedBy<Four, u64, ()>;
-		type MembershipInitialized = TestChangeMembers;
+		type Event = ();
 		type MembershipChanged = TestChangeMembers;
+		type MembershipInitialized = TestChangeMembers;
+		type RemoveOrigin = EnsureSignedBy<Two, u64, ()>;
+		type ResetOrigin = EnsureSignedBy<Four, u64, ()>;
+		type SwapOrigin = EnsureSignedBy<Three, u64, ()>;
 	}
 
 	type Membership = Module<Test>;
@@ -309,12 +313,16 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		GenesisConfig::<Test>{
+		GenesisConfig::<Test> {
 			members: vec![10, 20, 30],
-			.. Default::default()
-		}.assimilate_storage(&mut t).unwrap();
+			..Default::default()
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -330,7 +338,10 @@ mod tests {
 	fn add_member_works() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Membership::add_member(Origin::signed(5), 15), "bad origin");
-			assert_noop!(Membership::add_member(Origin::signed(1), 10), "already a member");
+			assert_noop!(
+				Membership::add_member(Origin::signed(1), 10),
+				"already a member"
+			);
 			assert_ok!(Membership::add_member(Origin::signed(1), 15));
 			assert_eq!(Membership::members(), vec![10, 15, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -340,8 +351,14 @@ mod tests {
 	#[test]
 	fn remove_member_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::remove_member(Origin::signed(5), 20), "bad origin");
-			assert_noop!(Membership::remove_member(Origin::signed(2), 15), "not a member");
+			assert_noop!(
+				Membership::remove_member(Origin::signed(5), 20),
+				"bad origin"
+			);
+			assert_noop!(
+				Membership::remove_member(Origin::signed(2), 15),
+				"not a member"
+			);
 			assert_ok!(Membership::remove_member(Origin::signed(2), 20));
 			assert_eq!(Membership::members(), vec![10, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -351,9 +368,18 @@ mod tests {
 	#[test]
 	fn swap_member_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::swap_member(Origin::signed(5), 10, 25), "bad origin");
-			assert_noop!(Membership::swap_member(Origin::signed(3), 15, 25), "not a member");
-			assert_noop!(Membership::swap_member(Origin::signed(3), 10, 30), "already a member");
+			assert_noop!(
+				Membership::swap_member(Origin::signed(5), 10, 25),
+				"bad origin"
+			);
+			assert_noop!(
+				Membership::swap_member(Origin::signed(3), 15, 25),
+				"not a member"
+			);
+			assert_noop!(
+				Membership::swap_member(Origin::signed(3), 10, 30),
+				"already a member"
+			);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 20, 20));
 			assert_eq!(Membership::members(), vec![10, 20, 30]);
 			assert_ok!(Membership::swap_member(Origin::signed(3), 10, 25));
@@ -374,8 +400,14 @@ mod tests {
 	#[test]
 	fn change_key_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::change_key(Origin::signed(3), 25), "not a member");
-			assert_noop!(Membership::change_key(Origin::signed(10), 20), "already a member");
+			assert_noop!(
+				Membership::change_key(Origin::signed(3), 25),
+				"not a member"
+			);
+			assert_noop!(
+				Membership::change_key(Origin::signed(10), 20),
+				"already a member"
+			);
 			assert_ok!(Membership::change_key(Origin::signed(10), 40));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
@@ -394,8 +426,13 @@ mod tests {
 	#[test]
 	fn reset_members_works() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Membership::reset_members(Origin::signed(1), vec![20, 40, 30]), "bad origin");
-			assert_ok!(Membership::reset_members(Origin::signed(4), vec![20, 40, 30]));
+			assert_noop!(
+				Membership::reset_members(Origin::signed(1), vec![20, 40, 30]),
+				"bad origin"
+			);
+			assert_ok!(Membership::reset_members(Origin::signed(4), vec![
+				20, 40, 30
+			]));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), Membership::members());
 		});

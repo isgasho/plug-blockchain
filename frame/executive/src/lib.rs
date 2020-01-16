@@ -21,9 +21,9 @@
 //!
 //! ## Overview
 //!
-//! The executive module is not a typical SRML module providing functionality around a specific feature.
-//! It is a cross-cutting framework component for the SRML. It works in conjunction with the
-//! [SRML System module](../frame_system/index.html) to perform these cross-cutting functions.
+//! The executive module is not a typical SRML module providing functionality around a specific
+//! feature. It is a cross-cutting framework component for the SRML. It works in conjunction with
+//! the [SRML System module](../frame_system/index.html) to perform these cross-cutting functions.
 //!
 //! The Executive module provides functions to:
 //!
@@ -43,7 +43,8 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in
+//! its library.
 //!
 //! ### Example
 //!
@@ -60,9 +61,9 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{TransactionValidity, UnknownTransaction};
-//!	# #[allow(deprecated)]
+//! 	# #[allow(deprecated)]
 //! # use sp_runtime::traits::ValidateUnsigned;
-//!	# #[allow(deprecated)]
+//! 	# #[allow(deprecated)]
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
@@ -76,19 +77,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, marker::PhantomData};
-use support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
-use sp_runtime::{
-	generic::Digest, ApplyExtrinsicResult,
-	traits::{
-		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
-	},
-	transaction_validity::TransactionValidity,
-};
+use codec::{Codec, Encode};
+use rstd::{marker::PhantomData, prelude::*};
 #[allow(deprecated)]
 use sp_runtime::traits::ValidateUnsigned;
-use codec::{Codec, Encode};
+use sp_runtime::{
+	generic::Digest,
+	traits::{
+		self, Applyable, Block as BlockT, CheckEqual, Checkable, Dispatchable, Header, NumberFor,
+		OffchainWorker, OnFinalize, OnInitialize, One, Zero,
+	},
+	transaction_validity::TransactionValidity,
+	ApplyExtrinsicResult,
+};
+use support::weights::{DispatchInfo, GetDispatchInfo, WeighBlock};
 use system::{extrinsics_root, DigestOf};
 
 /// Trait that can be used to execute a block.
@@ -102,29 +104,28 @@ pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
+	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>,
 );
 
 #[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
-	System: system::Trait,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
+		System: system::Trait,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>
+			+ WeighBlock<System::BlockNumber>,
+	> ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		GetDispatchInfo,
+		Applyable<AccountId = System::AccountId, DispatchInfo = DispatchInfo> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
-	OriginOf<Block::Extrinsic, Context>: From<(Option<System::AccountId>, Option<System::Doughnut>)>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>:
+		From<(Option<System::AccountId>, Option<System::Doughnut>)>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
 		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
@@ -133,30 +134,38 @@ where
 
 #[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
-	System: system::Trait,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
-> Executive<System, Block, Context, UnsignedValidator, AllModules>
+		System: system::Trait,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>
+			+ WeighBlock<System::BlockNumber>,
+	> Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
-		GetDispatchInfo,
+		Applyable<AccountId = System::AccountId, DispatchInfo = DispatchInfo> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
-	OriginOf<Block::Extrinsic, Context>: From<(Option<System::AccountId>, Option<System::Doughnut>)>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>:
+		From<(Option<System::AccountId>, Option<System::Doughnut>)>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		let mut digests = <DigestOf<System>>::default();
-		header.digest().logs().iter().for_each(|d| if d.as_pre_runtime().is_some() { digests.push(d.clone()) });
-		Self::initialize_block_impl(header.number(), header.parent_hash(), header.extrinsics_root(), &digests);
+		header.digest().logs().iter().for_each(|d| {
+			if d.as_pre_runtime().is_some() {
+				digests.push(d.clone())
+			}
+		});
+		Self::initialize_block_impl(
+			header.number(),
+			header.parent_hash(),
+			header.extrinsics_root(),
+			&digests,
+		);
 	}
 
 	fn initialize_block_impl(
@@ -167,12 +176,12 @@ where
 	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
-		);
-		<system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
-		);
+		<system::Module<System>>::register_extra_weight_unchecked(<AllModules as WeighBlock<
+			System::BlockNumber,
+		>>::on_initialize(*block_number));
+		<system::Module<System>>::register_extra_weight_unchecked(<AllModules as WeighBlock<
+			System::BlockNumber,
+		>>::on_finalize(*block_number));
 	}
 
 	fn initial_checks(block: &Block) {
@@ -182,14 +191,18 @@ where
 		let n = header.number().clone();
 		assert!(
 			n > System::BlockNumber::zero()
-			&& <system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
+				&& <system::Module<System>>::block_hash(n - System::BlockNumber::one())
+					== *header.parent_hash(),
 			"Parent hash should be valid."
 		);
 
 		// Check that transaction trie root represents the transactions.
 		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
 		header.extrinsics_root().check_equal(&xts_root);
-		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
+		assert!(
+			header.extrinsics_root() == &xts_root,
+			"Transaction trie root must be valid."
+		);
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -208,9 +221,13 @@ where
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
-	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-
-		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+	fn execute_extrinsics_with_book_keeping(
+		extrinsics: Vec<Block::Extrinsic>,
+		block_number: NumberFor<Block>,
+	) {
+		extrinsics
+			.into_iter()
+			.for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
 		<system::Module<System>>::note_finished_extrinsics();
@@ -221,7 +238,9 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<system::Module<System>>::block_number());
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(
+			<system::Module<System>>::block_number(),
+		);
 
 		// set up extrinsics
 		<system::Module<System>>::derive_extrinsics();
@@ -244,7 +263,10 @@ where
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(Ok(())) => (),
 			Ok(Err(e)) => sp_runtime::print(e),
-			Err(e) => { let err: &'static str = e.into(); panic!(err) },
+			Err(e) => {
+				let err: &'static str = e.into();
+				panic!(err)
+			},
 		}
 	}
 
@@ -285,20 +307,31 @@ where
 			new_header.digest().logs().len(),
 			"Number of digest items must match that calculated."
 		);
-		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+		let items_zip = header
+			.digest()
+			.logs()
+			.iter()
+			.zip(new_header.digest().logs().iter());
 		for (header_item, computed_item) in items_zip {
 			header_item.check_equal(&computed_item);
-			assert!(header_item == computed_item, "Digest item must match that calculated.");
+			assert!(
+				header_item == computed_item,
+				"Digest item must match that calculated."
+			);
 		}
 
 		// check storage root.
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
-		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
+		assert!(
+			header.state_root() == storage_root,
+			"Storage root must match that calculated."
+		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
-	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
+	/// side-effects; it merely checks whether the transaction would panic if it were included or
+	/// not.
 	///
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
@@ -315,26 +348,29 @@ where
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use balances::Call as BalancesCall;
+	use hex_literal::hex;
 	use primitives::H256;
 	use prml_doughnut::{DoughnutRuntime, PlugDoughnut};
 	use sp_runtime::{
-		generic::Era, Perbill, DispatchError, testing::{Block, Digest, Header, doughnut::{TestAccountId}},
-		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
-		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
+		generic::Era,
+		testing::{doughnut::TestAccountId, Block, Digest, Header},
+		traits::{BlakeTwo256, Bounded, ConvertInto, Header as HeaderT, IdentityLookup},
+		transaction_validity::{InvalidTransaction, TransactionValidityError, UnknownTransaction},
+		DispatchError, Perbill,
 	};
 	use support::{
-		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
-		additional_traits::{DelegatedDispatchVerifier},
-		traits::{Currency, LockIdentifier, LockableCurrency, Time, WithdrawReasons, WithdrawReason},
+		additional_traits::DelegatedDispatchVerifier,
+		impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+		traits::{
+			Currency, LockIdentifier, LockableCurrency, Time, WithdrawReason, WithdrawReasons,
+		},
 		weights::Weight,
 	};
 	use system::{Call as SystemCall, ChainContext};
-	use balances::Call as BalancesCall;
-	use hex_literal::hex;
 
 	mod custom {
 		use support::weights::SimpleDispatchInfo;
@@ -379,7 +415,7 @@ mod tests {
 		pub enum Origin for Runtime { }
 	}
 
-	impl_outer_event!{
+	impl_outer_event! {
 		pub enum MetaEvent for Runtime {
 			balances<T>,
 		}
@@ -394,9 +430,11 @@ mod tests {
 	// We aren't testing doughnut verification here just return `Ok(())`
 	pub struct MockDelegatedDispatchVerifier<T: system::Trait>(rstd::marker::PhantomData<T>);
 	impl<T: system::Trait> DelegatedDispatchVerifier for MockDelegatedDispatchVerifier<T> {
-		type Doughnut = T::Doughnut;
 		type AccountId = T::AccountId;
+		type Doughnut = T::Doughnut;
+
 		const DOMAIN: &'static str = "";
+
 		fn verify_dispatch(
 			_doughnut: &T::Doughnut,
 			_module: &str,
@@ -416,27 +454,28 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Runtime {
-		type Origin = Origin;
-		type Index = u64;
-		type Call = Call;
+		type AccountId = TestAccountId;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
+		type Call = Call;
+		type DelegatedDispatchVerifier = MockDelegatedDispatchVerifier<Runtime>;
+		type Doughnut = PlugDoughnut<Runtime>;
+		type Event = MetaEvent;
 		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = TestAccountId;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = MetaEvent;
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = PlugDoughnut<Runtime>;
-		type DelegatedDispatchVerifier = MockDelegatedDispatchVerifier<Runtime>;
 	}
 	pub struct TimestampProvider;
 	impl Time for TimestampProvider {
 		type Moment = u64;
+
 		fn now() -> Self::Moment { 0 }
 	}
 	impl DoughnutRuntime for Runtime {
@@ -452,14 +491,14 @@ mod tests {
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = MetaEvent;
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = MetaEvent;
-		type DustRemoval = ();
-		type TransferPayment = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 
 	parameter_types! {
@@ -468,11 +507,11 @@ mod tests {
 	}
 	impl transaction_payment::Trait for Runtime {
 		type Currency = Balances;
+		type FeeMultiplierUpdate = ();
 		type OnTransactionPayment = ();
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = ConvertInto;
-		type FeeMultiplierUpdate = ();
 	}
 	impl custom::Trait for Runtime {}
 
@@ -480,9 +519,7 @@ mod tests {
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
 
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
-			Ok(())
-		}
+		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> { Ok(()) }
 
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {
@@ -497,11 +534,12 @@ mod tests {
 		system::CheckEra<Runtime>,
 		system::CheckNonce<Runtime>,
 		system::CheckWeight<Runtime>,
-		transaction_payment::ChargeTransactionPayment<Runtime>
+		transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
 	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<TestAccountId, Call, SignedExtra>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
+	type Executive =
+		super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
 
 	fn extra(nonce: u64, fee: u64, doughnut: Option<PlugDoughnut<Runtime>>) -> SignedExtra {
 		(
@@ -509,22 +547,34 @@ mod tests {
 			system::CheckEra::from(Era::Immortal),
 			system::CheckNonce::from(nonce),
 			system::CheckWeight::new(),
-			transaction_payment::ChargeTransactionPayment::from(fee)
+			transaction_payment::ChargeTransactionPayment::from(fee),
 		)
 	}
 
-	fn sign_extra(who: TestAccountId, nonce: u64, fee: u64, doughnut: Option<PlugDoughnut<Runtime>>) -> Option<(TestAccountId, SignedExtra)> {
+	fn sign_extra(
+		who: TestAccountId,
+		nonce: u64,
+		fee: u64,
+		doughnut: Option<PlugDoughnut<Runtime>>,
+	) -> Option<(TestAccountId, SignedExtra)> {
 		Some((who.into(), extra(nonce, fee, doughnut)))
 	}
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Runtime>()
+			.unwrap();
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1.into(), 211)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
-		let xt = sp_runtime::testing::TestXt(sign_extra(1.into(), 0, 0, None), Call::Balances(BalancesCall::transfer(2.into(), 69)));
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+		let xt = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 0, 0, None),
+			Call::Balances(BalancesCall::transfer(2.into(), 69)),
+		);
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::new(t);
 		t.execute_with(|| {
@@ -537,17 +587,24 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert!(r.is_ok());
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1.into()), 142 - 10 - weight);
+			assert_eq!(
+				<balances::Module<Runtime>>::total_balance(&1.into()),
+				142 - 10 - weight
+			);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2.into()), 69);
 		});
 	}
 
 	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Runtime>()
+			.unwrap();
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1.into(), 111 * balance_factor)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -558,9 +615,15 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("c6b01b27df520ba23adb96e7fc032acb7c586ba1b477c6282de43184111f2091").into(),
-					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-					digest: Digest { logs: vec![], },
+					state_root: hex!(
+						"c6b01b27df520ba23adb96e7fc032acb7c586ba1b477c6282de43184111f2091"
+					)
+					.into(),
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
 			});
@@ -576,8 +639,11 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-					digest: Digest { logs: vec![], },
+					extrinsics_root: hex!(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
+					)
+					.into(),
+					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
 			});
@@ -592,9 +658,12 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+					state_root: hex!(
+						"49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48"
+					)
+					.into(),
 					extrinsics_root: [0u8; 32].into(),
-					digest: Digest { logs: vec![], },
+					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
 			});
@@ -605,7 +674,10 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = sp_runtime::testing::TestXt(sign_extra(1.into(), 30, 0, None), Call::Balances(BalancesCall::transfer(33.into(), 69)));
+		let xt = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 30, 0, None),
+			Call::Balances(BalancesCall::transfer(33.into(), 69)),
+		);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -623,7 +695,10 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = sp_runtime::testing::TestXt(sign_extra(1.into(), 0, 0, None), Call::Balances(BalancesCall::transfer(3.into(), 0)));
+		let xt = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 0, 0, None),
+			Call::Balances(BalancesCall::transfer(3.into(), 0)),
+		);
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - 175;
@@ -641,7 +716,8 @@ mod tests {
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = sp_runtime::testing::TestXt(
-					sign_extra(1.into(), nonce.into(), 0, None), Call::Balances(BalancesCall::transfer(3.into(), 0)),
+					sign_extra(1.into(), nonce.into(), 0, None),
+					Call::Balances(BalancesCall::transfer(3.into(), 0)),
 				);
 				let res = Executive::apply_extrinsic(xt);
 				if nonce != num_to_exhaust_block {
@@ -650,7 +726,10 @@ mod tests {
 						<system::Module<Runtime>>::all_extrinsics_weight(),
 						encoded_len * (nonce + 1) + 175,
 					);
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
+					assert_eq!(
+						<system::Module<Runtime>>::extrinsic_index(),
+						Some(nonce as u32 + 1)
+					);
 				} else {
 					assert_eq!(res, Err(InvalidTransaction::ExhaustsResources.into()));
 				}
@@ -660,9 +739,18 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = sp_runtime::testing::TestXt(sign_extra(1.into(), 0, 0, None), Call::Balances(BalancesCall::transfer(3.into(), 0)));
-		let x1 = sp_runtime::testing::TestXt(sign_extra(1.into(), 1, 0, None), Call::Balances(BalancesCall::transfer(3.into(), 0)));
-		let x2 = sp_runtime::testing::TestXt(sign_extra(1.into(), 2, 0, None), Call::Balances(BalancesCall::transfer(3.into(), 0)));
+		let xt = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 0, 0, None),
+			Call::Balances(BalancesCall::transfer(3.into(), 0)),
+		);
+		let x1 = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 1, 0, None),
+			Call::Balances(BalancesCall::transfer(3.into(), 0)),
+		);
+		let x2 = sp_runtime::testing::TestXt(
+			sign_extra(1.into(), 2, 0, None),
+			Call::Balances(BalancesCall::transfer(3.into(), 0)),
+		);
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
@@ -674,7 +762,10 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len) as Weight);
+			assert_eq!(
+				<system::Module<Runtime>>::all_extrinsics_weight(),
+				(3 * len) as Weight
+			);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();
@@ -686,18 +777,24 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = sp_runtime::testing::TestXt(None, Call::Balances(BalancesCall::set_balance(33.into(), 69, 69)));
+		let xt = sp_runtime::testing::TestXt(
+			None,
+			Call::Balances(BalancesCall::set_balance(33.into(), 69, 69)),
+		);
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
-			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
+			assert_eq!(
+				Executive::validate_transaction(xt.clone()),
+				Ok(Default::default())
+			);
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
-				Ok(
-					Err(
-						DispatchError { module: Some(1), error: 0, message: Some("RequireRootOrigin") }
-					)
-				)
+				Ok(Err(DispatchError {
+					module: Some(1),
+					error: 0,
+					message: Some("RequireRootOrigin")
+				}))
 			);
 		});
 	}
@@ -731,7 +828,10 @@ mod tests {
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
 					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
 					// tx fee has been deducted.
-					assert_eq!(<balances::Module<Runtime>>::total_balance(&1.into()), 111 - 10 - weight);
+					assert_eq!(
+						<balances::Module<Runtime>>::total_balance(&1.into()),
+						111 - 10 - weight
+					);
 				} else {
 					assert_eq!(
 						Executive::apply_extrinsic(xt),
@@ -749,7 +849,6 @@ mod tests {
 	#[test]
 	fn block_hooks_weight_is_stored() {
 		new_test_ext(1).execute_with(|| {
-
 			Executive::initialize_block(&Header::new_from_number(1));
 			// NOTE: might need updates over time if system and balance introduce new weights. For
 			// now only accounts for the custom module.

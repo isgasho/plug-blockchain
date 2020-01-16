@@ -54,11 +54,15 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 /// Convert a wasm_interface Signature into a cranelift_codegen Signature.
 pub fn cranelift_ir_signature(signature: Signature, call_conv: &isa::CallConv) -> ir::Signature {
 	ir::Signature {
-		params: signature.args.iter()
+		params: signature
+			.args
+			.iter()
 			.map(cranelift_ir_type)
 			.map(ir::AbiParam::new)
 			.collect(),
-		returns: signature.return_value.iter()
+		returns: signature
+			.return_value
+			.iter()
 			.map(cranelift_ir_type)
 			.map(ir::AbiParam::new)
 			.collect(),

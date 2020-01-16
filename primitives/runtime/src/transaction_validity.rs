@@ -16,9 +16,11 @@
 
 //! Transaction validity interface.
 
+use crate::{
+	codec::{Decode, Encode},
+	RuntimeDebug,
+};
 use rstd::prelude::*;
-use crate::codec::{Encode, Decode};
-use crate::RuntimeDebug;
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -48,7 +50,8 @@ pub enum InvalidTransaction {
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
-	/// The transaction might be valid, but there are not enough resources left in the current block.
+	/// The transaction might be valid, but there are not enough resources left in the current
+	/// block.
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
@@ -72,10 +75,10 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::Stale => "Transaction is outdated",
 			InvalidTransaction::BadProof => "Transaction has a bad signature",
 			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
-			InvalidTransaction::ExhaustsResources =>
-				"Transaction would exhausts the block limits",
-			InvalidTransaction::Payment =>
-				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::ExhaustsResources => "Transaction would exhausts the block limits",
+			InvalidTransaction::Payment => {
+				"Inability to pay some fees (e.g. account balance too low)"
+			},
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 		}
 	}
@@ -96,10 +99,12 @@ pub enum UnknownTransaction {
 impl From<UnknownTransaction> for &'static str {
 	fn from(unknown: UnknownTransaction) -> &'static str {
 		match unknown {
-			UnknownTransaction::CannotLookup =>
-				"Could not lookup information required to validate the transaction",
-			UnknownTransaction::NoUnsignedValidator =>
-				"Could not find an unsigned validator for the unsigned transaction",
+			UnknownTransaction::CannotLookup => {
+				"Could not lookup information required to validate the transaction"
+			},
+			UnknownTransaction::NoUnsignedValidator => {
+				"Could not find an unsigned validator for the unsigned transaction"
+			},
 			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
 		}
 	}
@@ -135,30 +140,22 @@ impl From<TransactionValidityError> for &'static str {
 }
 
 impl From<InvalidTransaction> for TransactionValidityError {
-	fn from(err: InvalidTransaction) -> Self {
-		TransactionValidityError::Invalid(err)
-	}
+	fn from(err: InvalidTransaction) -> Self { TransactionValidityError::Invalid(err) }
 }
 
 impl From<UnknownTransaction> for TransactionValidityError {
-	fn from(err: UnknownTransaction) -> Self {
-		TransactionValidityError::Unknown(err)
-	}
+	fn from(err: UnknownTransaction) -> Self { TransactionValidityError::Unknown(err) }
 }
 
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 
 impl Into<TransactionValidity> for InvalidTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
-	}
+	fn into(self) -> TransactionValidity { Err(self.into()) }
 }
 
 impl Into<TransactionValidity> for UnknownTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
-	}
+	fn into(self) -> TransactionValidity { Err(self.into()) }
 }
 
 /// Information concerning a valid transaction.
@@ -213,8 +210,14 @@ impl ValidTransaction {
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
 		ValidTransaction {
 			priority: self.priority.saturating_add(other.priority),
-			requires: { self.requires.append(&mut other.requires); self.requires },
-			provides: { self.provides.append(&mut other.provides); self.provides },
+			requires: {
+				self.requires.append(&mut other.requires);
+				self.requires
+			},
+			provides: {
+				self.provides.append(&mut other.provides);
+				self.provides
+			},
 			longevity: self.longevity.min(other.longevity),
 			propagate: self.propagate && other.propagate,
 		}
@@ -236,10 +239,10 @@ mod tests {
 		});
 
 		let encoded = v.encode();
-		assert_eq!(
-			encoded,
-			vec![0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
-		);
+		assert_eq!(encoded, vec![
+			0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0,
+			0
+		]);
 
 		// decode back
 		assert_eq!(TransactionValidity::decode(&mut &*encoded), Ok(v));

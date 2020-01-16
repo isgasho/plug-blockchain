@@ -16,22 +16,27 @@
 
 //! Proving state machine backend.
 
-use std::sync::Arc;
-use parking_lot::RwLock;
-use codec::{Decode, Encode, Codec};
-use log::debug;
-use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
-use trie::{
-	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
-	read_trie_value_with, read_child_trie_value_with, record_all_keys
+use crate::{
+	trie_backend::TrieBackend,
+	trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage},
+	Backend, DBValue, Error, ExecutionError,
 };
-pub use trie::Recorder;
-pub use trie::trie_types::{Layout, TrieError};
-use crate::trie_backend::TrieBackend;
-use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend};
-use std::collections::{HashMap, HashSet};
-use crate::DBValue;
+use codec::{Codec, Decode, Encode};
+use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
+use log::debug;
+use parking_lot::RwLock;
+use std::{
+	collections::{HashMap, HashSet},
+	sync::Arc,
+};
+use trie::{
+	default_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
+	MemoryDB, PrefixedMemoryDB,
+};
+pub use trie::{
+	trie_types::{Layout, TrieError},
+	Recorder,
+};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -53,9 +58,7 @@ pub struct StorageProof {
 
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
-	}
+	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self { StorageProof { trie_nodes } }
 
 	/// Returns a new empty proof.
 	///
@@ -68,15 +71,11 @@ impl StorageProof {
 	}
 
 	/// Returns whether this is an empty proof.
-	pub fn is_empty(&self) -> bool {
-		self.trie_nodes.is_empty()
-	}
+	pub fn is_empty(&self) -> bool { self.trie_nodes.is_empty() }
 
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
 	/// to be traversed in any particular order.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
-		StorageProofNodeIterator::new(self)
-	}
+	pub fn iter_nodes(self) -> StorageProofNodeIterator { StorageProofNodeIterator::new(self) }
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
@@ -96,18 +95,18 @@ impl StorageProofNodeIterator {
 impl Iterator for StorageProofNodeIterator {
 	type Item = Vec<u8>;
 
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
+	fn next(&mut self) -> Option<Self::Item> { self.inner.next() }
 }
 
 /// Merges multiple storage proofs covering potentially different sets of keys into one proof
 /// covering all keys. The merged proof output may be smaller than the aggregate size of the input
 /// proofs due to deduplication of trie nodes.
 pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
-	where I: IntoIterator<Item=StorageProof>
+where
+	I: IntoIterator<Item = StorageProof>,
 {
-	let trie_nodes = proofs.into_iter()
+	let trie_nodes = proofs
+		.into_iter()
 		.flat_map(|proof| proof.iter_nodes())
 		.collect::<HashSet<_>>()
 		.into_iter()
@@ -116,18 +115,15 @@ pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
-	where
-		S: TrieBackendStorage<H>,
-		H: Hasher,
-		H::Out: Codec,
+where
+	S: TrieBackendStorage<H>,
+	H: Hasher,
+	H::Out: Codec,
 {
 	/// Produce proof for a key query.
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
-			self.backend.backend_storage(),
-			&mut read_overlay,
-		);
+		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -135,25 +131,24 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 			&eph,
 			self.backend.root(),
 			key,
-			&mut *self.proof_recorder
-		).map_err(map_e)
+			&mut *self.proof_recorder,
+		)
+		.map_err(map_e)
 	}
 
 	/// Produce proof for a child key query.
 	pub fn child_storage(
 		&mut self,
 		storage_key: &[u8],
-		key: &[u8]
+		key: &[u8],
 	) -> Result<Option<Vec<u8>>, String> {
-		let root = self.storage(storage_key)?
+		let root = self
+			.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
 			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
-			self.backend.backend_storage(),
-			&mut read_overlay,
-		);
+		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -162,17 +157,15 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 			&eph,
 			&root.as_ref(),
 			key,
-			&mut *self.proof_recorder
-		).map_err(map_e)
+			&mut *self.proof_recorder,
+		)
+		.map_err(map_e)
 	}
 
 	/// Produce proof for the whole backend.
 	pub fn record_all_keys(&mut self) {
 		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(
-			self.backend.backend_storage(),
-			&mut read_overlay,
-		);
+		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
@@ -191,7 +184,7 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValu
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher>(
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
@@ -202,7 +195,8 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
-	where H::Out: Codec
+where
+	H::Out: Codec,
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
@@ -219,14 +213,18 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder: proof_recorder,
+			proof_recorder,
 		};
 		ProvingBackend(TrieBackend::new(recorder, root))
 	}
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let trie_nodes = self.0.essence().backend_storage().proof_recorder
+		let trie_nodes = self
+			.0
+			.essence()
+			.backend_storage()
+			.proof_recorder
 			.read()
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
@@ -235,40 +233,48 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> for ProofRecorderBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
+	for ProofRecorderBackend<'a, S, H>
+{
 	type Overlay = S::Overlay;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
-			return Ok(v.clone());
+			return Ok(v.clone())
 		}
-		let backend_value =  self.backend.get(key, prefix)?;
-		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
+		let backend_value = self.backend.get(key, prefix)?;
+		self.proof_recorder
+			.write()
+			.insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
+	for ProvingBackend<'a, S, H>
+{
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
 	}
 }
 
 impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
-	where
-		S: 'a + TrieBackendStorage<H>,
-		H: 'a + Hasher,
-		H::Out: Ord + Codec,
+where
+	S: 'a + TrieBackendStorage<H>,
+	H: 'a + Hasher,
+	H::Out: Ord + Codec,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
 
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.storage(key)
-	}
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> { self.0.storage(key) }
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.child_storage(storage_key, key)
 	}
 
@@ -276,7 +282,11 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.next_storage_key(key)
 	}
 
-	fn next_child_storage_key(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn next_child_storage_key(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.next_child_storage_key(storage_key, key)
 	}
 
@@ -296,28 +306,29 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.0.pairs()
-	}
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> { self.0.pairs() }
 
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.0.keys(prefix)
-	}
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> { self.0.keys(prefix) }
 
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.0.child_keys(child_storage_key, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	where
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 	{
 		self.0.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		delta: I,
+	) -> (H::Out, bool, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord
+		I: IntoIterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord,
 	{
 		self.0.child_storage_root(storage_key, delta)
 	}
@@ -342,9 +353,7 @@ where
 }
 
 /// Create in-memory storage of proof check backend.
-pub fn create_proof_check_backend_storage<H>(
-	proof: StorageProof,
-) -> MemoryDB<H>
+pub fn create_proof_check_backend_storage<H>(proof: StorageProof) -> MemoryDB<H>
 where
 	H: Hasher,
 {
@@ -357,14 +366,15 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::backend::{InMemory};
-	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::{Blake2Hasher, storage::ChildStorageKey};
-	use crate::proving_backend::create_proof_check_backend;
+	use crate::{
+		backend::InMemory, proving_backend::create_proof_check_backend,
+		trie_backend::tests::test_trie,
+	};
+	use primitives::{storage::ChildStorageKey, Blake2Hasher};
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
+		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
 		ProvingBackend::new(trie_backend)
 	}
@@ -388,7 +398,7 @@ mod tests {
 		use primitives::H256;
 		let result = create_proof_check_backend::<Blake2Hasher>(
 			H256::from_low_u64_be(1),
-			StorageProof::empty()
+			StorageProof::empty(),
 		);
 		assert!(result.is_err());
 	}
@@ -397,7 +407,10 @@ mod tests {
 	fn passes_throgh_backend_calls() {
 		let trie_backend = test_trie();
 		let proving_backend = test_proving(&trie_backend);
-		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
+		assert_eq!(
+			trie_backend.storage(b"key").unwrap(),
+			proving_backend.storage(b"key").unwrap()
+		);
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
@@ -408,7 +421,9 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let contents = (0..64)
+			.map(|i| (None, vec![i], Some(vec![i])))
+			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
@@ -424,7 +439,8 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+		let proof_check =
+			create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 
@@ -434,46 +450,47 @@ mod tests {
 		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
 		let own1 = subtrie1.into_owned();
 		let own2 = subtrie2.into_owned();
-		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
+		let contents = (0..64)
+			.map(|i| (None, vec![i], Some(vec![i])))
 			.chain((28..65).map(|i| (Some(own1.clone()), vec![i], Some(vec![i]))))
 			.chain((10..15).map(|i| (Some(own2.clone()), vec![i], Some(vec![i]))))
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
-			::std::iter::empty(),
-			in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new()))
-		).0;
-		(0..64).for_each(|i| assert_eq!(
-			in_memory.storage(&[i]).unwrap().unwrap(),
-			vec![i]
-		));
-		(28..65).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own1[..], &[i]).unwrap().unwrap(),
-			vec![i]
-		));
-		(10..15).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own2[..], &[i]).unwrap().unwrap(),
-			vec![i]
-		));
+		let in_memory_root = in_memory
+			.full_storage_root::<_, Vec<_>, _>(
+				::std::iter::empty(),
+				in_memory
+					.child_storage_keys()
+					.map(|k| (k.to_vec(), Vec::new())),
+			)
+			.0;
+		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
+		(28..65).for_each(|i| {
+			assert_eq!(
+				in_memory.child_storage(&own1[..], &[i]).unwrap().unwrap(),
+				vec![i]
+			)
+		});
+		(10..15).for_each(|i| {
+			assert_eq!(
+				in_memory.child_storage(&own2[..], &[i]).unwrap().unwrap(),
+				vec![i]
+			)
+		});
 
 		let trie = in_memory.as_trie_backend().unwrap();
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
-		(0..64).for_each(|i| assert_eq!(
-			trie.storage(&[i]).unwrap().unwrap(),
-			vec![i]
-		));
+		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
-			in_memory_root.into(),
-			proof
-		).unwrap();
+		let proof_check =
+			create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
 		assert!(proof_check.storage(&[0]).is_err());
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 		// note that it is include in root because proof close
@@ -484,14 +501,14 @@ mod tests {
 		assert_eq!(proving.child_storage(&own1[..], &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
-		let proof_check = create_proof_check_backend::<Blake2Hasher>(
-			in_memory_root.into(),
-			proof
-		).unwrap();
+		let proof_check =
+			create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(
-			proof_check.child_storage(&own1[..], &[64]).unwrap().unwrap(),
+			proof_check
+				.child_storage(&own1[..], &[64])
+				.unwrap()
+				.unwrap(),
 			vec![64]
 		);
 	}
-
 }

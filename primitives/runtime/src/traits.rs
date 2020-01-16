@@ -16,117 +16,120 @@
 
 //! Primitives for the runtime modules.
 
-use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use runtime_io;
-#[cfg(feature = "std")]
-use std::fmt::Display;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher, TypeId};
-use crate::codec::{Codec, Encode, Decode};
-use crate::transaction_validity::{
-	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
-};
-use crate::generic::{Digest, DigestItem};
-pub use arithmetic::traits::{
-	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
-	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, IntegerSquareRoot
+use crate::{
+	codec::{Codec, Decode, Encode},
+	generic::{Digest, DigestItem},
+	transaction_validity::{
+		TransactionValidity, TransactionValidityError, UnknownTransaction, ValidTransaction,
+	},
 };
 use app_crypto::AppKey;
-use impl_trait_for_tuples::impl_for_tuples;
+pub use arithmetic::traits::{
+	Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedShl, CheckedShr, CheckedSub,
+	IntegerSquareRoot, One, SaturatedConversion, Saturating, SimpleArithmetic, UniqueSaturatedFrom,
+	UniqueSaturatedInto, Zero,
+};
 pub use doughnut::{
-	error::{VerifyError, ValidationError},
+	error::{ValidationError, VerifyError},
 	traits::{DoughnutApi, DoughnutVerify},
 };
+use impl_trait_for_tuples::impl_for_tuples;
+use primitives::{self, Blake2Hasher, Hasher, TypeId};
+use rstd::{
+	self,
+	convert::{TryFrom, TryInto},
+	fmt::Debug,
+	marker::PhantomData,
+	prelude::*,
+	result,
+};
+use runtime_io;
+#[cfg(feature = "std")]
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+#[cfg(feature = "std")]
+use std::fmt::Display;
 
 /// A version agnostic API trait to expose a doughnut's underlying data.
 /// It requires that associated types implement certain conversion traits in order
 /// to provide a default validation implementation.
 pub trait PlugDoughnutApi {
-    /// The holder and issuer public key type
-    type PublicKey: PartialEq + AsRef<[u8]>;
-    /// The expiry timestamp type
-    type Timestamp: PartialOrd + TryInto<u32>;
-    /// The signature type
+	/// The holder and issuer public key type
+	type PublicKey: PartialEq + AsRef<[u8]>;
+	/// The expiry timestamp type
+	type Timestamp: PartialOrd + TryInto<u32>;
+	/// The signature type
 	type Signature;
-    /// Return the doughnut holder
-    fn holder(&self) -> Self::PublicKey;
-    /// Return the doughnut issuer
-    fn issuer(&self) -> Self::PublicKey;
-    /// Return the doughnut expiry timestamp
-    fn expiry(&self) -> Self::Timestamp;
-    /// Return the doughnut 'not before' timestamp
-    fn not_before(&self) -> Self::Timestamp;
-    /// Return the doughnut payload bytes
-    fn payload(&self) -> Vec<u8>;
-    /// Return the doughnut signature
-    fn signature(&self) -> Self::Signature;
-    /// Return the doughnut signature version
-    fn signature_version(&self) -> u8;
-    /// Return the payload for domain, if it exists in the doughnut
-    fn get_domain(&self, domain: &str) -> Option<&[u8]>;
-    /// Validate the doughnut is usable by a public key (`who`) at the current timestamp (`not_before` <= `now` <= `expiry`)
+	/// Return the doughnut holder
+	fn holder(&self) -> Self::PublicKey;
+	/// Return the doughnut issuer
+	fn issuer(&self) -> Self::PublicKey;
+	/// Return the doughnut expiry timestamp
+	fn expiry(&self) -> Self::Timestamp;
+	/// Return the doughnut 'not before' timestamp
+	fn not_before(&self) -> Self::Timestamp;
+	/// Return the doughnut payload bytes
+	fn payload(&self) -> Vec<u8>;
+	/// Return the doughnut signature
+	fn signature(&self) -> Self::Signature;
+	/// Return the doughnut signature version
+	fn signature_version(&self) -> u8;
+	/// Return the payload for domain, if it exists in the doughnut
+	fn get_domain(&self, domain: &str) -> Option<&[u8]>;
+	/// Validate the doughnut is usable by a public key (`who`) at the current timestamp
+	/// (`not_before` <= `now` <= `expiry`)
 	fn validate<Q, R>(&self, who: Q, now: R) -> Result<(), ValidationError>
-    where
-        Q: AsRef<[u8]>,
-        R: TryInto<u32>,
-    {
-        if who.as_ref() != self.holder().as_ref() {
-            return Err(ValidationError::HolderIdentityMismatched);
-        }
-        let now_ = now.try_into().map_err(|_| ValidationError::Conversion)?;
-        if now_
-            < self
-                .not_before()
-                .try_into()
-                .map_err(|_| ValidationError::Conversion)?
-        {
-            return Err(ValidationError::Premature);
-        }
-        if now_
-            >= self
-                .expiry()
-                .try_into()
-                .map_err(|_| ValidationError::Conversion)?
-        {
-            return Err(ValidationError::Expired);
-        }
-        Ok(())
-    }
+	where
+		Q: AsRef<[u8]>,
+		R: TryInto<u32>,
+	{
+		if who.as_ref() != self.holder().as_ref() {
+			return Err(ValidationError::HolderIdentityMismatched)
+		}
+		let now_ = now.try_into().map_err(|_| ValidationError::Conversion)?;
+		if now_
+			< self
+				.not_before()
+				.try_into()
+				.map_err(|_| ValidationError::Conversion)?
+		{
+			return Err(ValidationError::Premature)
+		}
+		if now_
+			>= self
+				.expiry()
+				.try_into()
+				.map_err(|_| ValidationError::Conversion)?
+		{
+			return Err(ValidationError::Expired)
+		}
+		Ok(())
+	}
 }
 
 // Dummy implementation for unit type
 impl PlugDoughnutApi for () {
-    type PublicKey = [u8; 32];
-    type Timestamp = u32;
+	type PublicKey = [u8; 32];
 	type Signature = ();
-    fn holder(&self) -> Self::PublicKey {
-        Default::default()
-    }
-    fn issuer(&self) -> Self::PublicKey {
-        Default::default()
-    }
-    fn expiry(&self) -> Self::Timestamp {
-        0
-    }
-    fn not_before(&self) -> Self::Timestamp {
-        0
-    }
-    fn payload(&self) -> Vec<u8> {
-        Vec::default()
-    }
-    fn signature(&self) -> Self::Signature {}
-    fn signature_version(&self) -> u8 {
-        255
-    }
-    fn get_domain(&self, _domain: &str) -> Option<&[u8]> {
-        None
-    }
-    // fn validate<Q: AsRef<[u8]>, R: TryInto<u32>>(&self, who: Q, now: R) -> Result<(), ValidationError> {
-    //     Ok(())
-    // }
+	type Timestamp = u32;
+
+	fn holder(&self) -> Self::PublicKey { Default::default() }
+
+	fn issuer(&self) -> Self::PublicKey { Default::default() }
+
+	fn expiry(&self) -> Self::Timestamp { 0 }
+
+	fn not_before(&self) -> Self::Timestamp { 0 }
+
+	fn payload(&self) -> Vec<u8> { Vec::default() }
+
+	fn signature(&self) -> Self::Signature {}
+
+	fn signature_version(&self) -> u8 { 255 }
+
+	fn get_domain(&self, _domain: &str) -> Option<&[u8]> { None }
+	// fn validate<Q: AsRef<[u8]>, R: TryInto<u32>>(&self, who: Q, now: R) -> Result<(),
+	// ValidationError> {     Ok(())
+	// }
 }
 
 /// A lazy value.
@@ -141,8 +144,8 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
-/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
-/// the account ID.
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the
+/// original value from the account ID.
 pub trait IdentifyAccount {
 	/// The account ID that this can be transformed into.
 	type AccountId;
@@ -152,16 +155,19 @@ pub trait IdentifyAccount {
 
 impl IdentifyAccount for primitives::ed25519::Public {
 	type AccountId = Self;
+
 	fn into_account(self) -> Self { self }
 }
 
 impl IdentifyAccount for primitives::sr25519::Public {
 	type AccountId = Self;
+
 	fn into_account(self) -> Self { self }
 }
 
 impl IdentifyAccount for primitives::ecdsa::Public {
 	type AccountId = Self;
+
 	fn into_account(self) -> Self { self }
 }
 
@@ -170,11 +176,16 @@ pub trait Verify {
 	/// Type of the signer.
 	type Signer: IdentifyAccount;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
+	fn verify<L: Lazy<[u8]>>(
+		&self,
+		msg: L,
+		signer: &<Self::Signer as IdentifyAccount>::AccountId,
+	) -> bool;
 }
 
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
 		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
@@ -182,6 +193,7 @@ impl Verify for primitives::ed25519::Signature {
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
 		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
@@ -189,6 +201,7 @@ impl Verify for primitives::sr25519::Signature {
 
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
 		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
 			self.as_ref(),
@@ -209,19 +222,26 @@ pub trait AppVerify {
 }
 
 impl<
-	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
-	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
-		AsRef<S> + AsMut<S> + From<S>,
-> AppVerify for T where
+		S: Verify<Signer = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
+		T: app_crypto::Wraps<Inner = S>
+			+ app_crypto::AppKey
+			+ app_crypto::AppSignature
+			+ AsRef<S>
+			+ AsMut<S>
+			+ From<S>,
+	> AppVerify for T
+where
 	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
 	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
 		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
 {
 	type AccountId = <T as AppKey>::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
 		use app_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey =
+			<<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -231,9 +251,7 @@ impl<
 pub struct InvalidOrigin;
 
 impl From<InvalidOrigin> for &'static str {
-	fn from(_: InvalidOrigin) -> &'static str {
-		"Invalid origin"
-	}
+	fn from(_: InvalidOrigin) -> &'static str { "Invalid origin" }
 }
 
 /// Some sort of check on the origin is performed by this object.
@@ -253,15 +271,11 @@ pub trait EnsureOrigin<OuterOrigin> {
 pub struct LookupError;
 
 impl From<LookupError> for &'static str {
-	fn from(_: LookupError) -> &'static str {
-		"Can not lookup"
-	}
+	fn from(_: LookupError) -> &'static str { "Can not lookup" }
 }
 
 impl From<LookupError> for TransactionValidityError {
-	fn from(_: LookupError) -> Self {
-		UnknownTransaction::CannotLookup.into()
-	}
+	fn from(_: LookupError) -> Self { UnknownTransaction::CannotLookup.into() }
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -294,13 +308,16 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
+
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
+
 	fn unlookup(x: T) -> T { x }
 }
 
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
+
 	fn lookup(&self, x: T) -> Result<T, LookupError> { Ok(x) }
 }
 
@@ -335,7 +352,10 @@ pub trait CheckedConversion {
 	/// This just uses `TryFrom` internally but with this
 	/// variant you can provide the destination type using turbofish syntax
 	/// in case Rust happens not to assume the correct type.
-	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
+	fn checked_from<T>(t: T) -> Option<Self>
+	where
+		Self: TryFrom<T>,
+	{
 		<Self as TryFrom<T>>::try_from(t).ok()
 	}
 	/// Consume self to return `Some` equivalent value of `Option<T>`.
@@ -343,7 +363,10 @@ pub trait CheckedConversion {
 	/// This just uses `TryInto` internally but with this
 	/// variant you can provide the destination type using turbofish syntax
 	/// in case Rust happens not to assume the correct type.
-	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
+	fn checked_into<T>(self) -> Option<T>
+	where
+		Self: TryInto<T>,
+	{
 		<Self as TryInto<T>>::try_into(self).ok()
 	}
 }
@@ -368,11 +391,14 @@ macro_rules! impl_scale {
 	($self:ty, $other:ty) => {
 		impl Scale<$other> for $self {
 			type Output = Self;
+
 			fn mul(self, other: $other) -> Self::Output { self * (other as Self) }
+
 			fn div(self, other: $other) -> Self::Output { self / (other as Self) }
+
 			fn rem(self, other: $other) -> Self::Output { self % (other as Self) }
 		}
-	}
+	};
 }
 impl_scale!(u128, u128);
 impl_scale!(u128, u64);
@@ -402,22 +428,28 @@ pub trait Clear {
 
 impl<T: Default + Eq + PartialEq> Clear for T {
 	fn is_clear(&self) -> bool { *self == Self::clear() }
+
 	fn clear() -> Self { Default::default() }
 }
 
 /// A meta trait for all bit ops.
 pub trait SimpleBitOps:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
-{}
-impl<T:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
-> SimpleBitOps for T {}
+	Sized
+	+ Clear
+	+ rstd::ops::BitOr<Self, Output = Self>
+	+ rstd::ops::BitXor<Self, Output = Self>
+	+ rstd::ops::BitAnd<Self, Output = Self>
+{
+}
+impl<
+		T: Sized
+			+ Clear
+			+ rstd::ops::BitOr<Self, Output = Self>
+			+ rstd::ops::BitXor<Self, Output = Self>
+			+ rstd::ops::BitAnd<Self, Output = Self>,
+	> SimpleBitOps for T
+{
+}
 
 /// The block finalization trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
@@ -461,19 +493,25 @@ pub trait OffchainWorker<BlockNumber> {
 // traits must be fulfilled by all type parameters.
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
+	type Output: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ rstd::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Default
+		+ Encode
+		+ Decode;
 
 	/// The associated hash_db Hasher type.
-	type Hasher: Hasher<Out=Self::Output>;
+	type Hasher: Hasher<Out = Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
 
 	/// Produce the hash of some codec-encodable value.
-	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, Self::hash)
-	}
+	fn hash_of<S: Encode>(s: &S) -> Self::Output { Encode::using_encoded(s, Self::hash) }
 
 	/// The ordered Patricia tree root of the given `input`.
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output;
@@ -488,11 +526,10 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
-	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::hashing::blake2_256(s).into()
-	}
+	type Output = primitives::H256;
+
+	fn hash(s: &[u8]) -> Self::Output { runtime_io::hashing::blake2_256(s).into() }
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
 		runtime_io::trie::blake2_256_root(input)
@@ -532,7 +569,10 @@ impl CheckEqual for primitives::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
+impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H>
+where
+	H: Encode,
+{
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -615,11 +655,26 @@ pub trait IsMember<MemberId> {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
-		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Number: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ SimpleArithmetic
+		+ Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ Default
+		+ SimpleBitOps
+		+ Codec
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -658,9 +713,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
 
 	/// Returns the hash of the header.
-	fn hash(&self) -> Self::Hash {
-		<Self::Hashing as Hash>::hash_of(self)
-	}
+	fn hash(&self) -> Self::Hash { <Self::Hashing as Hash>::hash_of(self) }
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for an
@@ -671,10 +724,19 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Type of extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash=Self::Hash>;
+	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
-		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ rstd::hash::Hash
+		+ Copy
+		+ MaybeDisplay
+		+ Default
+		+ SimpleBitOps
+		+ Codec
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -688,7 +750,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
-	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create an instance.
+	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create
+	/// an instance.
 	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
@@ -712,8 +775,8 @@ pub trait Extrinsic: Sized {
 	///
 	/// Extrinsics can be split into:
 	/// 1. Inherents (no signature; created by validators during block production)
-	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of calls)
-	/// 3. Signed Transactions (with signature; a regular transactions with known origin)
+	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of
+	/// calls) 3. Signed Transactions (with signature; a regular transactions with known origin)
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
@@ -728,8 +791,8 @@ pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// Implement for pieces of information that require some additional context `Context` in order to be
-/// checked.
+/// Implement for pieces of information that require some additional context `Context` in order to
+/// be checked.
 pub trait Checkable<Context>: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
@@ -877,7 +940,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	}
 
 	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) {}
 }
 
 /// An error that is returned by a dispatchable function of a module.
@@ -893,11 +956,14 @@ pub trait ModuleDispatchError {
 
 #[impl_for_tuples(1, 12)]
 impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
-	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info> )* );
 	type AccountId = AccountId;
 	type Call = Call;
 	type DispatchInfo = Info;
+
+	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info> )* );
+
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
+
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -916,9 +982,13 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		Ok(valid)
 	}
 
-	fn pre_dispatch(&self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
-		-> Result<Self::Pre, TransactionValidityError>
-	{
+	fn pre_dispatch(
+		&self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info.clone(), len)? ),* ) ))
 	}
 
@@ -940,19 +1010,16 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info.clone(), len)? ),* ) ))
 	}
 
-	fn post_dispatch(
-		pre: Self::Pre,
-		info: Self::DispatchInfo,
-		len: usize,
-	) {
+	fn post_dispatch(pre: Self::Pre, info: Self::DispatchInfo, len: usize) {
 		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
 	}
 }
 
-/// This trait allows a doughnut value to be deconstructed from an extrinsic's `SignedExtension` payload.
-/// This is not possible with the `SignedExtension` trait alone, since the fields are indistinguishable
-/// from each other and are only decoded in pre-set hooks (`pre_dispatch`, `validate`, etc.), where as the doughnut is
-/// required outside these hooks, such as `Applyable::dispatch`.
+/// This trait allows a doughnut value to be deconstructed from an extrinsic's `SignedExtension`
+/// payload. This is not possible with the `SignedExtension` trait alone, since the fields are
+/// indistinguishable from each other and are only decoded in pre-set hooks (`pre_dispatch`,
+/// `validate`, etc.), where as the doughnut is required outside these hooks, such as
+/// `Applyable::dispatch`.
 pub trait MaybeDoughnut {
 	/// The extension doughnut type
 	type Doughnut: Send + Sync + PlugDoughnutApi;
@@ -963,7 +1030,7 @@ pub trait MaybeDoughnut {
 // Blanket impl for `Option<T: SignedExtension>`
 impl<T, AccountId, Info> SignedExtension for Option<T>
 where
-	T: SignedExtension<AccountId=AccountId, DispatchInfo=Info>,
+	T: SignedExtension<AccountId = AccountId, DispatchInfo = Info>,
 	Info: Clone,
 {
 	type AccountId = AccountId;
@@ -972,8 +1039,17 @@ where
 	type DispatchInfo = Info;
 	type Pre = T::Pre;
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> { Ok(()) }
-	fn validate(&self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize) -> Result<ValidTransaction, TransactionValidityError> {
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: Self::DispatchInfo,
+		len: usize,
+	) -> Result<ValidTransaction, TransactionValidityError> {
 		if let Some(inner) = self {
 			return inner.validate(who, call, info, len)
 		}
@@ -987,8 +1063,9 @@ impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
 	type Call = ();
-	type Pre = ();
 	type DispatchInfo = ();
+	type Pre = ();
+
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
@@ -1013,7 +1090,7 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
+	fn validate<V: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		info: Self::DispatchInfo,
 		len: usize,
@@ -1022,7 +1099,7 @@ pub trait Applyable: Sized + Send + Sync {
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
 	#[allow(deprecated)] // Allow ValidateUnsigned
-	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<V: ValidateUnsigned<Call = Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
@@ -1033,23 +1110,17 @@ pub trait Applyable: Sized + Send + Sync {
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 
 impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
+	fn from(api: T) -> Self { ApiRef(api, Default::default()) }
 }
 
 impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
+	fn deref_mut(&mut self) -> &mut T { &mut self.0 }
 }
 
 /// Something that provides a runtime api.
@@ -1144,15 +1215,11 @@ pub struct TrailingZeroInput<'a>(&'a [u8]);
 
 impl<'a> TrailingZeroInput<'a> {
 	/// Create a new instance from the given byte array.
-	pub fn new(data: &'a [u8]) -> Self {
-		Self(data)
-	}
+	pub fn new(data: &'a [u8]) -> Self { Self(data) }
 }
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		Ok(None)
-	}
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> { Ok(None) }
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		let len_from_inner = into.len().min(self.0.len());
@@ -1195,14 +1262,16 @@ pub trait AccountIdConversion<AccountId>: Sized {
 /// fill AccountId.
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
-		(Id::TYPE_ID, self, sub).using_encoded(|b|
-			T::decode(&mut TrailingZeroInput(b))
-		).unwrap_or_default()
+		(Id::TYPE_ID, self, sub)
+			.using_encoded(|b| T::decode(&mut TrailingZeroInput(b)))
+			.unwrap_or_default()
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID { return None }
+			if &d[0..4] != Id::TYPE_ID {
+				return None
+			}
 			let mut cursor = &d[4..];
 			let result = Decode::decode(&mut cursor).ok()?;
 			if cursor.iter().all(|x| *x == 0) {
@@ -1241,21 +1310,26 @@ macro_rules! count {
 ///
 /// ```rust
 /// use sp_runtime::{
-/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
-/// };
+/// 	app_crypto::{ed25519, sr25519},
+/// 	impl_opaque_keys, BoundToRuntimeAppPublic, KeyTypeId,
+/// 	};
 ///
 /// pub struct KeyModule;
-/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
+/// impl BoundToRuntimeAppPublic for KeyModule {
+/// 	type Public = ed25519::AppPublic;
+/// 	}
 ///
 /// pub struct KeyModule2;
-/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
+/// impl BoundToRuntimeAppPublic for KeyModule2 {
+/// 	type Public = sr25519::AppPublic;
+/// 	}
 ///
 /// impl_opaque_keys! {
-/// 	pub struct Keys {
-/// 		pub key_module: KeyModule,
-/// 		pub key_module2: KeyModule2,
-/// 	}
-/// }
+/// pub struct Keys {
+/// 	pub key_module: KeyModule,
+/// 	pub key_module2: KeyModule2,
+/// 			}
+/// 			}
 /// ```
 #[macro_export]
 macro_rules! impl_opaque_keys {
@@ -1338,46 +1412,32 @@ pub trait Printable {
 }
 
 impl Printable for u8 {
-	fn print(&self) {
-		(*self as u64).print()
-	}
+	fn print(&self) { (*self as u64).print() }
 }
 
 impl Printable for u32 {
-	fn print(&self) {
-		(*self as u64).print()
-	}
+	fn print(&self) { (*self as u64).print() }
 }
 
 impl Printable for usize {
-	fn print(&self) {
-		(*self as u64).print()
-	}
+	fn print(&self) { (*self as u64).print() }
 }
 
 impl Printable for u64 {
-	fn print(&self) {
-		runtime_io::misc::print_num(*self);
-	}
+	fn print(&self) { runtime_io::misc::print_num(*self); }
 }
 
 impl Printable for &[u8] {
-	fn print(&self) {
-		runtime_io::misc::print_hex(self);
-	}
+	fn print(&self) { runtime_io::misc::print_hex(self); }
 }
 
 impl Printable for &str {
-	fn print(&self) {
-		runtime_io::misc::print_utf8(self.as_bytes());
-	}
+	fn print(&self) { runtime_io::misc::print_utf8(self.as_bytes()); }
 }
 
 #[impl_for_tuples(1, 12)]
 impl Printable for Tuple {
-	fn print(&self) {
-		for_tuples!( #( Tuple.print(); )* )
-	}
+	fn print(&self) { for_tuples!( #( Tuple.print(); )* ) }
 }
 
 // Implement `MaybeDoughnut` for every tuple that starts with an `(Option<Doughnut>, ...)`
@@ -1435,18 +1495,18 @@ pub trait BlockIdTo<Block: self::Block> {
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode, Input};
+	use crate::codec::{Decode, Encode, Input};
 
 	mod t {
-		use primitives::crypto::KeyTypeId;
 		use app_crypto::{app_crypto, sr25519};
+		use primitives::crypto::KeyTypeId;
 		app_crypto!(sr25519, KeyTypeId(*b"test"));
 	}
 
 	#[test]
 	fn app_verify_works() {
-		use t::*;
 		use super::AppVerify;
+		use t::*;
 
 		let s = Signature::default();
 		let _ = s.verify(&[0u8; 100][..], &Public::default());

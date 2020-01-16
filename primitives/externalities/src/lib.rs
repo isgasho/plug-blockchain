@@ -26,8 +26,8 @@ use std::any::{Any, TypeId};
 
 use primitives_storage::ChildStorageKey;
 
+pub use extensions::{Extension, ExtensionStore, Extensions};
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
-pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
 mod scope_limited;
@@ -87,19 +87,16 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_storage(&mut self, key: &[u8]) {
-		self.place_storage(key.to_vec(), None);
-	}
+	fn clear_storage(&mut self, key: &[u8]) { self.place_storage(key.to_vec(), None); }
 
-	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
+	/// Clear a child storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn clear_child_storage(&mut self, storage_key: ChildStorageKey, key: &[u8]) {
 		self.place_child_storage(storage_key, key.to_vec(), None)
 	}
 
 	/// Whether a storage entry exists.
-	fn exists_storage(&self, key: &[u8]) -> bool {
-		self.storage(key).is_some()
-	}
+	fn exists_storage(&self, key: &[u8]) -> bool { self.storage(key).is_some() }
 
 	/// Whether a child storage entry exists.
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
@@ -121,7 +118,8 @@ pub trait Externalities: ExtensionStore {
 	/// Clear child storage entries which keys are start with the given prefix.
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]);
 
-	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Set or clear a storage entry (`key`) of current contract being called (effective
+	/// immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry. Return whether the operation succeeds.
@@ -166,6 +164,7 @@ pub trait ExternalitiesExt {
 
 impl ExternalitiesExt for &mut dyn Externalities {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
-		self.extension_by_type_id(TypeId::of::<T>()).and_then(Any::downcast_mut)
+		self.extension_by_type_id(TypeId::of::<T>())
+			.and_then(Any::downcast_mut)
 	}
 }

@@ -14,19 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Network packet message types. These get serialized and put into the lower level protocol payload.
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
 
-use bitflags::bitflags;
-use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
-	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	RemoteHeaderRequest, RemoteHeaderResponse,
-	RemoteChangesRequest, RemoteChangesResponse,
-	FinalityProofRequest, FinalityProofResponse,
-	FromBlock, RemoteReadChildRequest,
+	BlockAnnounce, FinalityProofRequest, FinalityProofResponse, FromBlock, RemoteCallRequest,
+	RemoteChangesRequest, RemoteChangesResponse, RemoteHeaderRequest, RemoteHeaderResponse,
+	RemoteReadChildRequest, RemoteReadRequest,
 };
+use bitflags::bitflags;
 use client_api::StorageProof;
+use codec::{Decode, Encode, Error, Input, Output};
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	ConsensusEngineId,
+};
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -40,30 +42,20 @@ pub type Message<B> = generic::Message<
 >;
 
 /// Type alias for using the status type using block type parameters.
-pub type Status<B> = generic::Status<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type Status<B> =
+	generic::Status<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the block request type using block type parameters.
-pub type BlockRequest<B> = generic::BlockRequest<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type BlockRequest<B> =
+	generic::BlockRequest<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> = generic::BlockData<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockData<B> =
+	generic::BlockData<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// Type alias for using the BlockResponse type using block type parameters.
-pub type BlockResponse<B> = generic::BlockResponse<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockResponse<B> =
+	generic::BlockResponse<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
@@ -86,9 +78,7 @@ bitflags! {
 }
 
 impl Encode for BlockAttributes {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
+	fn encode_to<T: Output>(&self, dest: &mut T) { dest.push_byte(self.bits()) }
 }
 
 impl codec::EncodeLike for BlockAttributes {}
@@ -137,14 +127,13 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
-	use crate::config::Roles;
 	use super::{
-		RemoteReadResponse, Transactions, Direction,
-		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
-		BlockState, StorageProof,
+		BlockAttributes, BlockState, ConsensusEngineId, Direction, RemoteCallResponse,
+		RemoteReadResponse, RequestId, StorageProof, Transactions,
 	};
+	use crate::config::Roles;
+	use codec::{Decode, Encode, Input, Output};
+	use sp_runtime::Justification;
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
@@ -283,7 +272,8 @@ pub mod generic {
 		pub to: Option<Hash>,
 		/// Sequence direction.
 		pub direction: Direction,
-		/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+		/// Maximum number of blocks to return. An implementation defined maximum is used when
+		/// unspecified.
 		pub max: Option<u32>,
 	}
 
@@ -435,7 +425,8 @@ pub mod generic {
 		pub id: RequestId,
 		/// Hash of the block to request proof for.
 		pub block: H,
-		/// Additional data blob (that both requester and provider understood) required for proving finality.
+		/// Additional data blob (that both requester and provider understood) required for proving
+		/// finality.
 		pub request: Vec<u8>,
 	}
 

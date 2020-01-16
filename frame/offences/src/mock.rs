@@ -18,24 +18,27 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
 use crate::{Module, Trait};
 use codec::Encode;
-use sp_runtime::Perbill;
-use sp_staking::{
-	SessionIndex,
-	offence::{self, Kind, OffenceDetails},
-};
-use sp_runtime::testing::Header;
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
+use runtime_io;
 use sp_core::H256;
-use support::{
-	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
-	weights::Weight,
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
-use {runtime_io, system};
+use sp_staking::{
+	offence::{self, Kind, OffenceDetails},
+	SessionIndex,
+};
+use std::cell::RefCell;
+use support::{
+	impl_outer_event, impl_outer_origin, parameter_types, weights::Weight, StorageDoubleMap,
+	StorageMap,
+};
+use system;
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Runtime {}
 }
 
@@ -58,9 +61,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOff
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| {
-		f(&mut *fractions.borrow_mut())
-	})
+	ON_OFFENCE_PERBILL.with(|fractions| f(&mut *fractions.borrow_mut()))
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -73,23 +74,23 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = TestEvent;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-    type Doughnut = ();
-    type DelegatedDispatchVerifier = ();
 }
 
 impl Trait for Runtime {
@@ -109,7 +110,9 @@ impl_outer_event! {
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	t.into()
 }
 
@@ -138,29 +141,19 @@ pub struct Offence<T> {
 }
 
 impl<T: Clone> offence::Offence<T> for Offence<T> {
-	const ID: offence::Kind = KIND;
 	type TimeSlot = u128;
 
-	fn offenders(&self) -> Vec<T> {
-		self.offenders.clone()
-	}
+	const ID: offence::Kind = KIND;
 
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
+	fn offenders(&self) -> Vec<T> { self.offenders.clone() }
 
-	fn time_slot(&self) -> u128 {
-		self.time_slot
-	}
+	fn validator_set_count(&self) -> u32 { self.validator_set_count }
 
-	fn session_index(&self) -> SessionIndex {
-		1
-	}
+	fn time_slot(&self) -> u128 { self.time_slot }
 
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
+	fn session_index(&self) -> SessionIndex { 1 }
+
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
 	}
 }

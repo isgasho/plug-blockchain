@@ -16,8 +16,10 @@
 
 //! Tracks offline validators.
 
-use std::collections::HashMap;
-use std::time::{Instant, Duration};
+use std::{
+	collections::HashMap,
+	time::{Duration, Instant},
+};
 
 // time before we report a validator.
 const REPORT_TIME: Duration = Duration::from_secs(60 * 5);
@@ -47,7 +49,9 @@ impl Observed {
 
 	fn is_active(&self) -> bool {
 		// can happen if clocks are not monotonic
-		if self.offline_since > self.last_round_end { return true }
+		if self.offline_since > self.last_round_end {
+			return true
+		}
 		self.last_round_end.duration_since(self.offline_since) < REPORT_TIME
 	}
 }
@@ -60,7 +64,9 @@ pub struct OfflineTracker<AuthorityId> {
 impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 	/// Create a new tracker.
 	pub fn new() -> Self {
-		OfflineTracker { observed: HashMap::new() }
+		OfflineTracker {
+			observed: HashMap::new(),
+		}
 	}
 
 	/// Note new consensus is starting with the given set of validators.
@@ -73,19 +79,23 @@ impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 
 	/// Note that a round has ended.
 	pub fn note_round_end(&mut self, validator: AuthorityId, was_online: bool) {
-		self.observed.entry(validator)
+		self.observed
+			.entry(validator)
 			.or_insert_with(Observed::new)
 			.note_round_end(was_online);
 	}
 
 	/// Generate a vector of indices for offline account IDs.
 	pub fn reports(&self, validators: &[AuthorityId]) -> Vec<u32> {
-		validators.iter()
+		validators
+			.iter()
 			.enumerate()
-			.filter_map(|(i, v)| if self.is_online(v) {
-				None
-			} else {
-				Some(i as u32)
+			.filter_map(|(i, v)| {
+				if self.is_online(v) {
+					None
+				} else {
+					Some(i as u32)
+				}
 			})
 			.collect()
 	}
@@ -105,7 +115,10 @@ impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 	}
 
 	fn is_online(&self, v: &AuthorityId) -> bool {
-		self.observed.get(v).map(Observed::is_active).unwrap_or(true)
+		self.observed
+			.get(v)
+			.map(Observed::is_active)
+			.unwrap_or(true)
 	}
 }
 

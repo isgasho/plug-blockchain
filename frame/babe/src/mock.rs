@@ -17,17 +17,20 @@
 //! Test utilities
 #![allow(dead_code, unused_imports)]
 
-use super::{Trait, Module, GenesisConfig};
+use super::{GenesisConfig, Module, Trait};
 use babe_primitives::AuthorityId;
+use primitives::{Blake2Hasher, H256};
+use runtime_io;
 use sp_runtime::{
-	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+	Perbill,
 };
 use sp_version::RuntimeVersion;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use runtime_io;
-use primitives::{H256, Blake2Hasher};
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
@@ -50,23 +53,23 @@ parameter_types! {
 }
 
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = DummyValidatorId;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
-	type Hash = H256;
-	type Version = Version;
-	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = DummyValidatorId;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
-	type Doughnut = ();
 	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
+	type Hash = H256;
+	type Hashing = sp_runtime::traits::BlakeTwo256;
+	type Header = Header;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
+	type Version = Version;
 }
 
 impl_opaque_keys! {
@@ -76,34 +79,41 @@ impl_opaque_keys! {
 }
 
 impl session::Trait for Test {
-	type Event = ();
-	type ValidatorId = <Self as system::Trait>::AccountId;
-	type ShouldEndSession = Babe;
-	type SessionHandler = (Babe,Babe,);
-	type OnSessionEnding = ();
-	type ValidatorIdOf = ();
-	type SelectInitialValidators = ();
-	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type Event = ();
+	type Keys = MockSessionKeys;
+	type OnSessionEnding = ();
+	type SelectInitialValidators = ();
+	type SessionHandler = (Babe, Babe);
+	type ShouldEndSession = Babe;
+	type ValidatorId = <Self as system::Trait>::AccountId;
+	type ValidatorIdOf = ();
 }
 
 impl timestamp::Trait for Test {
+	type MinimumPeriod = MinimumPeriod;
 	type Moment = u64;
 	type OnTimestampSet = Babe;
-	type MinimumPeriod = MinimumPeriod;
 }
 
 impl Trait for Test {
+	type EpochChangeTrigger = crate::ExternalTrigger;
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
-	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
 pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
 	GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
+		authorities: authorities
+			.into_iter()
+			.map(|a| (UintAuthorityId(a).to_public_key(), 1))
+			.collect(),
+	}
+	.assimilate_storage::<Test>(&mut t)
+	.unwrap();
 	t.into()
 }
 

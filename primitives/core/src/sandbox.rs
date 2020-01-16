@@ -16,17 +16,15 @@
 
 //! Definition of a sandbox environment.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
-#[derive(Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Encode, Decode, crate::RuntimeDebug)]
 pub struct HostError;
 
 /// Representation of a typed wasm value.
-#[derive(Clone, Copy, PartialEq, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Encode, Decode, crate::RuntimeDebug)]
 pub enum TypedValue {
 	/// Value of 32-bit signed or unsigned integer.
 	#[codec(index = "1")]
@@ -71,8 +69,10 @@ impl From<::wasmi::RuntimeValue> for TypedValue {
 #[cfg(feature = "std")]
 impl From<TypedValue> for ::wasmi::RuntimeValue {
 	fn from(val: TypedValue) -> ::wasmi::RuntimeValue {
-		use ::wasmi::RuntimeValue;
-		use ::wasmi::nan_preserving_float::{F32, F64};
+		use ::wasmi::{
+			nan_preserving_float::{F32, F64},
+			RuntimeValue,
+		};
 		match val {
 			TypedValue::I32(v) => RuntimeValue::I32(v),
 			TypedValue::I64(v) => RuntimeValue::I64(v),
@@ -85,8 +85,7 @@ impl From<TypedValue> for ::wasmi::RuntimeValue {
 /// Typed value that can be returned from a function.
 ///
 /// Basically a `TypedValue` plus `Unit`, for functions which return nothing.
-#[derive(Clone, Copy, PartialEq, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Encode, Decode, crate::RuntimeDebug)]
 pub enum ReturnValue {
 	/// For returning nothing.
 	Unit,
@@ -95,9 +94,7 @@ pub enum ReturnValue {
 }
 
 impl From<TypedValue> for ReturnValue {
-	fn from(v: TypedValue) -> ReturnValue {
-		ReturnValue::Value(v)
-	}
+	fn from(v: TypedValue) -> ReturnValue { ReturnValue::Value(v) }
 }
 
 impl ReturnValue {
@@ -118,8 +115,7 @@ fn return_value_encoded_max_size() {
 }
 
 /// Describes an entity to define or import into the environment.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, crate::RuntimeDebug)]
 pub enum ExternEntity {
 	/// Function that is specified by an index in a default table of
 	/// a module that creates the sandbox.
@@ -136,8 +132,7 @@ pub enum ExternEntity {
 ///
 /// Each entry has a two-level name and description of an entity
 /// being defined.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, crate::RuntimeDebug)]
 pub struct Entry {
 	/// Module name of which corresponding entity being defined.
 	pub module_name: Vec<u8>,
@@ -148,8 +143,7 @@ pub struct Entry {
 }
 
 /// Definition of runtime that could be used by sandboxed code.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, crate::RuntimeDebug)]
 pub struct EnvironmentDefinition {
 	/// Vector of all entries in the environment definition.
 	pub entries: Vec<Entry>,
@@ -183,8 +177,8 @@ pub const ERR_EXECUTION: u32 = -3i32 as u32;
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::fmt;
 	use codec::Codec;
+	use std::fmt;
 
 	fn roundtrip<S: Codec + PartialEq + fmt::Debug>(s: S) {
 		let encoded = s.encode();
@@ -193,28 +187,22 @@ mod tests {
 
 	#[test]
 	fn env_def_roundtrip() {
+		roundtrip(EnvironmentDefinition { entries: vec![] });
+
 		roundtrip(EnvironmentDefinition {
-			entries: vec![],
+			entries: vec![Entry {
+				module_name: b"kernel"[..].into(),
+				field_name: b"memory"[..].into(),
+				entity: ExternEntity::Memory(1337),
+			}],
 		});
 
 		roundtrip(EnvironmentDefinition {
-			entries: vec![
-				Entry {
-					module_name: b"kernel"[..].into(),
-					field_name: b"memory"[..].into(),
-					entity: ExternEntity::Memory(1337),
-				},
-			],
-		});
-
-		roundtrip(EnvironmentDefinition {
-			entries: vec![
-				Entry {
-					module_name: b"env"[..].into(),
-					field_name: b"abort"[..].into(),
-					entity: ExternEntity::Function(228),
-				},
-			],
+			entries: vec![Entry {
+				module_name: b"env"[..].into(),
+				field_name: b"abort"[..].into(),
+				entity: ExternEntity::Function(228),
+			}],
 		});
 	}
 }

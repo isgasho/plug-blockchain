@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::prelude::*;
-use rstd::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
+use crate::{
+	hash::{StorageHasher, Twox128},
+	storage::{self, unhashed},
+	traits::Len,
+};
+use codec::{Encode, EncodeAppend, EncodeLike, FullCodec, FullEncode, Ref};
+use rstd::{borrow::Borrow, prelude::*};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -71,7 +74,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -142,7 +145,7 @@ where
 		XKArg1: EncodeLike<K1>,
 		XKArg2: EncodeLike<K2>,
 		YKArg1: EncodeLike<K1>,
-		YKArg2: EncodeLike<K2>
+		YKArg2: EncodeLike<K2>,
 	{
 		let final_x_key = Self::storage_double_map_final_key(x_k1, x_k2);
 		let final_y_key = Self::storage_double_map_final_key(y_k1, y_k2);
@@ -177,7 +180,10 @@ where
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<K1> {
+	fn remove_prefix<KArg1>(k1: KArg1)
+	where
+		KArg1: EncodeLike<K1>,
+	{
 		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
@@ -208,24 +214,22 @@ where
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
-		let encoded_value = unhashed::get_raw(&final_key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => vec![],
-				}
+		let encoded_value =
+			unhashed::get_raw(&final_key).unwrap_or_else(|| match G::from_query_to_optional_value(
+				G::from_optional_value_to_query(None),
+			) {
+				Some(value) => value.encode(),
+				None => vec![],
 			});
 
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
+		let new_val =
+			V::append_or_new(encoded_value, items).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(&final_key, &new_val);
 
 		Ok(())
@@ -235,24 +239,24 @@ where
 		k1: KArg1,
 		k2: KArg2,
 		items: Items,
-	)
-	where
+	) where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator
+		V: EncodeAppend<Item = Item>,
+		Items: IntoIterator<Item = EncodeLikeItem> + Clone + EncodeLike<V>,
+		Items::IntoIter: ExactSizeIterator,
 	{
 		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
 			.unwrap_or_else(|_| Self::insert(k1, k2, items));
 	}
 
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
-		where KArg1: EncodeLike<K1>,
-		      KArg2: EncodeLike<K2>,
-		      V: codec::DecodeLength + Len,
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		V: codec::DecodeLength + Len,
 	{
 		let final_key = Self::storage_double_map_final_key(key1, key2);
 		if let Some(v) = unhashed::get_raw(&final_key) {

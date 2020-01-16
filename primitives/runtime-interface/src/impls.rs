@@ -16,19 +16,25 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner}};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
 use crate::wasm::*;
+use crate::{
+	pass_by::{Codec, Inner, PassBy, PassByInner},
+	Pointer, RIType,
+};
 
-#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
+#[cfg(all(
+	not(feature = "std"),
+	not(feature = "disable_target_static_assertions")
+))]
 use static_assertions::assert_eq_size;
 
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Result};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
 use rstd::{any::TypeId, mem, vec::Vec};
 
@@ -36,12 +42,18 @@ use rstd::{any::TypeId, mem, vec::Vec};
 use rstd::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use rstd::{slice, boxed::Box};
+use rstd::{boxed::Box, slice};
 
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
-#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
+#[cfg(all(
+	not(feature = "std"),
+	not(feature = "disable_target_static_assertions")
+))]
 assert_eq_size!(usize, u32);
-#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
+#[cfg(all(
+	not(feature = "std"),
+	not(feature = "disable_target_static_assertions")
+))]
 assert_eq_size!(*const u8, u32);
 
 /// Converts a pointer and length into an `u64`.
@@ -136,25 +148,19 @@ impl RIType for bool {
 impl IntoFFIValue for bool {
 	type Owned = ();
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<u8> {
-		if *self { 1 } else { 0 }.into()
-	}
+	fn into_ffi_value(&self) -> WrappedFFIValue<u8> { if *self { 1 } else { 0 }.into() }
 }
 
 #[cfg(not(feature = "std"))]
 impl FromFFIValue for bool {
-	fn from_ffi_value(arg: u8) -> bool {
-		arg == 1
-	}
+	fn from_ffi_value(arg: u8) -> bool { arg == 1 }
 }
 
 #[cfg(feature = "std")]
 impl FromFFIValue for bool {
 	type SelfInstance = bool;
 
-	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u8) -> Result<bool> {
-		Ok(arg == 1)
-	}
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u8) -> Result<bool> { Ok(arg == 1) }
 }
 
 #[cfg(feature = "std")]
@@ -203,9 +209,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
 	type Owned = Vec<u8>;
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
-		self[..].into_ffi_value()
-	}
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> { self[..].into_ffi_value() }
 }
 
 #[cfg(not(feature = "std"))]
@@ -245,7 +249,8 @@ impl<T: 'static + Decode> FromFFIValue for [T] {
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
 			Ok(unsafe { mem::transmute(vec) })
 		} else {
-			Ok(Vec::<T>::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
+			Ok(Vec::<T>::decode(&mut &vec[..])
+				.expect("Wasm to host values are encoded correctly; qed"))
 		}
 	}
 }
@@ -262,13 +267,11 @@ impl IntoPreallocatedFFIValue for [u8] {
 		let (ptr, len) = pointer_and_len_from_u64(allocated);
 
 		if (len as usize) < self_instance.len() {
-			Err(
-				format!(
-					"Preallocated buffer is not big enough (given {} vs needed {})!",
-					len,
-					self_instance.len()
-				)
-			)
+			Err(format!(
+				"Preallocated buffer is not big enough (given {} vs needed {})!",
+				len,
+				self_instance.len()
+			))
 		} else {
 			context.write_memory(Pointer::new(ptr), &self_instance)
 		}
@@ -462,16 +465,12 @@ impl<T> RIType for Pointer<T> {
 impl<T> IntoFFIValue for Pointer<T> {
 	type Owned = ();
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
-		(*self as u32).into()
-	}
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> { (*self as u32).into() }
 }
 
 #[cfg(not(feature = "std"))]
 impl<T> FromFFIValue for Pointer<T> {
-	fn from_ffi_value(arg: u32) -> Self {
-		arg as _
-	}
+	fn from_ffi_value(arg: u32) -> Self { arg as _ }
 }
 
 #[cfg(feature = "std")]
@@ -485,7 +484,5 @@ impl<T: wasm_interface::PointerType> FromFFIValue for Pointer<T> {
 
 #[cfg(feature = "std")]
 impl<T: wasm_interface::PointerType> IntoFFIValue for Pointer<T> {
-	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> {
-		Ok(self.into())
-	}
+	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> { Ok(self.into()) }
 }

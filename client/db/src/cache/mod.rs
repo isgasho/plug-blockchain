@@ -16,17 +16,22 @@
 
 //! DB-backed cache of blockchain data.
 
-use std::{sync::Arc, collections::HashMap};
 use parking_lot::RwLock;
+use std::{collections::HashMap, sync::Arc};
 
-use kvdb::{KeyValueDB, DBTransaction};
+use kvdb::{DBTransaction, KeyValueDB};
 
-use client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
+use crate::utils::{self, db_err, COLUMN_META};
+use client_api::blockchain::{
+	well_known_cache_keys::{self, Id as CacheKeyId},
+	Cache as BlockchainCache,
+};
+use codec::{Decode, Encode};
 use sp_blockchain::Result as ClientResult;
-use codec::{Encode, Decode};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use crate::utils::{self, COLUMN_META, db_err};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+};
 
 use self::list_cache::{ListCache, PruningStrategy};
 
@@ -111,7 +116,10 @@ impl<Block: BlockT> DbCache<Block> {
 	}
 
 	/// Begin cache transaction.
-	pub fn transaction<'a>(&'a mut self, tx: &'a mut DBTransaction) -> DbCacheTransaction<'a, Block> {
+	pub fn transaction<'a>(
+		&'a mut self,
+		tx: &'a mut DBTransaction,
+	) -> DbCacheTransaction<'a, Block> {
 		DbCacheTransaction {
 			cache: self,
 			tx,
@@ -131,7 +139,10 @@ impl<Block: BlockT> DbCache<Block> {
 	}
 
 	/// Creates `ListCache` with the given name or returns a reference to the existing.
-	fn get_cache(&mut self, name: CacheKeyId) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
+	fn get_cache(
+		&mut self,
+		name: CacheKeyId,
+	) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
 		get_cache_helper(
 			&mut self.cache_at,
 			name,
@@ -139,7 +150,7 @@ impl<Block: BlockT> DbCache<Block> {
 			self.key_lookup_column,
 			self.header_column,
 			self.authorities_column,
-			&self.best_finalized_block
+			&self.best_finalized_block,
 		)
 	}
 }
@@ -157,7 +168,9 @@ fn get_cache_helper<'a, Block: BlockT>(
 ) -> &'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
 	cache_at.entry(name).or_insert_with(|| {
 		ListCache::new(
-			self::list_storage::DbStorage::new(name.to_vec(), db.clone(),
+			self::list_storage::DbStorage::new(
+				name.to_vec(),
+				db.clone(),
 				self::list_storage::DbColumns {
 					meta: COLUMN_META,
 					key_lookup,
@@ -206,18 +219,20 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 
 		// prepare list of caches that are not update
 		// (we might still need to do some cache maintenance in this case)
-		let missed_caches = self.cache.cache_at.keys()
+		let missed_caches = self
+			.cache
+			.cache_at
+			.keys()
 			.filter(|cache| !data_at.contains_key(*cache))
 			.cloned()
 			.collect::<Vec<_>>();
 
-		let mut insert_op = |name: CacheKeyId, value: Option<Vec<u8>>| -> Result<(), sp_blockchain::Error> {
+		let mut insert_op = |name: CacheKeyId,
+		                     value: Option<Vec<u8>>|
+		 -> Result<(), sp_blockchain::Error> {
 			let cache = self.cache.get_cache(name);
 			let op = cache.on_block_insert(
-				&mut self::list_storage::DbStorageTransaction::new(
-					cache.storage(),
-					&mut self.tx,
-				),
+				&mut self::list_storage::DbStorageTransaction::new(cache.storage(), &mut self.tx),
 				parent.clone(),
 				block.clone(),
 				value,
@@ -229,12 +244,15 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			Ok(())
 		};
 
-		data_at.into_iter().try_for_each(|(name, data)| insert_op(name, Some(data)))?;
-		missed_caches.into_iter().try_for_each(|name| insert_op(name, None))?;
+		data_at
+			.into_iter()
+			.try_for_each(|(name, data)| insert_op(name, Some(data)))?;
+		missed_caches
+			.into_iter()
+			.try_for_each(|name| insert_op(name, None))?;
 
 		match entry_type {
-			EntryType::Final | EntryType::Genesis =>
-				self.best_finalized_block = Some(block),
+			EntryType::Final | EntryType::Genesis => self.best_finalized_block = Some(block),
 			EntryType::NonFinal => (),
 		}
 
@@ -245,7 +263,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	pub fn on_block_finalize(
 		mut self,
 		parent: ComplexBlockId<Block>,
-		block: ComplexBlockId<Block>
+		block: ComplexBlockId<Block>,
 	) -> ClientResult<Self> {
 		assert!(self.cache_at_op.is_empty());
 
@@ -253,7 +271,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			let op = cache_at.on_block_finalize(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache_at.storage(),
-					&mut self.tx
+					&mut self.tx,
 				),
 				parent.clone(),
 				block.clone(),
@@ -270,16 +288,10 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	}
 
 	/// When block is reverted.
-	pub fn on_block_revert(
-		mut self,
-		reverted_block: &ComplexBlockId<Block>,
-	) -> ClientResult<Self> {
+	pub fn on_block_revert(mut self, reverted_block: &ComplexBlockId<Block>) -> ClientResult<Self> {
 		for (name, cache) in self.cache.cache_at.iter() {
 			let op = cache.on_block_revert(
-				&mut self::list_storage::DbStorageTransaction::new(
-					cache.storage(),
-					&mut self.tx
-				),
+				&mut self::list_storage::DbStorageTransaction::new(cache.storage(), &mut self.tx),
 				reverted_block,
 			)?;
 
@@ -318,7 +330,11 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		&self,
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
-	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
+	) -> Option<(
+		(NumberFor<Block>, Block::Hash),
+		Option<(NumberFor<Block>, Block::Hash)>,
+		Vec<u8>,
+	)> {
 		let mut cache = self.0.write();
 		let storage = cache.get_cache(*key).storage();
 		let db = storage.db();
@@ -329,7 +345,9 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Hash(hash.clone())).ok()??;
+					BlockId::Hash(hash.clone()),
+				)
+				.ok()??;
 				ComplexBlockId::new(hash, *header.number())
 			},
 			BlockId::Number(number) => {
@@ -337,20 +355,27 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Number(number.clone())).ok()??.hash();
+					BlockId::Number(number.clone()),
+				)
+				.ok()??
+				.hash();
 				ComplexBlockId::new(hash, number)
 			},
 		};
 
-		cache.cache_at
+		cache
+			.cache_at
 			.get(key)?
 			.value_at_block(&at)
-			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
-				(
-					(begin_block.number, begin_block.hash),
-					end_block.map(|end_block| (end_block.number, end_block.hash)),
-					value,
-				)))
+			.map(|block_and_value| {
+				block_and_value.map(|(begin_block, end_block, value)| {
+					(
+						(begin_block.number, begin_block.hash),
+						end_block.map(|end_block| (end_block.number, end_block.hash)),
+						value,
+					)
+				})
+			})
 			.ok()?
 	}
 }

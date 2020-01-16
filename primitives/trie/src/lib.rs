@@ -19,41 +19,42 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod error;
-mod node_header;
 mod node_codec;
+mod node_header;
 mod trie_stream;
 
-use rstd::boxed::Box;
-use rstd::vec::Vec;
-use hash_db::Hasher;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
-/// The Substrate format implementation of `TrieStream`.
-pub use trie_stream::TrieStream;
-/// The Substrate format implementation of `NodeCodec`.
-pub use node_codec::NodeCodec;
-/// Various re-exports from the `trie-db` crate.
-pub use trie_db::{
-	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops,
-};
-/// Various re-exports from the `memory-db` crate.
-pub use memory_db::KeyFunction;
-pub use memory_db::prefixed_key;
+use hash_db::Hasher;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
+pub use memory_db::prefixed_key;
+/// Various re-exports from the `memory-db` crate.
+pub use memory_db::KeyFunction;
+/// The Substrate format implementation of `NodeCodec`.
+pub use node_codec::NodeCodec;
+use rstd::{boxed::Box, vec::Vec};
+/// Various re-exports from the `trie-db` crate.
+pub use trie_db::{
+	nibble_ops, CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieLayout, TrieMut,
+};
+/// The Substrate format implementation of `TrieStream`.
+pub use trie_stream::TrieStream;
 
 #[derive(Default)]
 /// substrate trie layout
 pub struct Layout<H>(rstd::marker::PhantomData<H>);
 
 impl<H: Hasher> TrieLayout for Layout<H> {
-	const USE_EXTENSION: bool = false;
-	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
+	type Hash = H;
+
+	const USE_EXTENSION: bool = false;
 }
 
 impl<H: Hasher> TrieConfiguration for Layout<H> {
-	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out where
+	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out
+	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
@@ -61,7 +62,8 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input)
 	}
 
-	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8> where
+	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8>
+	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
@@ -69,9 +71,7 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input)
 	}
 
-	fn encode_index(input: u32) -> Vec<u8> {
-		codec::Encode::encode(&codec::Compact(input))
-	}
+	fn encode_index(input: u32) -> Vec<u8> { codec::Encode::encode(&codec::Compact(input)) }
 }
 
 /// TrieDB error over `TrieConfiguration` trait.
@@ -122,8 +122,9 @@ pub mod trie_types {
 pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
-	delta: I
-) -> Result<TrieHash<L>, Box<TrieError<L>>> where
+	delta: I,
+) -> Result<TrieHash<L>, Box<TrieError<L>>>
+where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -147,23 +148,27 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>>(
 	db: &DB,
 	root: &TrieHash<L>,
-	key: &[u8]
+	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<L>::new(&*db, root)?
+		.get(key)
+		.map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the trie with given Query.
 pub fn read_trie_value_with<
 	L: TrieConfiguration,
-	Q: Query<L::Hash, Item=DBValue>,
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+	Q: Query<L::Hash, Item = DBValue>,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 >(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
-	query: Q
+	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<L>::new(&*db, root)?
+		.get_with(key, query)
+		.map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Determine the default child trie root.
@@ -179,10 +184,10 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 	_storage_key: &[u8],
 	input: I,
 ) -> <L::Hash as Hasher>::Out
-	where
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
+where
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
 {
 	L::trie_root(input)
 }
@@ -195,13 +200,13 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 	root_data: RD,
 	delta: I,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
-	where
-		I: IntoIterator<Item = (A, Option<B>)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
-		RD: AsRef<[u8]>,
-		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
+where
+	I: IntoIterator<Item = (A, Option<B>)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+	RD: AsRef<[u8]>,
+	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
+		+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -226,11 +231,11 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 	_storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
-	mut f: F
+	mut f: F,
 ) -> Result<(), Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+where
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+		+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -251,9 +256,10 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
 	root: &TrieHash<L>,
-	recorder: &mut Recorder<TrieHash<L>>
-) -> Result<(), Box<TrieError<L>>> where
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+	recorder: &mut Recorder<TrieHash<L>>,
+) -> Result<(), Box<TrieError<L>>>
+where
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let trie = TrieDB::<L>::new(&*db, root)?;
 	let iter = trie.iter()?;
@@ -275,36 +281,40 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	_storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
-	key: &[u8]
+	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+where
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+		+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_slice);
 
-	Ok(TrieDB::<L>::new(&*db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<L>::new(&*db, &root)?
+		.get(key)
+		.map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the child trie with given query.
-pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
+pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item = DBValue>, DB>(
 	_storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
 	key: &[u8],
-	query: Q
+	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+where
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
+		+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_slice);
 
-	Ok(TrieDB::<L>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<L>::new(&*db, &root)?
+		.get_with(key, query)
+		.map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Constants used into trie simplification codec.
@@ -319,12 +329,12 @@ mod trie_constants {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Compact};
-	use primitives::Blake2Hasher;
+	use codec::{Compact, Encode};
 	use hash_db::{HashDB, Hasher};
-	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
-	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
 	use hex_literal::hex;
+	use primitives::Blake2Hasher;
+	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
+	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
 
 	type Layout = super::Layout<Blake2Hasher>;
 
@@ -362,8 +372,12 @@ mod tests {
 		{
 			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
 			assert_eq!(
-				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
-				t.iter().unwrap()
+				input
+					.iter()
+					.map(|(i, j)| (i.to_vec(), j.to_vec()))
+					.collect::<Vec<_>>(),
+				t.iter()
+					.unwrap()
 					.map(|x| x.map(|y| (y.0, y.1.to_vec())).unwrap())
 					.collect::<Vec<_>>()
 			);
@@ -377,9 +391,11 @@ mod tests {
 		let mut empty = TrieDBMut::<Layout>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = Layout::trie_root::<_, Vec<u8>, Vec<u8>>(
-			std::iter::empty(),
-		).as_ref().iter().cloned().collect();
+		let root2: Vec<u8> = Layout::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
+			.as_ref()
+			.iter()
+			.cloned()
+			.collect();
 
 		assert_eq!(root1, root2);
 	}
@@ -400,20 +416,16 @@ mod tests {
 
 	#[test]
 	fn branch_is_equivalent() {
-		let input: Vec<(&[u8], &[u8])> = vec![
-			(&[0xaa][..], &[0x10][..]),
-			(&[0xba][..], &[0x11][..]),
-		];
+		let input: Vec<(&[u8], &[u8])> =
+			vec![(&[0xaa][..], &[0x10][..]), (&[0xba][..], &[0x11][..])];
 		check_equivalent::<Layout>(&input);
 		check_iteration::<Layout>(&input);
 	}
 
 	#[test]
 	fn extension_and_branch_is_equivalent() {
-		let input: Vec<(&[u8], &[u8])> = vec![
-			(&[0xaa][..], &[0x10][..]),
-			(&[0xab][..], &[0x11][..]),
-		];
+		let input: Vec<(&[u8], &[u8])> =
+			vec![(&[0xaa][..], &[0x10][..]), (&[0xab][..], &[0x11][..])];
 		check_equivalent::<Layout>(&input);
 		check_iteration::<Layout>(&input);
 	}
@@ -439,7 +451,7 @@ mod tests {
 		let input: Vec<(&[u8], &[u8])> = vec![
 			(&[0xaa][..], &[0xa0][..]),
 			(&[0xaa, 0xaa][..], &[0xaa][..]),
-			(&[0xaa, 0xbb][..], &[0xab][..])
+			(&[0xaa, 0xbb][..], &[0xab][..]),
 		];
 		check_equivalent::<Layout>(&input);
 		check_iteration::<Layout>(&input);
@@ -462,7 +474,10 @@ mod tests {
 	#[test]
 	fn single_long_leaf_is_equivalent() {
 		let input: Vec<(&[u8], &[u8])> = vec![
-			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
+			(
+				&[0xaa][..],
+				&b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..],
+			),
 			(&[0xba][..], &[0x11][..]),
 		];
 		check_equivalent::<Layout>(&input);
@@ -472,8 +487,14 @@ mod tests {
 	#[test]
 	fn two_long_leaves_is_equivalent() {
 		let input: Vec<(&[u8], &[u8])> = vec![
-			(&[0xaa][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..]),
-			(&[0xba][..], &b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..])
+			(
+				&[0xaa][..],
+				&b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..],
+			),
+			(
+				&[0xba][..],
+				&b"ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC"[..],
+			),
 		];
 		check_equivalent::<Layout>(&input);
 		check_iteration::<Layout>(&input);
@@ -482,11 +503,11 @@ mod tests {
 	fn populate_trie<'db, T: TrieConfiguration>(
 		db: &'db mut dyn HashDB<T::Hash, DBValue>,
 		root: &'db mut TrieHash<T>,
-		v: &[(Vec<u8>, Vec<u8>)]
+		v: &[(Vec<u8>, Vec<u8>)],
 	) -> TrieDBMut<'db, T> {
 		let mut t = TrieDBMut::<T>::new(db, root);
 		for i in 0..v.len() {
-			let key: &[u8]= &v[i].0;
+			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
 			t.insert(key, val).unwrap();
 		}
@@ -498,7 +519,7 @@ mod tests {
 		v: &[(Vec<u8>, Vec<u8>)],
 	) {
 		for i in v {
-			let key: &[u8]= &i.0;
+			let key: &[u8] = &i.0;
 			t.remove(key).unwrap();
 		}
 	}
@@ -516,7 +537,8 @@ mod tests {
 				journal_key: 0,
 				value_mode: ValueMode::Index,
 				count: 100,
-			}.make_with(seed.as_fixed_bytes_mut());
+			}
+			.make_with(seed.as_fixed_bytes_mut());
 
 			let real = Layout::trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
@@ -548,9 +570,7 @@ mod tests {
 		}
 	}
 
-	fn to_compact(n: u8) -> u8 {
-		Compact(n).encode()[0]
-	}
+	fn to_compact(n: u8) -> u8 { Compact(n).encode()[0] }
 
 	#[test]
 	fn codec_trie_empty() {
@@ -562,16 +582,14 @@ mod tests {
 
 	#[test]
 	fn codec_trie_single_tuple() {
-		let input = vec![
-			(vec![0xaa], vec![0xbb])
-		];
+		let input = vec![(vec![0xaa], vec![0xbb])];
 		let trie = Layout::trie_root_unhashed::<_, _, _>(input);
 		println!("trie: {:#x?}", trie);
 		assert_eq!(trie, vec![
-			0x42,					// leaf 0x40 (2^6) with (+) key of 2 nibbles (0x02)
-			0xaa,					// key data
-			to_compact(1),			// length of value in bytes as Compact
-			0xbb					// value data
+			0x42,          // leaf 0x40 (2^6) with (+) key of 2 nibbles (0x02)
+			0xaa,          // key data
+			to_compact(1), // length of value in bytes as Compact
+			0xbb           // value data
 		]);
 	}
 
@@ -581,21 +599,21 @@ mod tests {
 		let trie = Layout::trie_root_unhashed::<_, _, _>(input);
 		println!("trie: {:#x?}", trie);
 		let mut ex = Vec::<u8>::new();
-		ex.push(0x80);									// branch, no value (0b_10..) no nibble
-		ex.push(0x12);									// slots 1 & 4 are taken from 0-7
-		ex.push(0x00);									// no slots from 8-15
-		ex.push(to_compact(0x05));						// first slot: LEAF, 5 bytes long.
-		ex.push(0x43);									// leaf 0x40 with 3 nibbles
-		ex.push(0x03);									// first nibble
-		ex.push(0x14);									// second & third nibble
-		ex.push(to_compact(0x01));						// 1 byte data
-		ex.push(0xff);									// value data
-		ex.push(to_compact(0x05));						// second slot: LEAF, 5 bytes long.
-		ex.push(0x43);									// leaf with 3 nibbles
-		ex.push(0x08);									// first nibble
-		ex.push(0x19);									// second & third nibble
-		ex.push(to_compact(0x01));						// 1 byte data
-		ex.push(0xfe);									// value data
+		ex.push(0x80); // branch, no value (0b_10..) no nibble
+		ex.push(0x12); // slots 1 & 4 are taken from 0-7
+		ex.push(0x00); // no slots from 8-15
+		ex.push(to_compact(0x05)); // first slot: LEAF, 5 bytes long.
+		ex.push(0x43); // leaf 0x40 with 3 nibbles
+		ex.push(0x03); // first nibble
+		ex.push(0x14); // second & third nibble
+		ex.push(to_compact(0x01)); // 1 byte data
+		ex.push(0xff); // value data
+		ex.push(to_compact(0x05)); // second slot: LEAF, 5 bytes long.
+		ex.push(0x43); // leaf with 3 nibbles
+		ex.push(0x08); // first nibble
+		ex.push(0x19); // second & third nibble
+		ex.push(to_compact(0x01)); // 1 byte data
+		ex.push(0xfe); // value data
 
 		assert_eq!(trie, ex);
 	}
@@ -603,8 +621,14 @@ mod tests {
 	#[test]
 	fn iterator_works() {
 		let pairs = vec![
-			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
-			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
+			(
+				hex!("0103000000000000000464").to_vec(),
+				hex!("0400000000").to_vec(),
+			),
+			(
+				hex!("0103000000000000000469").to_vec(),
+				hex!("0401000000").to_vec(),
+			),
 		];
 
 		let mut mdb = MemoryDB::default();

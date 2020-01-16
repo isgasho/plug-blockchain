@@ -16,33 +16,34 @@
 
 //! Chain utilities.
 
-use crate::error;
-use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
-use crate::error::Error;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
-use log::{warn, info};
-use futures::{future, prelude::*};
-use futures03::{
-	TryFutureExt as _,
+use crate::{
+	builder::{ServiceBuilder, ServiceBuilderCommand},
+	error,
+	error::Error,
 };
-use primitives::{Blake2Hasher, Hasher};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
-};
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
+use chain_spec::{ChainSpec, Extension, RuntimeGenesis};
 use client::Client;
-use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use consensus_common::BlockOrigin;
-
-use std::{
-	io::{Read, Write, Seek},
+use codec::{Decode, Encode, IoReader};
+use consensus_common::{
+	import_queue::{BlockImportError, BlockImportResult, ImportQueue, IncomingBlock, Link},
+	BlockOrigin,
 };
+use futures::{future, prelude::*};
+use futures03::TryFutureExt as _;
+use log::{info, warn};
+use primitives::{Blake2Hasher, Hasher};
+use sp_runtime::{
+	generic::{BlockId, SignedBlock},
+	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Zero},
+};
+
+use std::io::{Read, Seek, Write};
 
 use network::message;
 
 /// Build a chain spec json
-pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
+pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String>
+where
 	G: RuntimeGenesis,
 	E: Extension,
 {
@@ -50,13 +51,40 @@ pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<Strin
 }
 
 impl<
-	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,
-	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
-	TExPool, TRpc, Backend
-> ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
-> where
+		TBl,
+		TRtApi,
+		TCfg,
+		TGen,
+		TCSExt,
+		TBackend,
+		TExec,
+		TFchr,
+		TSc,
+		TImpQu,
+		TFprb,
+		TFpp,
+		TNetP,
+		TExPool,
+		TRpc,
+		Backend,
+	> ServiceBuilderCommand
+	for ServiceBuilder<
+		TBl,
+		TRtApi,
+		TCfg,
+		TGen,
+		TCSExt,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TFchr,
+		TSc,
+		TImpQu,
+		TFprb,
+		TFpp,
+		TNetP,
+		TExPool,
+		TRpc,
+		Backend,
+	> where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
@@ -89,15 +117,21 @@ impl<
 				&mut self,
 				imported: usize,
 				_count: usize,
-				results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+				results: Vec<(
+					Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
+					B::Hash,
+				)>,
 			) {
 				self.imported_blocks += imported as u64;
 
 				for result in results {
 					if let (Err(err), hash) = result {
-						warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+						warn!(
+							"There was an error importing block with hash {:?}: {:?}",
+							hash, err
+						);
 						self.has_error = true;
-						break;
+						break
 					}
 				}
 			}
@@ -116,8 +150,8 @@ impl<
 		//
 		// Every time we read a block from the input or import a bunch of blocks from the import
 		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
-		// This makes it possible either to interleave other operations in-between the block imports,
-		// or to stop the operation completely.
+		// This makes it possible either to interleave other operations in-between the block
+		// imports, or to stop the operation completely.
 		let import = futures03::future::poll_fn(move |cx| {
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
@@ -127,13 +161,13 @@ impl<
 						Ok(c) => c,
 						Err(err) => {
 							let err = format!("Error reading file: {}", err);
-							return std::task::Poll::Ready(Err(From::from(err)));
+							return std::task::Poll::Ready(Err(From::from(err)))
 						},
 					};
 					info!("Importing {} blocks", c);
 					count = Some(c);
 					c
-				}
+				},
 			};
 
 			// Read blocks from the input.
@@ -142,13 +176,13 @@ impl<
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
-						let block  = message::BlockData::<Self::Block> {
+						let block = message::BlockData::<Self::Block> {
 							hash,
 							justification: signed.justification,
 							header: Some(header),
 							body: Some(extrinsics),
 							receipt: None,
-							message_queue: None
+							message_queue: None,
 						};
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
@@ -160,13 +194,13 @@ impl<
 								origin: None,
 								allow_missing_state: false,
 								import_existing: force,
-							}
+							},
 						]);
-					}
+					},
 					Err(e) => {
 						warn!("Error reading block data at {}: {}", read_block_count, e);
-						return std::task::Poll::Ready(Ok(()));
-					}
+						return std::task::Poll::Ready(Ok(()))
+					},
 				}
 
 				read_block_count += 1;
@@ -175,7 +209,7 @@ impl<
 				}
 
 				cx.waker().wake_by_ref();
-				return std::task::Poll::Pending;
+				return std::task::Poll::Pending
 			}
 
 			let blocks_before = link.imported_blocks;
@@ -186,7 +220,7 @@ impl<
 					"Stopping after #{} blocks because of an error",
 					link.imported_blocks,
 				);
-				return std::task::Poll::Ready(Ok(()));
+				return std::task::Poll::Ready(Ok(()))
 			}
 
 			if link.imported_blocks / 1000 != blocks_before / 1000 {
@@ -198,12 +232,15 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.info().chain.best_number);
-				return std::task::Poll::Ready(Ok(()));
-
+				info!(
+					"Imported {} blocks. Best: #{}",
+					read_block_count,
+					client.info().chain.best_number
+				);
+				return std::task::Poll::Ready(Ok(()))
 			} else {
 				// Polling the import queue will re-schedule the task when ready.
-				return std::task::Poll::Pending;
+				return std::task::Poll::Pending
 			}
 		});
 		Box::new(import.compat())
@@ -214,7 +251,7 @@ impl<
 		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
-		json: bool
+		json: bool,
 	) -> Box<dyn Future<Item = (), Error = Error>> {
 		let client = self.client;
 		let mut block = from;
@@ -232,11 +269,11 @@ impl<
 		//
 		// Every time we write a block to the output, the `Future` re-schedules itself and returns
 		// `Poll::Pending`.
-		// This makes it possible either to interleave other operations in-between the block exports,
-		// or to stop the operation completely.
+		// This makes it possible either to interleave other operations in-between the block
+		// exports, or to stop the operation completely.
 		let export = futures03::future::poll_fn(move |cx| {
 			if last < block {
-				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
+				return std::task::Poll::Ready(Err("Invalid block range specified".into()))
 			}
 
 			if !wrote_header {
@@ -255,8 +292,8 @@ impl<
 					if json {
 						serde_json::to_writer(&mut output, &block)
 							.map_err(|e| format!("Error writing JSON: {}", e))?;
-						} else {
-							output.write_all(&block.encode())?;
+					} else {
+						output.write_all(&block.encode())?;
 					}
 				},
 				// Reached end of the chain.
@@ -266,7 +303,7 @@ impl<
 				info!("#{}", block);
 			}
 			if block == last {
-				return std::task::Poll::Ready(Ok(()));
+				return std::task::Poll::Ready(Ok(()))
 			}
 			block += One::one();
 
@@ -278,24 +315,24 @@ impl<
 		Box::new(export.compat())
 	}
 
-	fn revert_chain(
-		&self,
-		blocks: NumberFor<TBl>
-	) -> Result<(), Error> {
+	fn revert_chain(&self, blocks: NumberFor<TBl>) -> Result<(), Error> {
 		let reverted = self.client.revert(blocks)?;
 		let info = self.client.info().chain;
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");
 		} else {
-			info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+			info!(
+				"Reverted {} blocks. Best: #{} ({})",
+				reverted, info.best_number, info.best_hash
+			);
 		}
 		Ok(())
 	}
 
 	fn check_block(
 		self,
-		block_id: BlockId<TBl>
+		block_id: BlockId<TBl>,
 	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
@@ -304,10 +341,9 @@ impl<
 				block.encode_to(&mut buf);
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true)
-			}
+			},
 			Ok(None) => Box::new(future::err("Unknown block".into())),
 			Err(e) => Box::new(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
 }
-

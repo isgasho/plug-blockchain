@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
 //! Error helpers for Chain RPC module.
 
 use crate::errors;
@@ -30,7 +29,7 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
+	#[display(fmt = "Client error: {}", _0)]
 	Client(Box<dyn std::error::Error + Send>),
 	/// Other error type.
 	Other(String),

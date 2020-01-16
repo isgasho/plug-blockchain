@@ -18,15 +18,15 @@
 
 //! This module implements sandboxing support in the runtime.
 
-use crate::error::{Result, Error};
-use std::{collections::HashMap, rc::Rc};
+use crate::error::{Error, Result};
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
-use wasmi::{
-	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
-};
+use std::{collections::HashMap, rc::Rc};
 use wasm_interface::{Pointer, WordSize};
+use wasmi::{
+	memory_units::Pages, Externals, ImportResolver, MemoryInstance, MemoryRef, Module,
+	ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind,
+};
 
 /// Index of a function inside the supervisor.
 ///
@@ -36,9 +36,7 @@ use wasm_interface::{Pointer, WordSize};
 pub struct SupervisorFuncIndex(usize);
 
 impl From<SupervisorFuncIndex> for usize {
-	fn from(index: SupervisorFuncIndex) -> Self {
-		index.0
-	}
+	fn from(index: SupervisorFuncIndex) -> Self { index.0 }
 }
 
 /// Index of a function within guest index space.
@@ -85,10 +83,7 @@ impl ImportResolver for Imports {
 			field_name.as_bytes().to_owned(),
 		);
 		let idx = *self.func_map.get(&key).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!(
-				"Export {}:{} not found",
-				module_name, field_name
-			))
+			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
 		})?;
 		Ok(wasmi::FuncInstance::alloc_host(signature.clone(), idx.0))
 	}
@@ -103,7 +98,8 @@ impl ImportResolver for Imports {
 			module_name.as_bytes().to_vec(),
 			field_name.as_bytes().to_vec(),
 		);
-		let mem = self.memories_map
+		let mem = self
+			.memories_map
 			.get(&key)
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
@@ -218,14 +214,13 @@ pub struct GuestExternals<'a, FE: SandboxCapabilities + 'a> {
 	state: u32,
 }
 
-fn trap(msg: &'static str) -> Trap {
-	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
-}
+fn trap(msg: &'static str) -> Trap { TrapKind::Host(Box::new(Error::Other(msg.into()))).into() }
 
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::{HostError, ReturnValue};
-	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
-		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
+	let result_val =
+		std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
+			.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
 	match result_val {
 		Ok(return_value) => Ok(match return_value {
@@ -245,18 +240,21 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		// Make `index` typesafe again.
 		let index = GuestFuncIndex(index);
 
-		let func_idx = self.sandbox_instance
+		let func_idx = self
+			.sandbox_instance
 			.guest_to_supervisor_mapping
 			.func_by_guest_index(index)
 			.expect(
 				"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
-					`FuncInstance::alloc_host` is called with indexes that was obtained from `guest_to_supervisor_mapping`;
+					`FuncInstance::alloc_host` is called with indexes that was obtained from \
+				 `guest_to_supervisor_mapping`;
 					`func_by_guest_index` called with `index` can't return `None`;
-					qed"
+					qed",
 			);
 
 		// Serialize arguments into a byte vector.
-		let invoke_args_data: Vec<u8> = args.as_ref()
+		let invoke_args_data: Vec<u8> = args
+			.as_ref()
 			.iter()
 			.cloned()
 			.map(sandbox_primitives::TypedValue::from)
@@ -269,7 +267,8 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		// then free allocated memory.
 		let invoke_args_len = invoke_args_data.len() as WordSize;
 		let invoke_args_ptr = self.supervisor_externals.allocate(invoke_args_len)?;
-		self.supervisor_externals.write_memory(invoke_args_ptr, &invoke_args_data)?;
+		self.supervisor_externals
+			.write_memory(invoke_args_ptr, &invoke_args_data)?;
 		let result = self.supervisor_externals.invoke(
 			&self.sandbox_instance.dispatch_thunk,
 			invoke_args_ptr,
@@ -289,7 +288,8 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			(Pointer::new(ptr), len)
 		};
 
-		let serialized_result_val = self.supervisor_externals
+		let serialized_result_val = self
+			.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
 		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr)?;
@@ -344,22 +344,17 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
-	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef=FR>>(
+	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef = FR>>(
 		&self,
 		export_name: &str,
 		args: &[RuntimeValue],
 		supervisor_externals: &mut FE,
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
-		with_guest_externals(
-			supervisor_externals,
-			self,
-			state,
-			|guest_externals| {
-				self.instance
-					.invoke_export(export_name, args, guest_externals)
-			},
-		)
+		with_guest_externals(supervisor_externals, self, state, |guest_externals| {
+			self.instance
+				.invoke_export(export_name, args, guest_externals)
+		})
 	}
 }
 
@@ -398,7 +393,7 @@ fn decode_environment_definition(
 				let externals_idx =
 					guest_to_supervisor_mapping.define(SupervisorFuncIndex(func_idx as usize));
 				func_map.insert((module, field), externals_idx);
-			}
+			},
 			sandbox_primitives::ExternEntity::Memory(memory_idx) => {
 				let memory_ref = memories
 					.get(memory_idx as usize)
@@ -406,7 +401,7 @@ fn decode_environment_definition(
 					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?
 					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?;
 				memories_map.insert((module, field), memory_ref);
-			}
+			},
 		}
 	}
 
@@ -444,7 +439,8 @@ pub fn instantiate<FE: SandboxCapabilities>(
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
+	let instance =
+		ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -503,11 +499,7 @@ impl<FR> Store<FR> {
 			specified_limit => Some(Pages(specified_limit as usize)),
 		};
 
-		let mem =
-			MemoryInstance::alloc(
-				Pages(initial as usize),
-				maximum,
-			)?;
+		let mem = MemoryInstance::alloc(Pages(initial as usize), maximum)?;
 
 		let mem_idx = self.memories.len();
 		self.memories.push(Some(mem));
@@ -555,7 +547,7 @@ impl<FR> Store<FR> {
 			Some(memory) => {
 				*memory = None;
 				Ok(())
-			}
+			},
 		}
 	}
 
@@ -572,7 +564,7 @@ impl<FR> Store<FR> {
 			Some(instance) => {
 				*instance = None;
 				Ok(())
-			}
+			},
 		}
 	}
 

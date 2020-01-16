@@ -15,11 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::ChainSpec;
-use futures01::{prelude::*, sync::oneshot, sync::mpsc};
+use futures01::{
+	prelude::*,
+	sync::{mpsc, oneshot},
+};
 use libp2p::wasm_ext;
 use log::{debug, info};
+use sc_service::{
+	config::DatabaseConfig, AbstractService, Configuration, Roles as ServiceRoles, RpcSession,
+};
 use std::sync::Arc;
-use sc_service::{AbstractService, RpcSession, Roles as ServiceRoles, Configuration, config::DatabaseConfig};
 use wasm_bindgen::prelude::*;
 
 /// Starts the client.
@@ -27,8 +32,7 @@ use wasm_bindgen::prelude::*;
 /// You must pass a libp2p transport that supports .
 #[wasm_bindgen]
 pub fn start_client(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, JsValue> {
-	start_inner(wasm_ext)
-		.map_err(|err| JsValue::from_str(&err.to_string()))
+	start_inner(wasm_ext).map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
 fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std::error::Error>> {
@@ -38,8 +42,11 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 	// Build the configuration to pass to the service.
 	let config = {
 		let wasm_ext = wasm_ext::ExtTransport::new(wasm_ext);
-		let chain_spec = ChainSpec::StagingTestnet.load().map_err(|e| format!("{:?}", e))?;
-		let mut config = Configuration::<(), _, _>::default_with_spec_and_base_path(chain_spec, None);
+		let chain_spec = ChainSpec::StagingTestnet
+			.load()
+			.map_err(|e| format!("{:?}", e))?;
+		let mut config =
+			Configuration::<(), _, _>::default_with_spec_and_base_path(chain_spec, None);
 		config.network.transport = network::config::TransportConfig::Normal {
 			wasm_external_transport: Some(wasm_ext.clone()),
 			allow_private_ipv4: true,
@@ -86,16 +93,14 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 		loop {
 			match service.poll().map_err(|_| ())? {
 				Async::Ready(()) => return Ok(Async::Ready(())),
-				Async::NotReady => break
+				Async::NotReady => break,
 			}
 		}
 
 		Ok(Async::NotReady)
 	}));
 
-	Ok(Client {
-		rpc_send_tx,
-	})
+	Ok(Client { rpc_send_tx })
 }
 
 /// A running client.
@@ -141,20 +146,21 @@ impl Client {
 			session: rpc_session.clone(),
 			send_back: fut_tx,
 		});
-		let fut_rx = fut_rx
-			.map_err(|_| ())
-			.and_then(|fut| fut);
+		let fut_rx = fut_rx.map_err(|_| ()).and_then(|fut| fut);
 		wasm_bindgen_futures::spawn_local(fut_rx.then(|_| Ok(())));
-		wasm_bindgen_futures::spawn_local(rx.for_each(move |s| {
-			match callback.call1(&callback, &JsValue::from_str(&s)) {
-				Ok(_) => Ok(()),
-				Err(_) => Err(()),
-			}
-		}).then(move |v| {
-			// We need to keep `rpc_session` alive.
-			debug!("RPC subscription has ended");
-			drop(rpc_session);
-			v
-		}));
+		wasm_bindgen_futures::spawn_local(
+			rx.for_each(
+				move |s| match callback.call1(&callback, &JsValue::from_str(&s)) {
+					Ok(_) => Ok(()),
+					Err(_) => Err(()),
+				},
+			)
+			.then(move |v| {
+				// We need to keep `rpc_session` alive.
+				debug!("RPC subscription has ended");
+				drop(rpc_session);
+				v
+			}),
+		);
 	}
 }

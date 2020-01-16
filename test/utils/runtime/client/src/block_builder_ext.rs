@@ -33,7 +33,8 @@ pub trait BlockBuilderExt {
 	) -> Result<(), sp_blockchain::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A> where
+impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A>
+where
 	A: ProvideRuntimeApi + 'a,
 	A::Api: BlockBuilderApi<runtime::Block, Error = sp_blockchain::Error>,
 {

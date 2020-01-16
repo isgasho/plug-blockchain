@@ -16,16 +16,15 @@
 
 //! Implementation of storage structures and implementation of storage traits on them.
 
-use proc_macro2::{TokenStream, Ident, Span};
+use super::{instance_trait::INHERENT_INSTANCE_NAME, DeclStorageDefExt, StorageLineTypeDef};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use super::{
-	DeclStorageDefExt, StorageLineTypeDef,
-	instance_trait::INHERENT_INSTANCE_NAME,
-};
 
 fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) -> TokenStream {
-	let default = default.as_ref().map(|d| quote!( #d ))
-		.unwrap_or_else(|| quote!( Default::default() ));
+	let default = default
+		.as_ref()
+		.map(|d| quote!( #d ))
+		.unwrap_or_else(|| quote!(Default::default()));
 
 	if !is_option {
 		// raw type case
@@ -39,10 +38,10 @@ fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) ->
 fn from_query_to_optional_value(is_option: bool) -> TokenStream {
 	if !is_option {
 		// raw type case
-		quote!( Some(v) )
+		quote!(Some(v))
 	} else {
 		// Option<> type case
-		quote!( v )
+		quote!(v)
 	}
 }
 
@@ -50,7 +49,6 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	let mut impls = TokenStream::new();
 
 	for line in &def.storage_lines {
-
 		// Propagate doc attributes.
 		let attrs = &line.doc_attrs;
 
@@ -58,7 +56,8 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let optional_storage_runtime_comma = &line.optional_storage_runtime_comma;
 		let optional_storage_runtime_bound_comma = &line.optional_storage_runtime_bound_comma;
 		let optional_storage_where_clause = &line.optional_storage_where_clause;
-		let optional_instance_bound_optional_default = &def.optional_instance_bound_optional_default;
+		let optional_instance_bound_optional_default =
+			&def.optional_instance_bound_optional_default;
 		let optional_instance_bound = &def.optional_instance_bound;
 		let optional_instance = &def.optional_instance;
 		let name = &line.name;
@@ -94,31 +93,29 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let query_type = &line.query_type;
 
 		let struct_impl = match &line.storage_type {
-			StorageLineTypeDef::Simple(_) => {
-				quote!(
-					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
-					#optional_storage_where_clause
-					{
-						type Query = #query_type;
+			StorageLineTypeDef::Simple(_) => quote!(
+				impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
+				#optional_storage_where_clause
+				{
+					type Query = #query_type;
 
-						fn module_prefix() -> &'static [u8] {
-							#instance_or_inherent::PREFIX.as_bytes()
-						}
-
-						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
-						}
-
-						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
-							#from_optional_value_to_query
-						}
-
-						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
-							#from_query_to_optional_value
-						}
+					fn module_prefix() -> &'static [u8] {
+						#instance_or_inherent::PREFIX.as_bytes()
 					}
-				)
-			},
+
+					fn storage_prefix() -> &'static [u8] {
+						#storage_name_str.as_bytes()
+					}
+
+					fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
+						#from_optional_value_to_query
+					}
+
+					fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
+						#from_query_to_optional_value
+					}
+				}
+			),
 			StorageLineTypeDef::Map(map) => {
 				let hasher = map.hasher.to_storage_hasher_struct();
 				quote!(
@@ -253,7 +250,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 					}
 				)
-			}
+			},
 		};
 
 		impls.extend(quote!(

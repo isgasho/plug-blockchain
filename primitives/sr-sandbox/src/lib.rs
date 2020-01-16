@@ -22,9 +22,9 @@
 //! and without the performance penalty of full wasm emulation inside wasm.
 //!
 //! This is achieved by using bindings to the wasm VM, which are published by the host API.
-//! This API is thin and consists of only a handful functions. It contains functions for instantiating
-//! modules and executing them, but doesn't contain functions for inspecting the module
-//! structure. The user of this library is supposed to read the wasm module.
+//! This API is thin and consists of only a handful functions. It contains functions for
+//! instantiating modules and executing them, but doesn't contain functions for inspecting the
+//! module structure. The user of this library is supposed to read the wasm module.
 //!
 //! When this crate is used in the `std` environment all these functions are implemented by directly
 //! calling the wasm VM.
@@ -40,7 +40,7 @@
 
 use rstd::prelude::*;
 
-pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};
+pub use primitives::sandbox::{HostError, ReturnValue, TypedValue};
 
 mod imp {
 	#[cfg(feature = "std")]
@@ -66,9 +66,7 @@ pub enum Error {
 }
 
 impl From<Error> for HostError {
-	fn from(_e: Error) -> HostError {
-		HostError
-	}
+	fn from(_e: Error) -> HostError { HostError }
 }
 
 /// Function pointer for specifying functions by the
@@ -110,16 +108,12 @@ impl Memory {
 	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
 	///
 	/// Returns `Err` if the range is out-of-bounds.
-	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
-		self.inner.get(ptr, buf)
-	}
+	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> { self.inner.get(ptr, buf) }
 
 	/// Write a memory area at the address `ptr` with contents of the provided slice `buf`.
 	///
 	/// Returns `Err` if the range is out-of-bounds.
-	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
-		self.inner.set(ptr, value)
-	}
+	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> { self.inner.set(ptr, value) }
 }
 
 /// Struct that can be used for defining an environment for a sandboxed module.
@@ -174,13 +168,15 @@ impl<T> Instance<T> {
 	/// run the `start` function (if it is present in the module) with the given `state`.
 	///
 	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
-	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
-	/// be returned.
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)`
+	/// will be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
-		-> Result<Instance<T>, Error>
-	{
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
 		Ok(Instance {
 			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
 		})
@@ -194,8 +190,8 @@ impl<T> Instance<T> {
 	///
 	/// - An export function name isn't a proper utf8 byte sequence,
 	/// - This module doesn't have an exported function with the given name,
-	/// - If types of the arguments passed to the function doesn't match function signature
-	///   then trap occurs (as if the exported function was called via call_indirect),
+	/// - If types of the arguments passed to the function doesn't match function signature then
+	///   trap occurs (as if the exported function was called via call_indirect),
 	/// - Trap occured at the execution time.
 	pub fn invoke(
 		&mut self,

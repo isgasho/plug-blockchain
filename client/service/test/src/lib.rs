@@ -16,26 +16,22 @@
 
 //! Service integration test utils.
 
-use std::iter;
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::net::Ipv4Addr;
-use std::time::Duration;
+use futures::{Future, Poll, Stream};
 use log::info;
-use futures::{Future, Stream, Poll};
-use tempfile::TempDir;
-use tokio::{runtime::Runtime, prelude::FutureExt};
-use tokio::timer::Interval;
-use service::{
-	AbstractService,
-	ChainSpec,
-	Configuration,
-	config::DatabaseConfig,
-	Roles,
-	Error,
+use network::{
+	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, Secret, TransportConfig},
+	multiaddr, Multiaddr,
 };
-use network::{multiaddr, Multiaddr};
-use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use service::{config::DatabaseConfig, AbstractService, ChainSpec, Configuration, Error, Roles};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use std::{
+	iter,
+	net::Ipv4Addr,
+	sync::{Arc, Mutex, MutexGuard},
+	time::Duration,
+};
+use tempfile::TempDir;
+use tokio::{prelude::FutureExt, runtime::Runtime, timer::Interval};
 use txpool_api::TransactionPool;
 
 /// Maximum duration of single wait call.
@@ -55,60 +51,51 @@ struct TestNet<G, E, F, L, U> {
 pub struct SyncService<T>(Arc<Mutex<T>>);
 
 impl<T> SyncService<T> {
-	pub fn get(&self) -> MutexGuard<T> {
-		self.0.lock().unwrap()
-	}
+	pub fn get(&self) -> MutexGuard<T> { self.0.lock().unwrap() }
 }
 
 impl<T> Clone for SyncService<T> {
-	fn clone(&self) -> Self {
-		Self(self.0.clone())
-	}
+	fn clone(&self) -> Self { Self(self.0.clone()) }
 }
 
 impl<T> From<T> for SyncService<T> {
-	fn from(service: T) -> Self {
-		SyncService(Arc::new(Mutex::new(service)))
-	}
+	fn from(service: T) -> Self { SyncService(Arc::new(Mutex::new(service))) }
 }
 
-impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
-	type Item = ();
+impl<T: Future<Item = (), Error = service::Error>> Future for SyncService<T> {
 	type Error = service::Error;
+	type Item = ();
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.0.lock().unwrap().poll()
-	}
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> { self.0.lock().unwrap().poll() }
 }
 
 impl<G, E, F, L, U> TestNet<G, E, F, L, U>
-where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
+where
+	F: Send + 'static,
+	L: Send + 'static,
+	U: Clone + Send + 'static,
 {
-	pub fn run_until_all_full<FP, LP>(
-		&mut self,
-		full_predicate: FP,
-		light_predicate: LP,
-	)
-		where
-			FP: Send + Fn(usize, &SyncService<F>) -> bool + 'static,
-			LP: Send + Fn(usize, &SyncService<L>) -> bool + 'static,
+	pub fn run_until_all_full<FP, LP>(&mut self, full_predicate: FP, light_predicate: LP)
+	where
+		FP: Send + Fn(usize, &SyncService<F>) -> bool + 'static,
+		LP: Send + Fn(usize, &SyncService<L>) -> bool + 'static,
 	{
 		let full_nodes = self.full_nodes.clone();
 		let light_nodes = self.light_nodes.clone();
 		let interval = Interval::new_interval(Duration::from_millis(100))
 			.map_err(|_| ())
 			.for_each(move |_| {
-				let full_ready = full_nodes.iter().all(|&(ref id, ref service, _, _)|
-					full_predicate(*id, service)
-				);
+				let full_ready = full_nodes
+					.iter()
+					.all(|&(ref id, ref service, _, _)| full_predicate(*id, service));
 
 				if !full_ready {
-					return Ok(());
+					return Ok(())
 				}
 
-				let light_ready = light_nodes.iter().all(|&(ref id, ref service, _)|
-					light_predicate(*id, service)
-				);
+				let light_ready = light_nodes
+					.iter()
+					.all(|&(ref id, ref service, _)| light_predicate(*id, service));
 
 				if !light_ready {
 					Ok(())
@@ -126,15 +113,14 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 	}
 }
 
-fn node_config<G, E: Clone> (
+fn node_config<G, E: Clone>(
 	index: usize,
 	spec: &ChainSpec<G, E>,
 	role: Roles,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<(), G, E>
-{
+) -> Configuration<(), G, E> {
 	let root = root.path().join(format!("node-{}", index));
 
 	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
@@ -143,10 +129,12 @@ fn node_config<G, E: Clone> (
 	let network_config = NetworkConfiguration {
 		config_path,
 		net_config_path,
-		listen_addresses: vec! [
+		listen_addresses: vec![
 			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
-				.collect()
+				.chain(iter::once(multiaddr::Protocol::Tcp(
+					base_port + index as u16,
+				)))
+				.collect(),
 		],
 		public_addresses: vec![],
 		boot_nodes: vec![],
@@ -178,7 +166,7 @@ fn node_config<G, E: Clone> (
 		config_dir: Some(root.clone()),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
-			cache_size: None
+			cache_size: None,
 		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
@@ -206,7 +194,8 @@ fn node_config<G, E: Clone> (
 	}
 }
 
-impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
+impl<G, E, F, L, U> TestNet<G, E, F, L, U>
+where
 	F: AbstractService,
 	L: AbstractService,
 	E: Clone,
@@ -216,11 +205,13 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		spec: ChainSpec<G, E>,
 		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
 		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (
-			String,
-			impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>
-		)>,
-		base_port: u16
+		authorities: impl Iterator<
+			Item = (
+				String,
+				impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>,
+			),
+		>,
+		base_port: u16,
 	) -> TestNet<G, E, F, L, U> {
 		let _ = env_logger::try_init();
 		fdlimit::raise_fd_limit();
@@ -243,7 +234,12 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		temp: &TempDir,
 		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
 		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
+		authorities: impl Iterator<
+			Item = (
+				String,
+				impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>,
+			),
+		>,
 	) {
 		let executor = self.runtime.executor();
 
@@ -256,35 +252,76 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 				self.base_port,
 				&temp,
 			);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let (service, user_data) = authority(node_config).expect("Error creating test node service");
+			let addr = node_config
+				.network
+				.listen_addresses
+				.iter()
+				.next()
+				.unwrap()
+				.clone();
+			let (service, user_data) =
+				authority(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
-			self.authority_nodes.push((self.nodes, service, user_data, addr));
+			let addr = addr.with(multiaddr::Protocol::P2p(
+				service.get().network().local_peer_id().into(),
+			));
+			self.authority_nodes
+				.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for full in full {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, None, self.base_port, &temp);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Roles::FULL,
+				None,
+				self.base_port,
+				&temp,
+			);
+			let addr = node_config
+				.network
+				.listen_addresses
+				.iter()
+				.next()
+				.unwrap()
+				.clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(
+				service.get().network().local_peer_id().into(),
+			));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
 
 		for light in light {
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, None, self.base_port, &temp);
-			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Roles::LIGHT,
+				None,
+				self.base_port,
+				&temp,
+			);
+			let addr = node_config
+				.network
+				.listen_addresses
+				.iter()
+				.next()
+				.unwrap()
+				.clone();
+			let service =
+				SyncService::from(light(node_config).expect("Error creating test node service"));
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(
+				service.get().network().local_peer_id().into(),
+			));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}
@@ -292,15 +329,18 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 }
 
 fn tempdir_with_prefix(prefix: &str) -> TempDir {
-	tempfile::Builder::new().prefix(prefix).tempdir().expect("Error creating test dir")
+	tempfile::Builder::new()
+		.prefix(prefix)
+		.tempdir()
+		.expect("Error creating test dir")
 }
 
 pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
-	// aren't actually light.
+	light_node_interconnectivity: bool, /* should normally be false, unless the light nodes
+	                                     * aren't actually light. */
 ) where
 	E: Clone,
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
@@ -324,8 +364,8 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			let mut network = TestNet::new(
 				&temp,
 				spec.clone(),
-				(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
-				(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+				(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg).map(|s| (s, ()))),
+				(0..NUM_LIGHT_NODES).map(|_| |cfg| light_builder(cfg)),
 				// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
 				// the type of the closure cannot be inferred.
 				(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
@@ -334,25 +374,36 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			info!("Checking star topology");
 			let first_address = network.full_nodes[0].3.clone();
 			for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-				service.get().network().add_reserved_peer(first_address.to_string())
+				service
+					.get()
+					.network()
+					.add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
 			for (_, service, _) in network.light_nodes.iter() {
-				service.get().network().add_reserved_peer(first_address.to_string())
+				service
+					.get()
+					.network()
+					.add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.get().network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.get().network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					service.get().network().num_connected() == expected_full_connections
+				},
+				move |_index, service| {
+					service.get().network().num_connected() == expected_light_connections
+				},
 			);
 
 			network.runtime
 		};
 
-		runtime.shutdown_now().wait().expect("Error shutting down runtime");
+		runtime
+			.shutdown_now()
+			.wait()
+			.expect("Error shutting down runtime");
 
 		temp.close().expect("Error removing temp dir");
 	}
@@ -362,8 +413,8 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			let mut network = TestNet::new(
 				&temp,
 				spec,
-				(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
-				(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+				(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg).map(|s| (s, ()))),
+				(0..NUM_LIGHT_NODES).map(|_| |cfg| light_builder(cfg)),
 				// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
 				// the type of the closure cannot be inferred.
 				(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
@@ -375,24 +426,32 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			for i in 0..max_nodes {
 				if i != 0 {
 					if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
-						service.get().network().add_reserved_peer(address.to_string())
+						service
+							.get()
+							.network()
+							.add_reserved_peer(address.to_string())
 							.expect("Error adding reserved peer");
 						address = node_id.clone();
 					}
 				}
 
 				if let Some((_, service, node_id)) = network.light_nodes.get(i) {
-					service.get().network().add_reserved_peer(address.to_string())
+					service
+						.get()
+						.network()
+						.add_reserved_peer(address.to_string())
 						.expect("Error adding reserved peer");
 					address = node_id.clone();
 				}
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.get().network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.get().network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					service.get().network().num_connected() == expected_full_connections
+				},
+				move |_index, service| {
+					service.get().network().num_connected() == expected_light_connections
+				},
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -404,7 +463,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	full_builder: Fb,
 	light_builder: Lb,
 	mut make_block_and_import: B,
-	mut extrinsic_factory: ExF
+	mut extrinsic_factory: ExF,
 ) where
 	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
@@ -423,8 +482,8 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),
-		(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg) }),
-		(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+		(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg)),
+		(0..NUM_LIGHT_NODES).map(|_| |cfg| light_builder(cfg)),
 		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
 		// the type of the closure cannot be inferred.
 		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg) })),
@@ -433,7 +492,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	info!("Checking block sync");
 	let first_address = {
 		let &mut (_, ref first_service, ref mut first_user_data, _) = &mut network.full_nodes[0];
-		for i in 0 .. NUM_BLOCKS {
+		for i in 0..NUM_BLOCKS {
 			if i % 128 == 0 {
 				info!("Generating #{}", i + 1);
 			}
@@ -445,16 +504,26 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 	info!("Running sync");
 	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
-		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
-		|_index, service|
-			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into(),
+		|_index, service| {
+			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into()
+		},
+		|_index, service| {
+			service.get().client().info().chain.best_number == (NUM_BLOCKS as u32).into()
+		},
 	);
 
 	info!("Checking extrinsic propagation");
@@ -462,7 +531,13 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
+	futures03::executor::block_on(
+		first_service
+			.get()
+			.transaction_pool()
+			.submit_one(&best_block, extrinsic),
+	)
+	.unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,
@@ -473,7 +548,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	authorities: impl IntoIterator<Item = String>
+	authorities: impl IntoIterator<Item = String>,
 ) where
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
 	F: AbstractService,
@@ -488,49 +563,75 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),
-		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
-		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
-		authorities.into_iter().map(|key| (key, { |cfg| full_builder(cfg).map(|s| (s, ())) })),
+		(0..NUM_FULL_NODES / 2).map(|_| |cfg| full_builder(cfg).map(|s| (s, ()))),
+		(0..NUM_LIGHT_NODES / 2).map(|_| |cfg| light_builder(cfg)),
+		authorities
+			.into_iter()
+			.map(|key| (key, { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 		30600,
 	);
 
 	info!("Checking consensus");
 	let first_address = network.authority_nodes[0].3.clone();
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
-		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
-		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32 / 2).into(),
+		|_index, service| {
+			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32 / 2).into()
+		},
+		|_index, service| {
+			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32 / 2).into()
+		},
 	);
 
 	info!("Adding more peers");
 	network.insert_nodes(
 		&temp,
-		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
-		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
+		(0..NUM_FULL_NODES / 2).map(|_| |cfg| full_builder(cfg).map(|s| (s, ()))),
+		(0..NUM_LIGHT_NODES / 2).map(|_| |cfg| light_builder(cfg)),
 		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
 		// the type of the closure cannot be inferred.
 		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 	);
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service
+			.get()
+			.network()
+			.add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
-		|_index, service|
-			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32).into(),
-		|_index, service|
-			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32).into(),
+		|_index, service| {
+			service.get().client().info().chain.finalized_number >= (NUM_BLOCKS as u32).into()
+		},
+		|_index, service| {
+			service.get().client().info().chain.best_number >= (NUM_BLOCKS as u32).into()
+		},
 	);
 }

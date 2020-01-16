@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
+use sp_api::{decl_runtime_apis, impl_runtime_apis, RuntimeApiInfo};
 
-use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, GetNodeBlockType},
+};
 
-use test_client::runtime::Block;
 use sp_blockchain::Result;
+use test_client::runtime::Block;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -81,28 +84,33 @@ impl_runtime_apis! {
 	}
 }
 
-type TestClient = test_client::client::Client<
-	test_client::Backend, test_client::Executor, Block, RuntimeApi
->;
+type TestClient =
+	test_client::client::Client<test_client::Backend, test_client::Executor, Block, RuntimeApi>;
 
 #[test]
 fn test_client_side_function_signature() {
 	let _test: fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, u64) -> Result<()> =
 		RuntimeApiImpl::<TestClient>::test;
-	let _something_with_block:
-		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, Block) -> Result<Block> =
-			RuntimeApiImpl::<TestClient>::something_with_block;
+	let _something_with_block: fn(
+		&RuntimeApiImpl<TestClient>,
+		&BlockId<Block>,
+		Block,
+	) -> Result<Block> = RuntimeApiImpl::<TestClient>::something_with_block;
 
 	#[allow(deprecated)]
-	let _same_name_before_version_2:
-		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>) -> Result<String> =
-			RuntimeApiImpl::<TestClient>::same_name_before_version_2;
+	let _same_name_before_version_2: fn(
+		&RuntimeApiImpl<TestClient>,
+		&BlockId<Block>,
+	) -> Result<String> = RuntimeApiImpl::<TestClient>::same_name_before_version_2;
 }
 
 #[test]
 fn check_runtime_api_info() {
 	assert_eq!(&Api::<Block, Error = ()>::ID, &runtime_decl_for_Api::ID);
-	assert_eq!(Api::<Block, Error = ()>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(
+		Api::<Block, Error = ()>::VERSION,
+		runtime_decl_for_Api::VERSION
+	);
 	assert_eq!(Api::<Block, Error = ()>::VERSION, 1);
 
 	assert_eq!(
@@ -117,7 +125,9 @@ fn check_runtime_api_info() {
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
-	assert!(RUNTIME_API_VERSIONS.iter().any(|v| v == &(T::ID, T::VERSION)));
+	assert!(RUNTIME_API_VERSIONS
+		.iter()
+		.any(|v| v == &(T::ID, T::VERSION)));
 }
 
 #[test]

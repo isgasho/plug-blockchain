@@ -16,28 +16,29 @@
 
 //! A method call executor interface.
 
-use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
-};
-use state_machine::{
-	self, OverlayedChanges, ExecutionManager, ExecutionStrategy,
-	ChangesTrieTransaction, StorageProof,
-};
-use executor::{RuntimeVersion, NativeVersion};
+use codec::{Decode, Encode};
+use executor::{NativeVersion, RuntimeVersion};
 use externalities::Extensions;
 use hash_db::Hasher;
 use primitives::{Blake2Hasher, NativeOrEncoded};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
+use state_machine::{
+	self, ChangesTrieTransaction, ExecutionManager, ExecutionStrategy, OverlayedChanges,
+	StorageProof,
+};
+use std::{cell::RefCell, cmp::Ord, panic::UnwindSafe, result};
 
-use sp_api::{ProofRecorder, InitializeBlock};
+use sp_api::{InitializeBlock, ProofRecorder};
 use sp_blockchain;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
 where
 	B: BlockT,
-	H: Hasher<Out=B::Hash>,
+	H: Hasher<Out = B::Hash>,
 	H::Out: Ord,
 {
 	/// Externalities error type.
@@ -65,7 +66,7 @@ where
 		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
@@ -81,7 +82,9 @@ where
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+	) -> sp_blockchain::Result<NativeOrEncoded<R>>
+	where
+		ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -99,7 +102,8 @@ where
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
+	>(
+		&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
@@ -111,7 +115,7 @@ where
 		(
 			NativeOrEncoded<R>,
 			(S::Transaction, H::Out),
-			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
+			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>,
 		),
 		sp_blockchain::Error,
 	>;
@@ -124,13 +128,12 @@ where
 		mut state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		let trie_state = state.as_trie_backend()
-			.ok_or_else(||
-				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<dyn state_machine::Error>
-			)?;
+		let trie_state = state.as_trie_backend().ok_or_else(|| {
+			Box::new(state_machine::ExecutionError::UnableToGenerateProof)
+				as Box<dyn state_machine::Error>
+		})?;
 		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}
 
@@ -142,7 +145,7 @@ where
 		trie_state: &state_machine::TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.

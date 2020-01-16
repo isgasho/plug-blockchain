@@ -16,7 +16,7 @@
 
 //! Types and traits for interfacing between the host and the wasm runtime.
 
-use std::{borrow::Cow, marker::PhantomData, mem, iter::Iterator, result};
+use std::{borrow::Cow, iter::Iterator, marker::PhantomData, mem, result};
 
 mod wasmi_impl;
 
@@ -102,49 +102,42 @@ impl<T: PointerType> Pointer<T> {
 
 	/// Calculate the offset from this pointer.
 	///
-	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
+	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the
+	/// pointer.
 	///
 	/// Returns an `Option` to respect that the pointer could probably overflow.
 	pub fn offset(self, offset: u32) -> Option<Self> {
-		offset.checked_mul(T::SIZE).and_then(|o| self.ptr.checked_add(o)).map(|ptr| {
-			Self {
+		offset
+			.checked_mul(T::SIZE)
+			.and_then(|o| self.ptr.checked_add(o))
+			.map(|ptr| Self {
 				ptr,
 				_marker: Default::default(),
-			}
-		})
+			})
 	}
 
 	/// Create a null pointer.
-	pub fn null() -> Self {
-		Self::new(0)
-	}
+	pub fn null() -> Self { Self::new(0) }
 
 	/// Cast this pointer of type `T` to a pointer of type `R`.
-	pub fn cast<R: PointerType>(self) -> Pointer<R> {
-		Pointer::new(self.ptr)
-	}
+	pub fn cast<R: PointerType>(self) -> Pointer<R> { Pointer::new(self.ptr) }
 }
 
 impl<T: PointerType> From<Pointer<T>> for u32 {
-	fn from(ptr: Pointer<T>) -> Self {
-		ptr.ptr
-	}
+	fn from(ptr: Pointer<T>) -> Self { ptr.ptr }
 }
 
 impl<T: PointerType> From<Pointer<T>> for u64 {
-	fn from(ptr: Pointer<T>) -> Self {
-		u64::from(ptr.ptr)
-	}
+	fn from(ptr: Pointer<T>) -> Self { u64::from(ptr.ptr) }
 }
 
 impl<T: PointerType> From<Pointer<T>> for usize {
-	fn from(ptr: Pointer<T>) -> Self {
-		ptr.ptr as _
-	}
+	fn from(ptr: Pointer<T>) -> Self { ptr.ptr as _ }
 }
 
 impl<T: PointerType> IntoValue for Pointer<T> {
 	const VALUE_TYPE: ValueType = ValueType::I32;
+
 	fn into_value(self) -> Value { Value::I32(self.ptr as _) }
 }
 
@@ -171,7 +164,10 @@ pub struct Signature {
 
 impl Signature {
 	/// Create a new instance of `Signature`.
-	pub fn new<T: Into<Cow<'static, [ValueType]>>>(args: T, return_value: Option<ValueType>) -> Self {
+	pub fn new<T: Into<Cow<'static, [ValueType]>>>(
+		args: T,
+		return_value: Option<ValueType>,
+	) -> Self {
 		Self {
 			args: args.into(),
 			return_value,
@@ -185,7 +181,6 @@ impl Signature {
 			return_value: None,
 		}
 	}
-
 }
 
 /// Something that provides a function implementation on the host for a wasm function.

@@ -16,17 +16,16 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::collections::HashMap;
+use consensus::BlockOrigin;
 use futures::channel::mpsc;
 use primitives::storage::StorageKey;
 use sp_runtime::{
-    traits::{Block as BlockT, NumberFor},
-    generic::BlockId
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
 };
-use consensus::BlockOrigin;
+use std::collections::HashMap;
 
-use crate::blockchain::Info;
-use crate::notifications::StorageEventStream;
+use crate::{blockchain::Info, notifications::StorageEventStream};
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
@@ -69,16 +68,20 @@ pub trait BlockchainEvents<Block: BlockT> {
 /// Fetch block body by ID.
 pub trait BlockBody<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
-	fn block_body(&self,
-		id: &BlockId<Block>
+	fn block_body(
+		&self,
+		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.
 pub trait ProvideUncles<Block: BlockT> {
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
-	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
-		-> sp_blockchain::Result<Vec<Block::Header>>;
+	fn uncles(
+		&self,
+		target_hash: Block::Hash,
+		max_generation: NumberFor<Block>,
+	) -> sp_blockchain::Result<Vec<Block::Header>>;
 }
 
 /// Client info

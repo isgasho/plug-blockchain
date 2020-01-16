@@ -17,15 +17,13 @@ use primitives::{
 	ed25519::{self},
 	sr25519::{self},
 };
-use rstd::{self, prelude::*};
-use rstd::convert::{TryFrom};
-use sp_runtime::{Doughnut};
-use sp_runtime::traits::{PlugDoughnutApi, DoughnutApi, DoughnutVerify, SignedExtension, Verify, VerifyError};
-use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError, ValidTransaction};
-use support::{
-	dispatch::DispatchInfo,
-	traits::Time,
+use rstd::{self, convert::TryFrom, prelude::*};
+use sp_runtime::{
+	traits::{DoughnutApi, DoughnutVerify, PlugDoughnutApi, SignedExtension, Verify, VerifyError},
+	transaction_validity::{InvalidTransaction, TransactionValidityError, ValidTransaction},
+	Doughnut,
 };
+use support::{dispatch::DispatchInfo, traits::Time};
 
 // Proxy calls to the inner Doughnut type and provide Runtime type conversions where required.
 impl<Runtime> PlugDoughnutApi for PlugDoughnut<Runtime>
@@ -39,42 +37,49 @@ where
 
 	fn holder(&self) -> Self::PublicKey {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.holder().into()
+			Doughnut::V0(v0) => v0.holder().into(),
 		}
 	}
+
 	fn issuer(&self) -> Self::PublicKey {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.issuer().into()
+			Doughnut::V0(v0) => v0.issuer().into(),
 		}
 	}
+
 	fn not_before(&self) -> Self::Timestamp {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.not_before().into()
+			Doughnut::V0(v0) => v0.not_before().into(),
 		}
 	}
+
 	fn expiry(&self) -> Self::Timestamp {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.expiry().into()
+			Doughnut::V0(v0) => v0.expiry().into(),
 		}
 	}
+
 	fn signature(&self) -> Self::Signature {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.signature().into()
+			Doughnut::V0(v0) => v0.signature().into(),
 		}
 	}
+
 	fn signature_version(&self) -> u8 {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.signature_version()
+			Doughnut::V0(v0) => v0.signature_version(),
 		}
 	}
+
 	fn payload(&self) -> Vec<u8> {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.payload()
+			Doughnut::V0(v0) => v0.payload(),
 		}
 	}
+
 	fn get_domain(&self, domain: &str) -> Option<&[u8]> {
 		match &self.0 {
-			Doughnut::V0(v0) => v0.get_domain(domain)
+			Doughnut::V0(v0) => v0.get_domain(domain),
 		}
 	}
 }
@@ -126,9 +131,16 @@ where
 	type Call = Runtime::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
-	fn validate(&self, who: &Self::AccountId, _call: &Self::Call, _info: Self::DispatchInfo, _len: usize) -> Result<ValidTransaction, TransactionValidityError>
-	{
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: Self::DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, TransactionValidityError> {
 		if self.verify().is_err() {
 			// 170 == invalid signature on doughnut
 			return Err(InvalidTransaction::Custom(170).into())
@@ -146,7 +158,7 @@ mod tests {
 	use super::*;
 	use primitives::crypto::Pair;
 	use runtime_io::TestExternalities;
-	use sp_runtime::{DoughnutV0, Doughnut, MultiSignature, traits::IdentifyAccount};
+	use sp_runtime::{traits::IdentifyAccount, Doughnut, DoughnutV0, MultiSignature};
 
 	type Signature = MultiSignature;
 	type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
@@ -157,9 +169,8 @@ mod tests {
 	pub struct TimestampProvider;
 	impl Time for TimestampProvider {
 		type Moment = u64;
-		fn now() -> Self::Moment {
-			0
-		}
+
+		fn now() -> Self::Moment { 0 }
 	}
 	impl DoughnutRuntime for Runtime {
 		type AccountId = AccountId;
@@ -184,9 +195,12 @@ mod tests {
 			domains: vec![("test".to_string(), vec![0u8])],
 		});
 		let plug_doughnut = PlugDoughnut::<Runtime>::new(doughnut);
-		assert!(
-			<PlugDoughnut<_> as PlugDoughnutApi>::validate(&plug_doughnut, holder.public(), 100).is_ok()
-		);
+		assert!(<PlugDoughnut<_> as PlugDoughnutApi>::validate(
+			&plug_doughnut,
+			holder.public(),
+			100
+		)
+		.is_ok());
 	}
 
 	#[test]
@@ -206,17 +220,26 @@ mod tests {
 		});
 		let plug_doughnut = PlugDoughnut::<Runtime>::new(doughnut);
 		// premature
-		assert!(
-			<PlugDoughnut<_> as PlugDoughnutApi>::validate(&plug_doughnut, holder.public(), 999).is_err()
-		);
+		assert!(<PlugDoughnut<_> as PlugDoughnutApi>::validate(
+			&plug_doughnut,
+			holder.public(),
+			999
+		)
+		.is_err());
 		// expired
-		assert!(
-			<PlugDoughnut<_> as PlugDoughnutApi>::validate(&plug_doughnut, holder.public(), 3001).is_err()
-		);
+		assert!(<PlugDoughnut<_> as PlugDoughnutApi>::validate(
+			&plug_doughnut,
+			holder.public(),
+			3001
+		)
+		.is_err());
 		// signer is not holder
-		assert!(
-			<PlugDoughnut<_> as PlugDoughnutApi>::validate(&plug_doughnut, signer.public(), 100).is_err()
-		);
+		assert!(<PlugDoughnut<_> as PlugDoughnutApi>::validate(
+			&plug_doughnut,
+			signer.public(),
+			100
+		)
+		.is_err());
 	}
 
 	#[test]

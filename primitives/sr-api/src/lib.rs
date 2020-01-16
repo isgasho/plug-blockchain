@@ -17,8 +17,8 @@
 //! Substrate runtime api
 //!
 //! The Substrate runtime api is the crucial interface between the node and the runtime.
-//! Every call that goes into the runtime is done with a runtime api. The runtime apis are not fixed.
-//! Every Substrate user can define its own apis with
+//! Every call that goes into the runtime is done with a runtime api. The runtime apis are not
+//! fixed. Every Substrate user can define its own apis with
 //! [`decl_runtime_apis`](macro.decl_runtime_apis.html) and implement them in
 //! the runtime with [`impl_runtime_apis`](macro.impl_runtime_apis.html).
 //!
@@ -31,43 +31,43 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-#[cfg(feature = "std")]
-pub use state_machine::{OverlayedChanges, StorageProof};
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use primitives::NativeOrEncoded;
+pub use codec::{Decode, Encode};
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use primitives::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
-pub use sp_runtime::{
-	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
-		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
-	},
-	generic::BlockId, transaction_validity::TransactionValidity,
-};
+#[cfg(feature = "std")]
+pub use primitives::NativeOrEncoded;
+use primitives::OpaqueMetadata;
 #[doc(hidden)]
 pub use primitives::{offchain, ExecutionContext};
-#[doc(hidden)]
-pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
-#[doc(hidden)]
-pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
 use rstd::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};
-use primitives::OpaqueMetadata;
+pub use rstd::{mem, slice};
+#[doc(hidden)]
+pub use sp_runtime::{
+	generic::BlockId,
+	traits::{
+		ApiRef, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT,
+		Header as HeaderT, RuntimeApiInfo,
+	},
+	transaction_validity::TransactionValidity,
+};
+#[doc(hidden)]
+pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
+#[doc(hidden)]
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell};
+pub use state_machine::{OverlayedChanges, StorageProof};
+#[cfg(feature = "std")]
+use std::{cell::RefCell, panic::UnwindSafe};
 
 pub use sp_api_proc_macro::{decl_runtime_apis, impl_runtime_apis};
 
 #[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
-pub type ProofRecorder<B> = state_machine::ProofRecorder<
-	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
->;
+pub type ProofRecorder<B> =
+	state_machine::ProofRecorder<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -92,14 +92,16 @@ pub trait ApiExt<Block: BlockT> {
 	/// On `Ok`, the structure commits the changes to an internal buffer.
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
-		map_call: F
-	) -> result::Result<R, E> where Self: Sized;
+		map_call: F,
+	) -> result::Result<R, E>
+	where
+		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(
-		&self,
-		at: &BlockId<Block>
-	) -> Result<bool, Self::Error> where Self: Sized {
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at: &BlockId<Block>) -> Result<bool, Self::Error>
+	where
+		Self: Sized,
+	{
 		self.runtime_version_at(at).map(|v| v.has_api::<A>())
 	}
 
@@ -108,8 +110,12 @@ pub trait ApiExt<Block: BlockT> {
 		&self,
 		at: &BlockId<Block>,
 		pred: P,
-	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api_with::<A, _>(pred))
+	) -> Result<bool, Self::Error>
+	where
+		Self: Sized,
+	{
+		self.runtime_version_at(at)
+			.map(|v| v.has_api_with::<A, _>(pred))
 	}
 
 	/// Returns the runtime version at the given block id.
@@ -175,9 +181,8 @@ pub trait CallRuntimeAt<Block: BlockT> {
 
 /// Extracts the `Api::Error` for a type that provides a runtime api.
 #[cfg(feature = "std")]
-pub type ApiErrorFor<T, Block> = <
-	<T as sp_runtime::traits::ProvideRuntimeApi>::Api as ApiExt<Block>
->::Error;
+pub type ApiErrorFor<T, Block> =
+	<<T as sp_runtime::traits::ProvideRuntimeApi>::Api as ApiExt<Block>>::Error;
 
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.

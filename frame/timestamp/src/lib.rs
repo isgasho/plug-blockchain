@@ -26,13 +26,14 @@
 //!
 //! The Timestamp module allows the validators to set and validate a timestamp with each block.
 //!
-//! It uses inherents for timestamp data, which is provided by the block author and validated/verified
-//! by other validators. The timestamp can be set only once per block and must be set each block.
-//! There could be a constraint on how much time must pass before setting the new timestamp.
+//! It uses inherents for timestamp data, which is provided by the block author and
+//! validated/verified by other validators. The timestamp can be set only once per block and must be
+//! set each block. There could be a constraint on how much time must pass before setting the new
+//! timestamp.
 //!
-//! **NOTE:** The Timestamp module is the recommended way to query the on-chain time instead of using
-//! an approach based on block numbers. The block number based time measurement can cause issues
-//! because of cumulative calculation errors and hence should be avoided.
+//! **NOTE:** The Timestamp module is the recommended way to query the on-chain time instead of
+//! using an approach based on block numbers. The block number based time measurement can cause
+//! issues because of cumulative calculation errors and hence should be avoided.
 //!
 //! ## Interface
 //!
@@ -51,7 +52,8 @@
 //!
 //! ## Usage
 //!
-//! The following example shows how to use the Timestamp module in your custom module to query the current timestamp.
+//! The following example shows how to use the Timestamp module in your custom module to query the
+//! current timestamp.
 //!
 //! ### Prerequisites
 //!
@@ -68,14 +70,14 @@
 //! pub trait Trait: timestamp::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn get_time(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
+//! pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub fn get_time(origin) -> Result {
+//! 		let _sender = ensure_signed(origin)?;
+//! 		let _now = <timestamp::Module<T>>::get();
+//! 		Ok(())
+//! 			}
+//! 			}
+//! 			}
 //! # fn main() {}
 //! ```
 //!
@@ -90,28 +92,29 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, cmp};
-use inherents::{ProvideInherent, InherentData, InherentIdentifier};
-use support::{Parameter, decl_storage, decl_module};
-use support::traits::{Time, Get};
+use inherents::{InherentData, InherentIdentifier, ProvideInherent};
+use rstd::{cmp, result};
 use sp_runtime::{
+	traits::{SaturatedConversion, Scale, SimpleArithmetic, Zero},
 	RuntimeString,
-	traits::{
-		SimpleArithmetic, Zero, SaturatedConversion, Scale
-	}
 };
-use support::weights::SimpleDispatchInfo;
+use sp_timestamp::{InherentError, InherentType, OnTimestampSet, INHERENT_IDENTIFIER};
+use support::{
+	decl_module, decl_storage,
+	traits::{Get, Time},
+	weights::SimpleDispatchInfo,
+	Parameter,
+};
 use system::ensure_none;
-use sp_timestamp::{
-	InherentError, INHERENT_IDENTIFIER, InherentType,
-	OnTimestampSet,
-};
 
 /// The module configuration trait
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic
-		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
+	type Moment: Parameter
+		+ Default
+		+ SimpleArithmetic
+		+ Scale<Self::BlockNumber, Output = Self::Moment>
+		+ Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -175,15 +178,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: if this function is called prior to setting the timestamp,
 	/// it will return the timestamp of the previous block.
-	pub fn get() -> T::Moment {
-		Self::now()
-	}
+	pub fn get() -> T::Moment { Self::now() }
 
 	/// Set the timestamp to something in particular. Only used for tests.
 	#[cfg(feature = "std")]
-	pub fn set_timestamp(now: T::Moment) {
-		<Self as Store>::Now::put(now);
-	}
+	pub fn set_timestamp(now: T::Moment) { <Self as Store>::Now::put(now); }
 }
 
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
@@ -195,6 +194,7 @@ fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeStr
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
+
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
@@ -218,7 +218,9 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
-			Err(InherentError::Other("Timestamp too far in future to accept".into()))
+			Err(InherentError::Other(
+				"Timestamp too far in future to accept".into(),
+			))
 		} else if t < minimum {
 			Err(InherentError::ValidAtTimestamp(minimum))
 		} else {
@@ -231,19 +233,21 @@ impl<T: Trait> Time for Module<T> {
 	type Moment = T::Moment;
 
 	/// Before the first set of now with inherent the value returned is zero.
-	fn now() -> Self::Moment {
-		Self::now()
-	}
+	fn now() -> Self::Moment { Self::now() }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
-	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use runtime_io::TestExternalities;
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
+	};
+	use support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -258,37 +262,39 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
 	}
 	impl Trait for Test {
+		type MinimumPeriod = MinimumPeriod;
 		type Moment = u64;
 		type OnTimestampSet = ();
-		type MinimumPeriod = MinimumPeriod;
 	}
 	type Timestamp = Module<Test>;
 
 	#[test]
 	fn timestamp_works() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -299,7 +305,9 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
@@ -308,9 +316,13 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
+	#[should_panic(
+		expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+	)]
 	fn block_period_minimum_enforced() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);

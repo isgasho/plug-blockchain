@@ -18,12 +18,13 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, PhragmenAssignment};
-use sp_runtime::{
-	assert_eq_error_rate, Perbill,
-	traits::{Convert, Member, SaturatedConversion}
-};
+use crate::{elect, PhragmenAssignment, PhragmenResult};
 use rstd::collections::btree_map::BTreeMap;
+use sp_runtime::{
+	assert_eq_error_rate,
+	traits::{Convert, Member, SaturatedConversion},
+	Perbill,
+};
 
 pub(crate) struct TestCurrencyToVote;
 impl Convert<Balance, u64> for TestCurrencyToVote {
@@ -72,11 +73,14 @@ pub(crate) type AccountId = u64;
 #[derive(Debug, Clone)]
 pub(crate) struct _PhragmenResult<A: Clone> {
 	pub winners: Vec<(A, Balance)>,
-	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
+	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>,
 }
 
 pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, Vec<A>)> {
-	candidates.iter().map(|c| (c.clone(), vec![c.clone()])).collect()
+	candidates
+		.iter()
+		.map(|c| (c.clone(), vec![c.clone()]))
+		.collect()
 }
 
 pub(crate) fn elect_float<A, FS>(
@@ -85,7 +89,8 @@ pub(crate) fn elect_float<A, FS>(
 	initial_candidates: Vec<A>,
 	initial_voters: Vec<(A, Vec<A>)>,
 	stake_of: FS,
-) -> Option<_PhragmenResult<A>> where
+) -> Option<_PhragmenResult<A>>
+where
 	A: Default + Ord + Member + Copy,
 	for<'r> FS: Fn(&'r A) -> Balance,
 {
@@ -100,12 +105,15 @@ pub(crate) fn elect_float<A, FS>(
 		.enumerate()
 		.map(|(idx, who)| {
 			c_idx_cache.insert(who.clone(), idx);
-			_Candidate { who, ..Default::default() }
+			_Candidate {
+				who,
+				..Default::default()
+			}
 		})
 		.collect::<Vec<_Candidate<A>>>();
 
 	if candidates.len() < minimum_candidate_count {
-		return None;
+		return None
 	}
 
 	voters.extend(initial_voters.into_iter().map(|(who, votes)| {
@@ -114,14 +122,16 @@ pub(crate) fn elect_float<A, FS>(
 		for v in votes {
 			if let Some(idx) = c_idx_cache.get(&v) {
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake + voter_stake;
-				edges.push(
-					_Edge { who: v.clone(), candidate_index: *idx, ..Default::default() }
-				);
+				edges.push(_Edge {
+					who: v.clone(),
+					candidate_index: *idx,
+					..Default::default()
+				});
 			}
 		}
 		_Voter {
 			who,
-			edges: edges,
+			edges,
 			budget: voter_stake,
 			load: 0f64,
 		}
@@ -146,11 +156,11 @@ pub(crate) fn elect_float<A, FS>(
 			}
 		}
 
-		if let Some(winner) = candidates
-			.iter_mut()
-			.filter(|c| !c.elected)
-			.min_by(|x, y| x.score.partial_cmp(&y.score).unwrap_or(rstd::cmp::Ordering::Equal))
-		{
+		if let Some(winner) = candidates.iter_mut().filter(|c| !c.elected).min_by(|x, y| {
+			x.score
+				.partial_cmp(&y.score)
+				.unwrap_or(rstd::cmp::Ordering::Equal)
+		}) {
 			winner.elected = true;
 			for n in &mut voters {
 				for e in &mut n.edges {
@@ -170,7 +180,12 @@ pub(crate) fn elect_float<A, FS>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if let Some(c) = elected_candidates.iter().cloned().map(|(c, _)| c).find(|c| *c == e.who) {
+			if let Some(c) = elected_candidates
+				.iter()
+				.cloned()
+				.map(|(c, _)| c)
+				.find(|c| *c == e.who)
+			{
 				if c != n.who {
 					let ratio = e.load / n.load;
 					assignment.1.push((e.who.clone(), ratio));
@@ -202,18 +217,14 @@ pub(crate) fn equalize_float<A, FS>(
 		let mut max_diff = 0.0;
 		for (voter, assignment) in assignments.iter_mut() {
 			let voter_budget = stake_of(&voter);
-			let diff = do_equalize_float(
-				voter,
-				voter_budget,
-				assignment,
-				supports,
-				tolerance,
-			);
-			if diff > max_diff { max_diff = diff; }
+			let diff = do_equalize_float(voter, voter_budget, assignment, supports, tolerance);
+			if diff > max_diff {
+				max_diff = diff;
+			}
 		}
 
 		if max_diff < tolerance {
-			break;
+			break
 		}
 	}
 }
@@ -223,16 +234,17 @@ pub(crate) fn do_equalize_float<A>(
 	budget_balance: Balance,
 	elected_edges: &mut Vec<_PhragmenAssignment<A>>,
 	support_map: &mut _SupportMap<A>,
-	tolerance: f64
-) -> f64 where
+	tolerance: f64,
+) -> f64
+where
 	A: Ord + Clone,
 {
 	let budget = budget_balance as f64;
-	if elected_edges.is_empty() { return 0.0; }
+	if elected_edges.is_empty() {
+		return 0.0
+	}
 
-	let stake_used = elected_edges
-		.iter()
-		.fold(0.0, |s, e| s + e.1);
+	let stake_used = elected_edges.iter().fold(0.0, |s, e| s + e.1);
 
 	let backed_stakes_iter = elected_edges
 		.iter()
@@ -259,7 +271,7 @@ pub(crate) fn do_equalize_float<A>(
 		difference = max_stake - min_stake;
 		difference = difference + budget - stake_used;
 		if difference < tolerance {
-			return difference;
+			return difference
 		}
 	} else {
 		difference = budget;
@@ -274,11 +286,16 @@ pub(crate) fn do_equalize_float<A>(
 		e.1 = 0.0;
 	});
 
-	elected_edges.sort_unstable_by(|x, y|
-		support_map.get(&x.0)
-			.and_then(|x| support_map.get(&y.0).and_then(|y| x.total.partial_cmp(&y.total)))
+	elected_edges.sort_unstable_by(|x, y| {
+		support_map
+			.get(&x.0)
+			.and_then(|x| {
+				support_map
+					.get(&y.0)
+					.and_then(|y| x.total.partial_cmp(&y.total))
+			})
 			.unwrap_or(rstd::cmp::Ordering::Equal)
-	);
+	});
 
 	let mut cumulative_stake = 0.0;
 	let mut last_index = elected_edges.len() - 1;
@@ -309,16 +326,16 @@ pub(crate) fn do_equalize_float<A>(
 	difference
 }
 
-
-pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
-	-> Box<dyn Fn(&AccountId) -> Balance>
-{
+pub(crate) fn create_stake_of(
+	stakes: &[(AccountId, Balance)],
+) -> Box<dyn Fn(&AccountId) -> Balance> {
 	let mut storage = BTreeMap::<AccountId, Balance>::new();
-	stakes.iter().for_each(|s| { storage.insert(s.0, s.1); });
+	stakes.iter().for_each(|s| {
+		storage.insert(s.0, s.1);
+	});
 	let stake_of = move |who: &AccountId| -> Balance { storage.get(who).unwrap().to_owned() };
 	Box::new(stake_of)
 }
-
 
 pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>) {
 	for (_, a) in assignments {
@@ -335,29 +352,29 @@ pub(crate) fn run_and_compare(
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult {
+		winners,
+		assignments,
+	} = elect::<_, _, _, TestCurrencyToVote>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),
 		voters.clone(),
 		&stake_of,
-	).unwrap();
+	)
+	.unwrap();
 
 	// run float poc code.
-	let truth_value = elect_float(
-		to_elect,
-		min_to_elect,
-		candidates,
-		voters,
-		&stake_of,
-	).unwrap();
+	let truth_value = elect_float(to_elect, min_to_elect, candidates, voters, &stake_of).unwrap();
 
 	assert_eq!(winners, truth_value.winners);
 
 	for (nominator, assigned) in assignments.clone() {
 		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
 			for (candidate, per_thingy) in assigned {
-				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
+				if let Some(float_assignment) =
+					float_assignments.1.iter().find(|x| x.0 == candidate)
+				{
 					assert_eq_error_rate!(
 						Perbill::from_fraction(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
@@ -379,14 +396,20 @@ pub(crate) fn build_support_map<FS>(
 	result: &mut _PhragmenResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
-	where for<'r> FS: Fn(&'r AccountId) -> Balance
+where
+	for<'r> FS: Fn(&'r AccountId) -> Balance,
 {
 	let mut supports = <_SupportMap<AccountId>>::new();
-	result.winners
+	result
+		.winners
 		.iter()
 		.map(|(e, _)| (e, stake_of(e) as f64))
 		.for_each(|(e, s)| {
-			let item = _Support { own: s, total: s, ..Default::default() };
+			let item = _Support {
+				own: s,
+				total: s,
+				..Default::default()
+			};
 			supports.insert(e.clone(), item);
 		});
 

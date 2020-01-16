@@ -17,9 +17,9 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::codec::{Decode, Encode, Input, Output, Error};
+use crate::codec::{Decode, Encode, Error, Input, Output};
 
 /// Era period
 pub type Period = u64;
@@ -43,20 +43,20 @@ pub enum Era {
 	Mortal(Period, Phase),
 }
 
-/*
-E.g. with period == 4:
-0         10        20        30        40
-0123456789012345678901234567890123456789012
-             |...|
-   authored -/   \- expiry
-phase = 1
-n = Q(current - phase, period) + phase
-*/
+// E.g. with period == 4:
+// 0         10        20        30        40
+// 0123456789012345678901234567890123456789012
+// |...|
+// authored -/   \- expiry
+// phase = 1
+// n = Q(current - phase, period) + phase
 impl Era {
-	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
-	/// and a block number on which it should start (or, for long periods, be shortly after the start).
+	/// Create a new era based on a period (which should be a power of two between 4 and 65536
+	/// inclusive) and a block number on which it should start (or, for long periods, be shortly
+	/// after the start).
 	pub fn mortal(period: u64, current: u64) -> Self {
-		let period = period.checked_next_power_of_two()
+		let period = period
+			.checked_next_power_of_two()
 			.unwrap_or(1 << 16)
 			.max(4)
 			.min(1 << 16);
@@ -68,9 +68,7 @@ impl Era {
 	}
 
 	/// Create an "immortal" transaction.
-	pub fn immortal() -> Self {
-		Era::Immortal
-	}
+	pub fn immortal() -> Self { Era::Immortal }
 
 	/// `true` if this is an immortal transaction.
 	pub fn is_immortal(&self) -> bool {
@@ -104,9 +102,10 @@ impl Encode for Era {
 			Era::Immortal => output.push_byte(0),
 			Era::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
-				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
+				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16
+					| ((phase / quantize_factor) << 4) as u16;
 				output.push(&encoded);
-			}
+			},
 		}
 	}
 }
@@ -148,7 +147,7 @@ mod tests {
 		assert!(e.is_immortal());
 
 		assert_eq!(e.encode(), vec![0u8]);
-		assert_eq!(e, Era::decode(&mut&[0u8][..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &[0u8][..]).unwrap());
 	}
 
 	#[test]
@@ -158,7 +157,7 @@ mod tests {
 
 		let expected = vec![5 + 42 % 16 * 16, 42 / 16];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]
@@ -167,7 +166,7 @@ mod tests {
 
 		let expected = vec![(14 + 2500 % 16 * 16) as u8, (2500 / 16) as u8];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]
@@ -182,7 +181,10 @@ mod tests {
 	#[test]
 	fn quantized_clamped_era_initialization_works() {
 		// clamp 1000000 to 65536, quantize 1000001 % 65536 to the nearest 4
-		assert_eq!(Era::mortal(1000000, 1000001), Era::Mortal(65536, 1000001 % 65536 / 4 * 4));
+		assert_eq!(
+			Era::mortal(1000000, 1000001),
+			Era::Mortal(65536, 1000001 % 65536 / 4 * 4)
+		);
 	}
 
 	#[test]

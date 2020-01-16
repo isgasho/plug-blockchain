@@ -18,12 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Codec, Decode, Encode};
 use rstd::prelude::*;
-use support::weights::{Weight, DispatchClass};
-use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use sp_runtime::traits::{UniqueSaturatedInto, SaturatedConversion};
+use serde::{Deserialize, Serialize};
+use sp_runtime::traits::{SaturatedConversion, UniqueSaturatedInto};
+use support::weights::{DispatchClass, Weight};
 
 /// Some information related to a dispatchable that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
@@ -33,8 +33,8 @@ pub struct RuntimeDispatchInfo<Balance> {
 	pub weight: Weight,
 	/// Class of this dispatch.
 	pub class: DispatchClass,
-	/// The partial inclusion fee of this dispatch. This does not include tip or anything else which
-	/// is dependent on the signature (aka. depends on a `SignedExtension`).
+	/// The partial inclusion fee of this dispatch. This does not include tip or anything else
+	/// which is dependent on the signature (aka. depends on a `SignedExtension`).
 	pub partial_fee: Balance,
 }
 
@@ -49,16 +49,14 @@ pub struct CappedDispatchInfo {
 	pub weight: Weight,
 	/// Class of this dispatch.
 	pub class: DispatchClass,
-	/// The partial inclusion fee of this dispatch. This does not include tip or anything else which
-	/// is dependent on the signature (aka. depends on a `SignedExtension`).
+	/// The partial inclusion fee of this dispatch. This does not include tip or anything else
+	/// which is dependent on the signature (aka. depends on a `SignedExtension`).
 	pub partial_fee: u64,
 }
 
 impl CappedDispatchInfo {
 	/// Create a new `CappedDispatchInfo` from `RuntimeDispatchInfo`.
-	pub fn new<Balance: UniqueSaturatedInto<u64>>(
-		dispatch: RuntimeDispatchInfo<Balance>,
-	) -> Self {
+	pub fn new<Balance: UniqueSaturatedInto<u64>>(dispatch: RuntimeDispatchInfo<Balance>) -> Self {
 		let RuntimeDispatchInfo {
 			weight,
 			class,

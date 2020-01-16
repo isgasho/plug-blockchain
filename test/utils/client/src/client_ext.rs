@@ -18,37 +18,31 @@
 
 use client::{self, Client};
 use client_api::backend::Finalizer;
+use codec::alloc::collections::hash_map::HashMap;
 use consensus::{
-	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
-	ForkChoiceStrategy,
+	BlockImport, BlockImportParams, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy,
 };
 use hash_db::Hasher;
-use sp_runtime::Justification;
-use sp_runtime::traits::{Block as BlockT};
-use sp_runtime::generic::BlockId;
 use primitives::Blake2Hasher;
-use codec::alloc::collections::hash_map::HashMap;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT, Justification};
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
-	fn import(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>;
+	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and make it our best block if possible.
-	fn import_as_best(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>;
+	fn import_as_best(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and finalize it.
-	fn import_as_final(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>;
+	fn import_as_final(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
 	fn import_justified(
 		&self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification
+		justification: Justification,
 	) -> Result<(), ConsensusError>;
 
 	/// Finalize a block.
@@ -63,15 +57,13 @@ pub trait ClientExt<Block: BlockT>: Sized {
 }
 
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
-	where
-		B: client_api::backend::Backend<Block, Blake2Hasher>,
-		E: client::CallExecutor<Block, Blake2Hasher>,
-		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+where
+	B: client_api::backend::Backend<Block, Blake2Hasher>,
+	E: client::CallExecutor<Block, Blake2Hasher>,
+	for<'r> &'r Self: BlockImport<Block, Error = ConsensusError>,
+	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 {
-	fn import(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>
-	{
+	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let import = BlockImportParams {
 			origin,
@@ -89,9 +81,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_best(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>
-	{
+	fn import_as_best(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let import = BlockImportParams {
 			origin,
@@ -109,9 +99,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_final(&self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>
-	{
+	fn import_as_final(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let import = BlockImportParams {
 			origin,

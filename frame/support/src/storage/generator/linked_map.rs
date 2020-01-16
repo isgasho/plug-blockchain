@@ -14,9 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::{FullCodec, Encode, Decode, EncodeLike, Ref};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
-use rstd::{prelude::*, marker::PhantomData};
+use crate::{
+	hash::{StorageHasher, Twox128},
+	storage::{self, unhashed},
+	traits::Len,
+};
+use codec::{Decode, Encode, EncodeLike, FullCodec, Ref};
+use rstd::{marker::PhantomData, prelude::*};
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.
 ///
@@ -93,7 +97,7 @@ pub trait KeyFormat {
 		let key_hashed = key.using_encoded(Self::Hasher::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -108,7 +112,8 @@ pub trait KeyFormat {
 		[
 			Twox128::hash(Self::module_prefix()),
 			Twox128::hash(Self::head_prefix()),
-		].concat()
+		]
+		.concat()
 	}
 }
 
@@ -176,12 +181,14 @@ where
 				None => {
 					// TODO #3700: error should be handleable.
 					runtime_print!(
-						"ERROR: Corrupted state: linked map {:?}{:?}: \
-						next value doesn't exist at {:?}",
-						F::module_prefix(), F::storage_prefix(), next_full_key,
+						"ERROR: Corrupted state: linked map {:?}{:?}: next value doesn't exist at \
+						 {:?}",
+						F::module_prefix(),
+						F::storage_prefix(),
+						next_full_key,
 					);
 					return None
-				}
+				},
 			}
 		};
 
@@ -200,8 +207,14 @@ where
 	V: FullCodec,
 	F: KeyFormat,
 {
-	let next_key = linkage.next.as_ref().map(|k| F::storage_linked_map_final_key(k));
-	let prev_key = linkage.previous.as_ref().map(|k| F::storage_linked_map_final_key(k));
+	let next_key = linkage
+		.next
+		.as_ref()
+		.map(|k| F::storage_linked_map_final_key(k));
+	let prev_key = linkage
+		.previous
+		.as_ref()
+		.map(|k| F::storage_linked_map_final_key(k));
 
 	if let Some(prev_key) = prev_key {
 		// Retrieve previous element and update `next`
@@ -211,9 +224,10 @@ where
 		} else {
 			// TODO #3700: error should be handleable.
 			runtime_print!(
-				"ERROR: Corrupted state: linked map {:?}{:?}: \
-				previous value doesn't exist at {:?}",
-				F::module_prefix(), F::storage_prefix(), prev_key,
+				"ERROR: Corrupted state: linked map {:?}{:?}: previous value doesn't exist at {:?}",
+				F::module_prefix(),
+				F::storage_prefix(),
+				prev_key,
 			);
 		}
 	} else {
@@ -228,9 +242,10 @@ where
 		} else {
 			// TODO #3700: error should be handleable.
 			runtime_print!(
-				"ERROR: Corrupted state: linked map {:?}{:?}: \
-				next value doesn't exist at {:?}",
-				F::module_prefix(), F::storage_prefix(), next_key,
+				"ERROR: Corrupted state: linked map {:?}{:?}: next value doesn't exist at {:?}",
+				F::module_prefix(),
+				F::storage_prefix(),
+				next_key,
 			);
 		}
 	}
@@ -269,14 +284,15 @@ where
 			} else {
 				// TODO #3700: error should be handleable.
 				runtime_print!(
-					"ERROR: Corrupted state: linked map {:?}{:?}: \
-					head value doesn't exist at {:?}",
-					F::module_prefix(), F::storage_prefix(), head_key,
+					"ERROR: Corrupted state: linked map {:?}{:?}: head value doesn't exist at {:?}",
+					F::module_prefix(),
+					F::storage_prefix(),
+					head_key,
 				);
 				// Thus we consider we are first - update the head and produce empty linkage
 
 				write_head::<_, _, F>(Some(key));
-				return Linkage::default();
+				return Linkage::default()
 			}
 		}
 		// update to current head
@@ -322,9 +338,8 @@ where
 	V: FullCodec,
 	G: StorageLinkedMap<K, V>,
 {
-	type Query = G::Query;
-
 	type Enumerator = Enumerator<K, V, G::KeyFormat>;
+	type Query = G::Query;
 
 	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
 		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
@@ -346,19 +361,19 @@ where
 			(Some((value1, linkage1)), Some((value2, linkage2))) => {
 				unhashed::put(final_key1.as_ref(), &(value2, linkage1));
 				unhashed::put(final_key2.as_ref(), &(value1, linkage2));
-			}
+			},
 			// Remove key and insert the new one.
 			(Some((value, _linkage)), None) => {
 				Self::remove(key1);
 				let linkage = new_head_linkage::<_, _, V, G::KeyFormat>(key2);
 				unhashed::put(final_key2.as_ref(), &(value, linkage));
-			}
+			},
 			// Remove key and insert the new one.
 			(None, Some((value, _linkage))) => {
 				Self::remove(key2);
 				let linkage = new_head_linkage::<_, _, V, G::KeyFormat>(key1);
 				unhashed::put(final_key1.as_ref(), &(value, linkage));
-			}
+			},
 			// No-op.
 			(None, None) => (),
 		}
@@ -375,9 +390,7 @@ where
 		unhashed::put(final_key.as_ref(), &(val, linkage))
 	}
 
-	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
-		G::take(key);
-	}
+	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) { G::take(key); }
 
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
 		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
@@ -414,12 +427,11 @@ where
 		}
 	}
 
-	fn head() -> Option<K> {
-		read_head::<_, G::KeyFormat>()
-	}
+	fn head() -> Option<K> { read_head::<_, G::KeyFormat>() }
 
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
+	where
+		V: codec::DecodeLength + Len,
 	{
 		let key = Self::storage_linked_map_final_key(key);
 		if let Some(v) = unhashed::get_raw(key.as_ref()) {
@@ -434,7 +446,11 @@ where
 	}
 
 	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
-		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V
+	where
+		K2: FullCodec + Clone,
+		V2: Decode,
+		TK: Fn(K2) -> K,
+		TV: Fn(V2) -> V,
 	{
 		let head_key = read_head::<K2, G::KeyFormat>().ok_or(None)?;
 
@@ -460,8 +476,8 @@ where
 					// to end the map early, since it's impossible to iterate further.
 					if let Some(last_key) = last_key {
 						let last_raw_key = G::storage_linked_map_final_key(&last_key);
-						if let Some((val, mut linkage))
-							= read_with_linkage::<K, V>(last_raw_key.as_ref())
+						if let Some((val, mut linkage)) =
+							read_with_linkage::<K, V>(last_raw_key.as_ref())
 						{
 							// defensive: should always happen, since it was just written
 							// in the last iteration of the loop.
@@ -470,8 +486,8 @@ where
 						}
 					}
 
-					return Err(Some(current_key));
-				}
+					return Err(Some(current_key))
+				},
 			};
 			let next = linkage.next.clone();
 

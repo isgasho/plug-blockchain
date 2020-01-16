@@ -30,20 +30,22 @@
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use sp_finality_grandpa as fg_primitives;
 
+use codec::{self as codec, Decode, Encode, Error};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+use fg_primitives::{
+	ConsensusLog, RoundNumber, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
+};
 use rstd::prelude::*;
-use codec::{self as codec, Encode, Decode, Error};
-use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+	generic::{DigestItem, OpaqueDigestItemId},
+	traits::Zero,
+	Perbill,
 };
 use sp_staking::{
+	offence::{Kind, Offence},
 	SessionIndex,
-	offence::{Offence, Kind},
 };
-use fg_primitives::{
-	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
-};
-pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+use support::{decl_event, decl_module, decl_storage, dispatch::Result, storage};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
@@ -109,7 +111,7 @@ pub enum StoredState<N> {
 		/// Block at which the intention to pause was scheduled.
 		scheduled_at: N,
 		/// Number of blocks after which the change will be enacted.
-		delay: N
+		delay: N,
 	},
 	/// The current GRANDPA authority set is paused.
 	Paused,
@@ -274,8 +276,10 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA pause when the authority set isn't live \
-				(either paused or already pending pause).")
+			Err(
+				"Attempt to signal GRANDPA pause when the authority set isn't live (either paused \
+				 or already pending pause).",
+			)
 		}
 	}
 
@@ -290,8 +294,10 @@ impl<T: Trait> Module<T> {
 
 			Ok(())
 		} else {
-			Err("Attempt to signal GRANDPA resume when the authority set isn't paused \
-				(either live or already pending resume).")
+			Err(
+				"Attempt to signal GRANDPA resume when the authority set isn't paused (either \
+				 live or already pending resume).",
+			)
 		}
 	}
 
@@ -319,7 +325,7 @@ impl<T: Trait> Module<T> {
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					return Err("Cannot signal forced change so soon after last.");
+					return Err("Cannot signal forced change so soon after last.")
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -372,30 +378,24 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to extract a pending set-change signal from a digest.
-	pub fn pending_change(digest: &DigestOf<T>)
-		-> Option<ScheduledChange<T::BlockNumber>>
-	{
+	pub fn pending_change(digest: &DigestOf<T>) -> Option<ScheduledChange<T::BlockNumber>> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
 	}
 
 	/// Attempt to extract a forced set-change signal from a digest.
-	pub fn forced_change(digest: &DigestOf<T>)
-		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
-	{
+	pub fn forced_change(
+		digest: &DigestOf<T>,
+	) -> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 
 	/// Attempt to extract a pause signal from a digest.
-	pub fn pending_pause(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
+	pub fn pending_pause(digest: &DigestOf<T>) -> Option<T::BlockNumber> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
 	}
 
 	/// Attempt to extract a resume signal from a digest.
-	pub fn pending_resume(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
+	pub fn pending_resume(digest: &DigestOf<T>) -> Option<T::BlockNumber> {
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
 	}
 }
@@ -405,19 +405,22 @@ impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
-	where T: session::Trait
+where
+	T: session::Trait,
 {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		// Always issue a change if `session` says that the validators have changed.
 		// Even if their session keys are the same as before, the underyling economic
@@ -429,7 +432,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 			} else {
 				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
 			}
-			CurrentSetId::mutate(|s| { *s += 1; *s })
+			CurrentSetId::mutate(|s| {
+				*s += 1;
+				*s
+			})
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
 			// of the current set.
@@ -442,9 +448,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 		SetIdSession::insert(current_set_id, &session_index);
 	}
 
-	fn on_disabled(i: usize) {
-		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
-	}
+	fn on_disabled(i: usize) { Self::deposit_log(ConsensusLog::OnDisabled(i as u64)) }
 }
 
 impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
@@ -478,30 +482,22 @@ struct GrandpaEquivocationOffence<FullIdentification> {
 	offender: FullIdentification,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"grandpa:equivoca";
+impl<FullIdentification: Clone> Offence<FullIdentification>
+	for GrandpaEquivocationOffence<FullIdentification>
+{
 	type TimeSlot = GrandpaTimeSlot;
 
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
+	const ID: Kind = *b"grandpa:equivoca";
 
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
+	fn offenders(&self) -> Vec<FullIdentification> { vec![self.offender.clone()] }
 
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
+	fn session_index(&self) -> SessionIndex { self.session_index }
 
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.time_slot
-	}
+	fn validator_set_count(&self) -> u32 { self.validator_set_count }
 
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
+	fn time_slot(&self) -> Self::TimeSlot { self.time_slot }
+
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2

@@ -28,14 +28,14 @@
 //! macro exposed by this crate.
 //!
 //! ```rust
-//! use std::collections::HashMap;
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{ChainSpec, ChainSpecExtension};
+//! use serde::{Deserialize, Serialize};
+//! use std::collections::HashMap;
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
-//!		pub known_blocks: HashMap<u64, String>,
-//! }
+//! 	pub known_blocks: HashMap<u64, String>,
+//! 	}
 //!
 //! pub type MyChainSpec<G> = ChainSpec<G, MyExtension>;
 //! ```
@@ -48,25 +48,25 @@
 //! block number.
 //!
 //! ```rust
-//! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{ChainSpec, ChainSpecExtension, ChainSpecGroup, Forks};
+//! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
-//! }
+//! 	max_block_size: usize,
+//! 	max_extrinsic_size: usize,
+//! 	}
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
-//! }
+//! 	max_transaction_size: usize,
+//! 	}
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		pub pool: PoolParams,
-//! }
+//! 	pub client: ClientParams,
+//! 	pub pool: PoolParams,
+//! 	}
 //!
 //! pub type BlockNumber = u64;
 //!
@@ -83,39 +83,38 @@
 //!
 //!
 //! ```rust
-//! use serde::{Serialize, Deserialize};
-//! use sc_chain_spec::{Forks, ChainSpec, ChainSpecGroup, ChainSpecExtension};
+//! use sc_chain_spec::{ChainSpec, ChainSpecExtension, ChainSpecGroup, Forks};
+//! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
-//! }
+//! 	max_block_size: usize,
+//! 	max_extrinsic_size: usize,
+//! 	}
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
-//! }
+//! 	max_transaction_size: usize,
+//! 	}
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		#[forks]
-//!		pub pool: Forks<u64, PoolParams>,
-//! }
+//! 	pub client: ClientParams,
+//! 	#[forks]
+//! 	pub pool: Forks<u64, PoolParams>,
+//! 	}
 //!
 //! pub type MyChainSpec<G> = ChainSpec<G, Extension>;
 //! ```
 
-
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec, Properties, NoExtension};
-pub use extension::{Group, Fork, Forks, Extension};
+pub use chain_spec::{ChainSpec, NoExtension, Properties};
+pub use extension::{Extension, Fork, Forks, Group};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use sp_runtime::BuildStorage;
 
 /// A set of traits for the runtime genesis config.

@@ -16,7 +16,7 @@
 
 //! RPC a lenient list or value type.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// RPC list or value wrapper.
 ///
@@ -50,15 +50,11 @@ impl<T> ListOrValue<T> {
 }
 
 impl<T> From<T> for ListOrValue<T> {
-	fn from(n: T) -> Self {
-		ListOrValue::Value(n)
-	}
+	fn from(n: T) -> Self { ListOrValue::Value(n) }
 }
 
 impl<T> From<Vec<T>> for ListOrValue<T> {
-	fn from(n: Vec<T>) -> Self {
-		ListOrValue::List(n)
-	}
+	fn from(n: Vec<T>) -> Self { ListOrValue::List(n) }
 }
 
 #[cfg(test)]

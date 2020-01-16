@@ -39,18 +39,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use sp_runtime::{
-	traits::{StaticLookup, EnsureOrigin, Zero}
-};
+use sp_runtime::traits::{EnsureOrigin, StaticLookup, Zero};
 use support::{
-	decl_module, decl_event, decl_storage, ensure,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	decl_event, decl_module, decl_storage, ensure,
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::SimpleDispatchInfo,
 };
-use system::{ensure_signed, ensure_root};
+use system::{ensure_root, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -83,7 +82,11 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T>
+	where
+		AccountId = <T as system::Trait>::AccountId,
+		Balance = BalanceOf<T>,
+	{
 		/// A name was set.
 		NameSet(AccountId),
 		/// A name was forcibly set.
@@ -229,13 +232,15 @@ decl_module! {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use system::EnsureSignedBy;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
 
 	impl_outer_origin! {
@@ -254,22 +259,22 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = ();
-		type Hashing = BlakeTwo256;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
-		type Doughnut = ();
+		type BlockHashCount = BlockHashCount;
+		type BlockNumber = u64;
+		type Call = ();
 		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Header = Header;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
 	}
 	parameter_types! {
@@ -279,14 +284,14 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
+		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
+		type TransferPayment = ();
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
@@ -295,13 +300,13 @@ mod tests {
 		pub const One: u64 = 1;
 	}
 	impl Trait for Test {
-		type Event = ();
 		type Currency = Balances;
+		type Event = ();
+		type ForceOrigin = EnsureSignedBy<One, u64, ()>;
+		type MaxLength = MaxLength;
+		type MinLength = MinLength;
 		type ReservationFee = ReservationFee;
 		type Slashed = ();
-		type ForceOrigin = EnsureSignedBy<One, u64, ()>;
-		type MinLength = MinLength;
-		type MaxLength = MaxLength;
 	}
 	type Balances = balances::Module<Test>;
 	type Nicks = Module<Test>;
@@ -309,15 +314,16 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test> {
-			balances: vec![
-				(1, 10),
-				(2, 10),
-			],
+			balances: vec![(1, 10), (2, 10)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		t.into()
 	}
 
@@ -342,9 +348,16 @@ mod tests {
 
 			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
 			assert_eq!(Balances::reserved_balance(&2), 2);
-			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()));
+			assert_ok!(Nicks::force_name(
+				Origin::signed(1),
+				2,
+				b"Dr. David Brubeck, III".to_vec()
+			));
 			assert_eq!(Balances::reserved_balance(&2), 2);
-			assert_eq!(<NameOf<Test>>::get(2).unwrap(), (b"Dr. David Brubeck, III".to_vec(), 2));
+			assert_eq!(
+				<NameOf<Test>>::get(2).unwrap(),
+				(b"Dr. David Brubeck, III".to_vec(), 2)
+			);
 		});
 	}
 
@@ -372,16 +385,25 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_noop!(Nicks::clear_name(Origin::signed(1)), "Not named");
 
-			assert_noop!(Nicks::set_name(Origin::signed(3), b"Dave".to_vec()), "not enough free funds");
+			assert_noop!(
+				Nicks::set_name(Origin::signed(3), b"Dave".to_vec()),
+				"not enough free funds"
+			);
 
-			assert_noop!(Nicks::set_name(Origin::signed(1), b"Ga".to_vec()), "Name too short");
+			assert_noop!(
+				Nicks::set_name(Origin::signed(1), b"Ga".to_vec()),
+				"Name too short"
+			);
 			assert_noop!(
 				Nicks::set_name(Origin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
 				"Name too long"
 			);
 			assert_ok!(Nicks::set_name(Origin::signed(1), b"Dave".to_vec()));
 			assert_noop!(Nicks::kill_name(Origin::signed(2), 1), "bad origin");
-			assert_noop!(Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), "bad origin");
+			assert_noop!(
+				Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()),
+				"bad origin"
+			);
 		});
 	}
 }

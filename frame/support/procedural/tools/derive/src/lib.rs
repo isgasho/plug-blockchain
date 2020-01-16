@@ -24,14 +24,14 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use syn::parse_macro_input;
 use quote::quote;
+use syn::parse_macro_input;
 
 pub(crate) fn fields_idents(
 	fields: impl Iterator<Item = syn::Field>,
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
-		field.ident.clone().map(|i| quote!{#i}).unwrap_or_else(|| {
+		field.ident.clone().map(|i| quote! {#i}).unwrap_or_else(|| {
 			let f_ix: syn::Ident = syn::Ident::new(&format!("f_{}", ix), Span::call_site());
 			quote!( #f_ix )
 		})
@@ -42,13 +42,17 @@ pub(crate) fn fields_access(
 	fields: impl Iterator<Item = syn::Field>,
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
-		field.ident.clone().map(|i| quote!( #i )).unwrap_or_else(|| {
-			let f_ix: syn::Index = syn::Index {
-				index: ix as u32,
-				span: Span::call_site(),
-			};
-			quote!( #f_ix )
-		})
+		field
+			.ident
+			.clone()
+			.map(|i| quote!( #i ))
+			.unwrap_or_else(|| {
+				let f_ix: syn::Index = syn::Index {
+					index: ix as u32,
+					span: Span::call_site(),
+				};
+				quote!( #f_ix )
+			})
 	})
 }
 
@@ -78,7 +82,7 @@ fn derive_parse_struct(input: syn::ItemStruct) -> TokenStream {
 	} = input;
 	let field_names = {
 		let name = fields_idents(fields.iter().map(Clone::clone));
-		quote!{
+		quote! {
 			#(
 				#name,
 			)*
@@ -116,26 +120,24 @@ fn derive_parse_enum(input: syn::ItemEnum) -> TokenStream {
 			quote!()
 		};
 
-		let fields_procs = fields_idents(v.fields.iter().map(Clone::clone))
-			.map(|fident| {
-				quote!{
-					let mut #fident = match fork.parse() {
-						Ok(r) => r,
-						Err(_e) => break,
-					};
-				}
-			});
-		let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone))
-			.map(|fident| {
-				quote!{
-					#fident = input.parse().expect("was parsed just before");
-				}
-			});
+		let fields_procs = fields_idents(v.fields.iter().map(Clone::clone)).map(|fident| {
+			quote! {
+				let mut #fident = match fork.parse() {
+					Ok(r) => r,
+					Err(_e) => break,
+				};
+			}
+		});
+		let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone)).map(|fident| {
+			quote! {
+				#fident = input.parse().expect("was parsed just before");
+			}
+		});
 
 		// double parse to update input cursor position
 		// next syn crate version should be checked for a way
 		// to copy position/state from a fork
-		quote!{
+		quote! {
 			let mut fork = input.fork();
 			loop {
 				#(#fields_procs)*
@@ -181,7 +183,7 @@ pub fn derive_totokens(input: TokenStream) -> TokenStream {
 }
 
 fn derive_totokens_struct(input: syn::ItemStruct) -> TokenStream {
- let syn::ItemStruct {
+	let syn::ItemStruct {
 		ident,
 		generics,
 		fields,

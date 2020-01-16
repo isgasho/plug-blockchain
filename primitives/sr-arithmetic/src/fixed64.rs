@@ -14,16 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::{
-	ops, prelude::*,
-	convert::{TryFrom, TryInto},
-};
-use codec::{Encode, Decode};
 use crate::{
-	Perbill,
 	traits::{
-		SaturatedConversion, CheckedSub, CheckedAdd, CheckedDiv, Bounded, UniqueSaturatedInto, Saturating
-	}
+		Bounded, CheckedAdd, CheckedDiv, CheckedSub, SaturatedConversion, Saturating,
+		UniqueSaturatedInto,
+	},
+	Perbill,
+};
+use codec::{Decode, Encode};
+use rstd::{
+	convert::{TryFrom, TryInto},
+	ops,
+	prelude::*,
 };
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
@@ -38,15 +40,11 @@ impl Fixed64 {
 	/// creates self from a natural number.
 	///
 	/// Note that this might be lossy.
-	pub fn from_natural(int: i64) -> Self {
-		Self(int.saturating_mul(DIV))
-	}
+	pub fn from_natural(int: i64) -> Self { Self(int.saturating_mul(DIV)) }
 
 	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
 	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
-	pub fn accuracy() -> i64 {
-		DIV
-	}
+	pub fn accuracy() -> i64 { DIV }
 
 	/// Consume self and return the inner value.
 	///
@@ -55,9 +53,7 @@ impl Fixed64 {
 	pub fn into_inner(self) -> i64 { self.0 }
 
 	/// Raw constructor. Equal to `parts / 1_000_000_000`.
-	pub fn from_parts(parts: i64) -> Self {
-		Self(parts)
-	}
+	pub fn from_parts(parts: i64) -> Self { Self(parts) }
 
 	/// creates self from a rational number. Equal to `n/d`.
 	///
@@ -66,7 +62,7 @@ impl Fixed64 {
 		Self(
 			(i128::from(n).saturating_mul(i128::from(DIV)) / i128::from(d).max(1))
 				.try_into()
-				.unwrap_or_else(|_| Bounded::max_value())
+				.unwrap_or_else(|_| Bounded::max_value()),
 		)
 	}
 
@@ -74,16 +70,26 @@ impl Fixed64 {
 	///
 	/// Returns a saturated `int + (self * int)`.
 	pub fn saturated_multiply_accumulate<N>(self, int: N) -> N
-		where
-			N: TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> + Bounded + Clone + Saturating +
-			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-			ops::Add<N, Output=N>,
+	where
+		N: TryFrom<u64>
+			+ From<u32>
+			+ UniqueSaturatedInto<u32>
+			+ Bounded
+			+ Clone
+			+ Saturating
+			+ ops::Rem<N, Output = N>
+			+ ops::Div<N, Output = N>
+			+ ops::Mul<N, Output = N>
+			+ ops::Add<N, Output = N>,
 	{
 		let div = DIV as u64;
 		let positive = self.0 > 0;
 		// safe to convert as absolute value.
-		let parts = self.0.checked_abs().map(|v| v as u64).unwrap_or(i64::max_value() as u64 + 1);
-
+		let parts = self
+			.0
+			.checked_abs()
+			.map(|v| v as u64)
+			.unwrap_or(i64::max_value() as u64 + 1);
 
 		// will always fit.
 		let natural_parts = parts / div;
@@ -107,15 +113,11 @@ impl Fixed64 {
 }
 
 impl Saturating for Fixed64 {
-	fn saturating_add(self, rhs: Self) -> Self {
-		Self(self.0.saturating_add(rhs.0))
-	}
-	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / DIV)
-	}
-	fn saturating_sub(self, rhs: Self) -> Self {
-		Self(self.0.saturating_sub(rhs.0))
-	}
+	fn saturating_add(self, rhs: Self) -> Self { Self(self.0.saturating_add(rhs.0)) }
+
+	fn saturating_mul(self, rhs: Self) -> Self { Self(self.0.saturating_mul(rhs.0) / DIV) }
+
+	fn saturating_sub(self, rhs: Self) -> Self { Self(self.0.saturating_sub(rhs.0)) }
 }
 
 /// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
@@ -123,9 +125,7 @@ impl Saturating for Fixed64 {
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
-	fn add(self, rhs: Self) -> Self::Output {
-		Self(self.0 + rhs.0)
-	}
+	fn add(self, rhs: Self) -> Self::Output { Self(self.0 + rhs.0) }
 }
 
 /// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
@@ -133,9 +133,7 @@ impl ops::Add for Fixed64 {
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 
-	fn sub(self, rhs: Self) -> Self::Output {
-		Self(self.0 - rhs.0)
-	}
+	fn sub(self, rhs: Self) -> Self::Output { Self(self.0 - rhs.0) }
 }
 
 /// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
@@ -146,7 +144,7 @@ impl ops::Div for Fixed64 {
 	fn div(self, rhs: Self) -> Self::Output {
 		if rhs.0 == 0 {
 			let zero = 0;
-			return Fixed64::from_parts( self.0 / zero);
+			return Fixed64::from_parts(self.0 / zero)
 		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs() as u64)
@@ -158,15 +156,11 @@ impl ops::Div for Fixed64 {
 }
 
 impl CheckedSub for Fixed64 {
-	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		self.0.checked_sub(rhs.0).map(Self)
-	}
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> { self.0.checked_sub(rhs.0).map(Self) }
 }
 
 impl CheckedAdd for Fixed64 {
-	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		self.0.checked_add(rhs.0).map(Self)
-	}
+	fn checked_add(&self, rhs: &Self) -> Option<Self> { self.0.checked_add(rhs.0).map(Self) }
 }
 
 impl CheckedDiv for Fixed64 {
@@ -186,18 +180,14 @@ impl rstd::fmt::Debug for Fixed64 {
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	fn max() -> Fixed64 {
-		Fixed64::from_parts(i64::max_value())
-	}
+	fn max() -> Fixed64 { Fixed64::from_parts(i64::max_value()) }
 
 	#[test]
 	fn fixed64_semantics() {
@@ -217,7 +207,10 @@ mod tests {
 		// negative (1/2)
 		let mut fm = Fixed64::from_rational(-1, 2);
 		test_set.clone().into_iter().for_each(|i| {
-			assert_eq!(fm.saturated_multiply_accumulate(i) as i32, i as i32 - i as i32 / 2);
+			assert_eq!(
+				fm.saturated_multiply_accumulate(i) as i32,
+				i as i32 - i as i32 / 2
+			);
 		});
 
 		// unit (1) multiplier
@@ -261,7 +254,7 @@ mod tests {
 				max().saturated_multiply_accumulate($num_type::max_value()),
 				$num_type::max_value()
 			);
-		}
+		};
 	}
 
 	#[test]

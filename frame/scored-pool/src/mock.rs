@@ -18,13 +18,15 @@
 
 use super::*;
 
+use primitives::H256;
 use std::cell::RefCell;
 use support::{impl_outer_origin, parameter_types, weights::Weight};
-use primitives::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
 use system::EnsureSignedBy;
 
@@ -55,35 +57,35 @@ parameter_types! {
 }
 
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Call = ();
-	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
+	type BlockNumber = u64;
+	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = ();
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type Header = Header;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type MaximumBlockLength = MaximumBlockLength;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-    type Doughnut = ();
-    type DelegatedDispatchVerifier = ();
 }
 
 impl balances::Trait for Test {
 	type Balance = u64;
+	type CreationFee = CreationFee;
+	type DustRemoval = ();
+	type Event = ();
+	type ExistentialDeposit = ExistentialDeposit;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type Event = ();
-	type TransferPayment = ();
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
-	type CreationFee = CreationFee;
+	type TransferPayment = ();
 }
 
 thread_local! {
@@ -114,12 +116,12 @@ impl InitializeMembers<u64> for TestChangeMembers {
 }
 
 impl Trait for Test {
+	type CandidateDeposit = CandidateDeposit;
+	type Currency = balances::Module<Self>;
 	type Event = ();
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64, ()>;
-	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
-	type Currency = balances::Module<Self>;
-	type CandidateDeposit = CandidateDeposit;
+	type MembershipInitialized = TestChangeMembers;
 	type Period = Period;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64, ()>;
@@ -128,7 +130,9 @@ impl Trait for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
 	balances::GenesisConfig::<Test> {
 		balances: vec![
@@ -141,8 +145,10 @@ pub fn new_test_ext() -> runtime_io::TestExternalities {
 			(99, 1),
 		],
 		vesting: vec![],
-	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::<Test>{
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	GenesisConfig::<Test> {
 		pool: vec![
 			(5, None),
 			(10, Some(1)),
@@ -151,8 +157,10 @@ pub fn new_test_ext() -> runtime_io::TestExternalities {
 			(40, Some(3)),
 		],
 		member_count: 2,
-		.. Default::default()
-	}.assimilate_storage(&mut t).unwrap();
+		..Default::default()
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 

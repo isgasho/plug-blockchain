@@ -18,30 +18,24 @@
 
 use std::sync::Arc;
 
-use codec::{self, Codec, Decode, Encode};
-use client::{
-	light::blockchain::{future_header, RemoteBlockchain},
-	light::fetcher::{Fetcher, RemoteCallRequest},
+use client::light::{
+	blockchain::{future_header, RemoteBlockchain},
+	fetcher::{Fetcher, RemoteCallRequest},
 };
+use codec::{self, Codec, Decode, Encode};
+use futures::future::{ready, TryFutureExt};
 use jsonrpc_core::{
-	Error, ErrorCode,
 	futures::future::{result, Future},
+	Error, ErrorCode,
 };
 use jsonrpc_derive::rpc;
-use futures::future::{ready, TryFutureExt};
-use sp_blockchain::{
-	HeaderBackend,
-	Error as ClientError
-};
-use sp_runtime::{
-	generic::BlockId,
-	traits,
-};
+use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_core::hexdisplay::HexDisplay;
-use txpool_api::{TransactionPool, InPoolTransaction};
+use sp_runtime::{generic::BlockId, traits};
+use txpool_api::{InPoolTransaction, TransactionPool};
 
-pub use frame_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
+pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// Future that resolves to account nonce.
 pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
@@ -149,24 +143,27 @@ where
 		let future_best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id);
 		let fetcher = self.fetcher.clone();
 		let call_data = account.encode();
-		let future_best_header = future_best_header
-			.and_then(move |maybe_best_header| ready(
-				match maybe_best_header {
-					Some(best_header) => Ok(best_header),
-					None => Err(ClientError::UnknownBlock(format!("{}", best_hash))),
-				}
-			));
-		let future_nonce = future_best_header.and_then(move |best_header|
-			fetcher.remote_call(RemoteCallRequest {
-				block: best_hash,
-				header: best_header,
-				method: "AccountNonceApi_account_nonce".into(),
-				call_data,
-				retry_count: None,
+		let future_best_header = future_best_header.and_then(move |maybe_best_header| {
+			ready(match maybe_best_header {
+				Some(best_header) => Ok(best_header),
+				None => Err(ClientError::UnknownBlock(format!("{}", best_hash))),
 			})
-		).compat();
-		let future_nonce = future_nonce.and_then(|nonce| Decode::decode(&mut &nonce[..])
-			.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e)));
+		});
+		let future_nonce = future_best_header
+			.and_then(move |best_header| {
+				fetcher.remote_call(RemoteCallRequest {
+					block: best_hash,
+					header: best_header,
+					method: "AccountNonceApi_account_nonce".into(),
+					call_data,
+					retry_count: None,
+				})
+			})
+			.compat();
+		let future_nonce = future_nonce.and_then(|nonce| {
+			Decode::decode(&mut &nonce[..])
+				.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e))
+		});
 		let future_nonce = future_nonce.map_err(|e| Error {
 			code: ErrorCode::ServerError(RUNTIME_ERROR),
 			message: "Unable to query nonce.".into(),
@@ -182,11 +179,8 @@ where
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P, AccountId, Index>(
-	pool: &P,
-	account: AccountId,
-	nonce: Index,
-) -> Index where
+fn adjust_nonce<P, AccountId, Index>(pool: &P, account: AccountId, nonce: Index) -> Index
+where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
 	Index: Clone + std::fmt::Display + Encode + traits::SimpleArithmetic + 'static,
@@ -224,10 +218,7 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use test_client::{
-		runtime::Transfer,
-		AccountKeyring,
-	};
+	use test_client::{runtime::Transfer, AccountKeyring};
 	use txpool::{BasicPool, FullChainApi};
 
 	#[test]
@@ -235,7 +226,10 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		let pool = Arc::new(BasicPool::new(
+			Default::default(),
+			FullChainApi::new(client.clone()),
+		));
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {

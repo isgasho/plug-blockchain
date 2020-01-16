@@ -127,7 +127,7 @@ macro_rules! unmarshall_args {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, String>
+	F: FnOnce() -> Result<R, String>,
 {
 	f
 }
@@ -183,4 +183,3 @@ pub fn interpret_runtime_api_result(retval: i64) -> (Pointer<u8>, WordSize) {
 	let len = ((retval as u64) >> 32) as WordSize;
 	(ptr, len)
 }
-

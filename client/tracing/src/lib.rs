@@ -31,26 +31,33 @@
 //!
 //! It's possible to record values with each span in the following way:
 //! ```
-//! let span = tracing::span!(tracing::Level::INFO, "my_span_name", my_number = 10, a_key = "a value");
+//! let span = tracing::span!(
+//! 	tracing::Level::INFO,
+//! 	"my_span_name",
+//! 	my_number = 10,
+//! 	a_key = "a value"
+//! 	);
 //! let _guard = span.enter();
 //! ```
 //! Currently we provide `Log` (default), `Telemetry` and `Grafana` variants for `Receiver`
 
-use std::collections::HashMap;
-use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::{
+	collections::HashMap,
+	fmt,
+	sync::atomic::{AtomicU64, Ordering},
+	time::{Duration, Instant},
+};
 
 use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer, SerializeMap};
+use serde::ser::{Serialize, SerializeMap, Serializer};
 use slog::{SerdeValue, Value};
 use tracing_core::{
 	event::Event,
-	field::{Visit, Field},
-	Level,
+	field::{Field, Visit},
 	metadata::Metadata,
 	span::{Attributes, Id, Record},
-	subscriber::Subscriber
+	subscriber::Subscriber,
+	Level,
 };
 
 use grafana_data_source::{self, record_metrics};
@@ -68,9 +75,7 @@ pub enum TracingReceiver {
 }
 
 impl Default for TracingReceiver {
-	fn default() -> Self {
-		Self::Log
-	}
+	fn default() -> Self { Self::Log }
 }
 
 #[derive(Debug)]
@@ -89,26 +94,22 @@ struct SpanDatum {
 struct Visitor(Vec<(String, String)>);
 
 impl Visit for Visitor {
-	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.record_debug(field, &value)
-	}
+	fn record_i64(&mut self, field: &Field, value: i64) { self.record_debug(field, &value) }
 
-	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.record_debug(field, &value)
-	}
+	fn record_u64(&mut self, field: &Field, value: u64) { self.record_debug(field, &value) }
 
-	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.record_debug(field, &value)
-	}
+	fn record_bool(&mut self, field: &Field, value: bool) { self.record_debug(field, &value) }
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.push((field.name().to_string(), format!("{:?}",value)));
+		self.0
+			.push((field.name().to_string(), format!("{:?}", value)));
 	}
 }
 
 impl Serialize for Visitor {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where S: Serializer,
+	where
+		S: Serializer,
 	{
 		let mut map = serializer.serialize_map(Some(self.0.len()))?;
 		for (k, v) in &self.0 {
@@ -120,19 +121,20 @@ impl Serialize for Visitor {
 
 impl fmt::Display for Visitor {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let values = self.0.iter().map(|(k,v)| format!("{}={}",k,v)).collect::<Vec<String>>().join(", ");
+		let values = self
+			.0
+			.iter()
+			.map(|(k, v)| format!("{}={}", k, v))
+			.collect::<Vec<String>>()
+			.join(", ");
 		write!(f, "{}", values)
 	}
 }
 
 impl SerdeValue for Visitor {
-	fn as_serde(&self) -> &dyn erased_serde::Serialize {
-		self
-	}
+	fn as_serde(&self) -> &dyn erased_serde::Serialize { self }
 
-	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> {
-		Box::new(self.clone())
-	}
+	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> { Box::new(self.clone()) }
 }
 
 impl Value for Visitor {
@@ -181,8 +183,8 @@ fn parse_target(s: &str) -> (String, Level) {
 			} else {
 				(target, Level::TRACE)
 			}
-		}
-		None => (s.to_string(), Level::TRACE)
+		},
+		None => (s.to_string(), Level::TRACE),
 	}
 }
 
@@ -190,10 +192,18 @@ impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
 		for t in &self.targets {
 			if metadata.target().starts_with(t.0.as_str()) && metadata.level() <= &t.1 {
-				log::debug!("Enabled target: {}, level: {}", metadata.target(), metadata.level());
-				return true;
+				log::debug!(
+					"Enabled target: {}, level: {}",
+					metadata.target(),
+					metadata.level()
+				);
+				return true
 			} else {
-				log::debug!("Disabled target: {}, level: {}", metadata.target(), metadata.level());
+				log::debug!(
+					"Disabled target: {}, level: {}",
+					metadata.target(),
+					metadata.level()
+				);
 			}
 		}
 		false
@@ -229,7 +239,10 @@ impl Subscriber for ProfilingSubscriber {
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
 			s.start_time = start_time;
 		} else {
-			log::warn!("Tried to enter span {:?} that has already been closed!", span);
+			log::warn!(
+				"Tried to enter span {:?} that has already been closed!",
+				span
+			);
 		}
 	}
 
@@ -262,7 +275,8 @@ impl ProfilingSubscriber {
 
 fn print_log(span_datum: SpanDatum) {
 	if span_datum.values.0.is_empty() {
-		log::info!("TRACING: {} {}: {}, line: {}, time: {}",
+		log::info!(
+			"TRACING: {} {}: {}, line: {}, time: {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
@@ -270,7 +284,8 @@ fn print_log(span_datum: SpanDatum) {
 			span_datum.overall_time.as_nanos(),
 		);
 	} else {
-		log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
+		log::info!(
+			"TRACING: {} {}: {}, line: {}, time: {}, {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,

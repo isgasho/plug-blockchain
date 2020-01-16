@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
+use crate::{BalanceOf, GasSpent, Module, NegativeImbalanceOf, Trait};
 use rstd::convert::TryFrom;
 use sp_runtime::traits::{
-	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
+	CheckedMul, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto, Zero,
 };
 use support::{
-	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
+	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason},
+	StorageValue,
 };
 
 #[cfg(test)]
@@ -174,24 +175,16 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
-	pub fn gas_price(&self) -> BalanceOf<T> {
-		self.gas_price
-	}
+	pub fn gas_price(&self) -> BalanceOf<T> { self.gas_price }
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> Gas {
-		self.gas_left
-	}
+	pub fn gas_left(&self) -> Gas { self.gas_left }
 
 	/// Returns how much gas was spent.
-	fn spent(&self) -> Gas {
-		self.limit - self.gas_left
-	}
+	fn spent(&self) -> Gas { self.limit - self.gas_left }
 
 	#[cfg(test)]
-	pub fn tokens(&self) -> &[ErasedToken] {
-		&self.tokens
-	}
+	pub fn tokens(&self) -> &[ErasedToken] { &self.tokens }
 }
 
 /// Buy the given amount of gas.
@@ -207,7 +200,8 @@ pub fn buy_gas<T: Trait>(
 	let cost = if gas_price.is_zero() {
 		<BalanceOf<T>>::zero()
 	} else {
-		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit).ok()
+		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit)
+			.ok()
 			.and_then(|gas_limit| gas_price.checked_mul(&gas_limit))
 			.ok_or("overflow multiplying gas limit by price")?
 	};
@@ -216,7 +210,7 @@ pub fn buy_gas<T: Trait>(
 		transactor,
 		cost,
 		WithdrawReason::Fee.into(),
-		ExistenceRequirement::KeepAlive
+		ExistenceRequirement::KeepAlive,
 	)?;
 
 	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
@@ -244,10 +238,11 @@ pub fn refund_unused_gas<T: Trait>(
 	}
 }
 
-/// A little handy utility for converting a value in balance units into approximate value in gas units
-/// at the given gas price.
+/// A little handy utility for converting a value in balance units into approximate value in gas
+/// units at the given gas price.
 pub fn approx_gas_for_balance<Balance>(gas_price: Balance, balance: Balance) -> Gas
-	where Balance: SimpleArithmetic
+where
+	Balance: SimpleArithmetic,
 {
 	(balance / gas_price).saturated_into::<Gas>()
 }
@@ -300,6 +295,7 @@ mod tests {
 	struct SimpleToken(u64);
 	impl Token<Test> for SimpleToken {
 		type Metadata = ();
+
 		fn calculate_amount(&self, _metadata: &()) -> u64 { self.0 }
 	}
 
@@ -313,6 +309,7 @@ mod tests {
 
 	impl Token<Test> for MultiplierToken {
 		type Metadata = MultiplierTokenMetadata;
+
 		fn calculate_amount(&self, metadata: &MultiplierTokenMetadata) -> u64 {
 			// Probably you want to use saturating mul in production code.
 			self.0 * metadata.multiplier
@@ -329,8 +326,10 @@ mod tests {
 	fn simple() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
-		let result = gas_meter
-			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
+		let result = gas_meter.charge(
+			&MultiplierTokenMetadata { multiplier: 3 },
+			MultiplierToken(10),
+		);
 		assert!(!result.is_out_of_gas());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
@@ -343,7 +342,10 @@ mod tests {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 		assert!(!gas_meter
-			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
+			.charge(
+				&MultiplierTokenMetadata { multiplier: 3 },
+				MultiplierToken(10)
+			)
 			.is_out_of_gas());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
@@ -372,7 +374,6 @@ mod tests {
 		// The gas meter is emptied at this moment, so this should also fail.
 		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
 	}
-
 
 	// Charging the exact amount that the user paid for should be
 	// possible.

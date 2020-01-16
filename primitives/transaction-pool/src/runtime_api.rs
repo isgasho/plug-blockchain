@@ -16,8 +16,7 @@
 
 //! Tagged Transaction Queue Runtime API.
 
-use sp_runtime::transaction_validity::TransactionValidity;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{traits::Block as BlockT, transaction_validity::TransactionValidity};
 
 sp_api::decl_runtime_apis! {
 	/// The `TaggedTransactionQueue` api trait for interfering with the transaction queue.

@@ -16,9 +16,9 @@
 
 //! Macro for declaring a module error.
 
+pub use frame_metadata::{DecodeDifferent, ErrorMetadata, ModuleErrorMetadata};
 #[doc(hidden)]
 pub use sp_runtime::traits::LookupError;
-pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 
 /// Declare an error type for a runtime module.
 ///
@@ -33,14 +33,14 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// ```
 /// # use frame_support::decl_error;
 /// decl_error! {
-///     /// Errors that can occur in my module.
-///     pub enum MyError {
-///         /// Hey this is an error message that indicates bla.
-///         MyCoolErrorMessage,
-///         /// You are just not cool enough for my module!
-///         YouAreNotCoolEnough,
-///     }
-/// }
+/// /// Errors that can occur in my module.
+/// pub enum MyError {
+/// 	/// Hey this is an error message that indicates bla.
+/// 	MyCoolErrorMessage,
+/// 	/// You are just not cool enough for my module!
+/// 	YouAreNotCoolEnough,
+/// 			}
+/// 			}
 /// ```
 ///
 /// `decl_error!` supports only variants that do not hold any data.

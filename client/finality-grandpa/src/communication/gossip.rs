@@ -82,23 +82,27 @@
 //!
 //! We only send polite messages to peers,
 
-use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
-use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
-use network::{config::Roles, PeerId, ReputationChange};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use fg_primitives::AuthorityId;
+use network::{
+	config::Roles,
+	consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext},
+	PeerId, ReputationChange,
+};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug, warn};
-use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::{prelude::*, sync::mpsc};
+use log::{debug, trace, warn};
 use rand::seq::SliceRandom;
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 
+use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
-use super::{cost, benefit, Round, SetId};
 
-use std::collections::{HashMap, VecDeque, HashSet};
-use std::time::{Duration, Instant};
+use std::{
+	collections::{HashMap, HashSet, VecDeque},
+	time::{Duration, Instant},
+};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -107,9 +111,9 @@ const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 /// catch up request.
 const CATCH_UP_THRESHOLD: u64 = 2;
 
-const PROPAGATION_ALL: u32 = 4; //in rounds;
-const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
-const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
+const PROPAGATION_ALL: u32 = 4; // in rounds;
+const PROPAGATION_ALL_AUTHORITIES: u32 = 2; // in rounds;
+const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; // in rounds;
 const ROUND_DURATION: u32 = 4; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
@@ -132,8 +136,8 @@ enum Consider {
 /// A view of protocol state.
 #[derive(Debug)]
 struct View<N> {
-	round: Round, // the current round we are at.
-	set_id: SetId, // the current voter set id.
+	round: Round,           // the current round we are at.
+	set_id: SetId,          // the current voter set id.
 	last_commit: Option<N>, // commit-finalized block height, if any.
 }
 
@@ -159,12 +163,20 @@ impl<N: Ord> View<N> {
 	/// Consider a round and set ID combination under a current view.
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
 		// only from current set
-		if set_id < self.set_id { return Consider::RejectPast }
-		if set_id > self.set_id { return Consider::RejectFuture }
+		if set_id < self.set_id {
+			return Consider::RejectPast
+		}
+		if set_id > self.set_id {
+			return Consider::RejectFuture
+		}
 
 		// only r-1 ... r+1
-		if round.0 > self.round.0.saturating_add(1) { return Consider::RejectFuture }
-		if round.0 < self.round.0.saturating_sub(1) { return Consider::RejectPast }
+		if round.0 > self.round.0.saturating_add(1) {
+			return Consider::RejectFuture
+		}
+		if round.0 < self.round.0.saturating_sub(1) {
+			return Consider::RejectPast
+		}
 
 		Consider::Accept
 	}
@@ -173,18 +185,24 @@ impl<N: Ord> View<N> {
 	/// because we gate on finalization of a further block than a previous commit.
 	fn consider_global(&self, set_id: SetId, number: N) -> Consider {
 		// only from current set
-		if set_id < self.set_id { return Consider::RejectPast }
-		if set_id > self.set_id { return Consider::RejectFuture }
+		if set_id < self.set_id {
+			return Consider::RejectPast
+		}
+		if set_id > self.set_id {
+			return Consider::RejectFuture
+		}
 
 		// only commits which claim to prove a higher block number than
 		// the one we're aware of.
 		match self.last_commit {
 			None => Consider::Accept,
-			Some(ref num) => if num < &number {
-				Consider::Accept
-			} else {
-				Consider::RejectPast
-			}
+			Some(ref num) => {
+				if num < &number {
+					Consider::Accept
+				} else {
+					Consider::RejectPast
+				}
+			},
 		}
 	}
 }
@@ -201,7 +219,7 @@ const KEEP_RECENT_ROUNDS: usize = 3;
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
-	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>
+	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>,
 }
 
 impl<B: BlockT> KeepTopics<B> {
@@ -224,7 +242,8 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 
 		// we also accept messages for the next round
-		self.rounds.push_back((Round(round.0.saturating_add(1)), set_id));
+		self.rounds
+			.push_back((Round(round.0.saturating_add(1)), set_id));
 
 		// the 2 is for the current and next round.
 		while self.rounds.len() > KEEP_RECENT_ROUNDS + 2 {
@@ -232,13 +251,13 @@ impl<B: BlockT> KeepTopics<B> {
 		}
 
 		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
-		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
+		map.insert(
+			super::global_topic::<B>(self.current_set.0),
+			(None, self.current_set),
+		);
 
 		for &(round, set) in &self.rounds {
-			map.insert(
-				super::round_topic::<B>(round.0, set.0),
-				(Some(round), set)
-			);
+			map.insert(super::round_topic::<B>(round.0, set.0), (Some(round), set));
 		}
 
 		self.reverse_map = map;
@@ -397,14 +416,21 @@ impl Misbehavior {
 				cost::PER_SIGNATURE_CHECKED.saturating_mul(signatures_checked),
 				"Grandpa: Bad cath-up message",
 			),
-			BadCommitMessage { signatures_checked, blocks_loaded, equivocations_caught } => {
+			BadCommitMessage {
+				signatures_checked,
+				blocks_loaded,
+				equivocations_caught,
+			} => {
 				let cost = cost::PER_SIGNATURE_CHECKED
 					.saturating_mul(signatures_checked)
 					.saturating_add(cost::PER_BLOCK_LOADED.saturating_mul(blocks_loaded));
 
 				let benefit = equivocations_caught.saturating_mul(benefit::PER_EQUIVOCATION);
 
-				ReputationChange::new((benefit as i32).saturating_add(cost as i32), "Grandpa: Bad commit")
+				ReputationChange::new(
+					(benefit as i32).saturating_add(cost as i32),
+					"Grandpa: Bad commit",
+				)
 			},
 			FutureMessage => cost::FUTURE_MESSAGE,
 			OutOfScopeMessage => cost::OUT_OF_SCOPE_MESSAGE,
@@ -463,9 +489,11 @@ impl<N: Ord> Peers<N> {
 	}
 
 	// returns a reference to the new view, if the peer is known.
-	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<N>)
-		-> Result<Option<&View<N>>, Misbehavior>
-	{
+	fn update_peer_state(
+		&mut self,
+		who: &PeerId,
+		update: NeighborPacket<N>,
+	) -> Result<Option<&View<N>>, Misbehavior> {
 		let peer = match self.inner.get_mut(who) {
 			None => return Ok(None),
 			Some(p) => p,
@@ -476,7 +504,7 @@ impl<N: Ord> Peers<N> {
 			|| peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
 
 		if invalid_change {
-			return Err(Misbehavior::InvalidViewChange);
+			return Err(Misbehavior::InvalidViewChange)
 		}
 
 		peer.view = View {
@@ -501,7 +529,7 @@ impl<N: Ord> Peers<N> {
 		// same height, because there is still a misbehavior condition based on
 		// sending commits that are <= the best we are aware of.
 		if peer.view.last_commit.as_ref() > Some(&new_height) {
-			return Err(Misbehavior::InvalidViewChange);
+			return Err(Misbehavior::InvalidViewChange)
 		}
 
 		peer.view.last_commit = Some(new_height);
@@ -509,26 +537,44 @@ impl<N: Ord> Peers<N> {
 		Ok(())
 	}
 
-	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> {
-		self.inner.get(who)
-	}
+	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> { self.inner.get(who) }
 
 	fn authorities(&self) -> usize {
-		self.inner.iter().filter(|(_, info)| info.roles.is_authority()).count()
+		self.inner
+			.iter()
+			.filter(|(_, info)| info.roles.is_authority())
+			.count()
 	}
 
 	fn non_authorities(&self) -> usize {
-		self.inner.iter().filter(|(_, info)| !info.roles.is_authority()).count()
+		self.inner
+			.iter()
+			.filter(|(_, info)| !info.roles.is_authority())
+			.count()
 	}
 
 	fn reshuffle(&mut self) {
-		let mut lucky_peers: Vec<_> = self.inner
+		let mut lucky_peers: Vec<_> = self
+			.inner
 			.iter()
-			.filter_map(|(id, info)| if !info.roles.is_authority() { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)| {
+				if !info.roles.is_authority() {
+					Some(id.clone())
+				} else {
+					None
+				}
+			})
 			.collect();
-		let mut lucky_authorities: Vec<_> = self.inner
+		let mut lucky_authorities: Vec<_> = self
+			.inner
 			.iter()
-			.filter_map(|(id, info)| if info.roles.is_authority() { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)| {
+				if info.roles.is_authority() {
+					Some(id.clone())
+				} else {
+					None
+				}
+			})
 			.collect();
 
 		let num_non_authorities = ((lucky_peers.len() as f32).sqrt() as usize)
@@ -554,7 +600,7 @@ impl<N: Ord> Peers<N> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum Action<H>  {
+pub(super) enum Action<H> {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, ReputationChange),
 	// discard and process.
@@ -575,9 +621,7 @@ enum PendingCatchUp {
 		instant: Instant,
 	},
 	/// Pending catch up request that was answered and is being processed.
-	Processing {
-		instant: Instant,
-	},
+	Processing { instant: Instant },
 }
 
 /// Configuration for the round catch-up mechanism.
@@ -598,18 +642,20 @@ enum CatchUpConfig {
 
 impl CatchUpConfig {
 	fn enabled(only_from_authorities: bool) -> CatchUpConfig {
-		CatchUpConfig::Enabled { only_from_authorities }
+		CatchUpConfig::Enabled {
+			only_from_authorities,
+		}
 	}
 
-	fn disabled() -> CatchUpConfig {
-		CatchUpConfig::Disabled
-	}
+	fn disabled() -> CatchUpConfig { CatchUpConfig::Disabled }
 
 	fn request_allowed<N>(&self, peer: &PeerInfo<N>) -> bool {
 		match self {
 			CatchUpConfig::Disabled => false,
-			CatchUpConfig::Enabled { only_from_authorities, .. } =>
-				!only_from_authorities || peer.roles.is_authority(),
+			CatchUpConfig::Enabled {
+				only_from_authorities,
+				..
+			} => !only_from_authorities || peer.roles.is_authority(),
 		}
 	}
 }
@@ -665,10 +711,12 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				None => return None,
-				Some(ref mut v) => if v.round == round {
-					return None
-				} else {
-					v
+				Some(ref mut v) => {
+					if v.round == round {
+						return None
+					} else {
+						v
+					}
 				},
 			};
 
@@ -696,10 +744,12 @@ impl<Block: BlockT> Inner<Block> {
 					set_id,
 					last_commit: None,
 				}),
-				Some(ref mut v) => if v.set_id == set_id {
-					return None
-				} else {
-					v
+				Some(ref mut v) => {
+					if v.set_id == set_id {
+						return None
+					} else {
+						v
+					}
 				},
 			};
 
@@ -715,10 +765,12 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			match self.local_view {
 				None => return None,
-				Some(ref mut v) => if v.last_commit.as_ref() < Some(&finalized) {
-					v.last_commit = Some(finalized);
-				} else {
-					return None
+				Some(ref mut v) => {
+					if v.last_commit.as_ref() < Some(&finalized) {
+						v.last_commit = Some(finalized);
+					} else {
+						return None
+					}
 				},
 			};
 		}
@@ -727,35 +779,49 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn consider_vote(&self, round: Round, set_id: SetId) -> Consider {
-		self.local_view.as_ref().map(|v| v.consider_vote(round, set_id))
+		self.local_view
+			.as_ref()
+			.map(|v| v.consider_vote(round, set_id))
 			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
 	fn consider_global(&self, set_id: SetId, number: NumberFor<Block>) -> Consider {
-		self.local_view.as_ref().map(|v| v.consider_global(set_id, number))
+		self.local_view
+			.as_ref()
+			.map(|v| v.consider_global(set_id, number))
 			.unwrap_or(Consider::RejectOutOfScope)
 	}
 
-	fn cost_past_rejection(&self, _who: &PeerId, _round: Round, _set_id: SetId) -> ReputationChange {
+	fn cost_past_rejection(
+		&self,
+		_who: &PeerId,
+		_round: Round,
+		_set_id: SetId,
+	) -> ReputationChange {
 		// hardcoded for now.
 		cost::PAST_REJECTION
 	}
 
-	fn validate_round_message(&self, who: &PeerId, full: &VoteMessage<Block>)
-		-> Action<Block::Hash>
-	{
+	fn validate_round_message(
+		&self,
+		who: &PeerId,
+		full: &VoteMessage<Block>,
+	) -> Action<Block::Hash> {
 		match self.consider_vote(full.round, full.set_id) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
-			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
-			Consider::RejectPast =>
-				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
+			Consider::RejectOutOfScope => {
+				return Action::Discard(Misbehavior::OutOfScopeMessage.cost())
+			},
+			Consider::RejectPast => {
+				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id))
+			},
 			Consider::Accept => {},
 		}
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return Action::Discard(cost::UNKNOWN_VOTER);
+			return Action::Discard(cost::UNKNOWN_VOTER)
 		}
 
 		if let Err(()) = super::check_message_sig::<Block>(
@@ -767,37 +833,46 @@ impl<Block: BlockT> Inner<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
-			return Action::Discard(cost::BAD_SIGNATURE);
+			return Action::Discard(cost::BAD_SIGNATURE)
 		}
 
 		let topic = super::round_topic::<Block>(full.round.0, full.set_id.0);
 		Action::Keep(topic, benefit::ROUND_MESSAGE)
 	}
 
-	fn validate_commit_message(&mut self, who: &PeerId, full: &FullCommitMessage<Block>)
-		-> Action<Block::Hash>
-	{
-
-		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
-			return Action::Discard(misbehavior.cost());
+	fn validate_commit_message(
+		&mut self,
+		who: &PeerId,
+		full: &FullCommitMessage<Block>,
+	) -> Action<Block::Hash> {
+		if let Err(misbehavior) = self
+			.peers
+			.update_commit_height(who, full.message.target_number)
+		{
+			return Action::Discard(misbehavior.cost())
 		}
 
 		match self.consider_global(full.set_id, full.message.target_number) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
-			Consider::RejectPast =>
-				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id)),
-			Consider::RejectOutOfScope => return Action::Discard(Misbehavior::OutOfScopeMessage.cost()),
+			Consider::RejectPast => {
+				return Action::Discard(self.cost_past_rejection(who, full.round, full.set_id))
+			},
+			Consider::RejectOutOfScope => {
+				return Action::Discard(Misbehavior::OutOfScopeMessage.cost())
+			},
 			Consider::Accept => {},
 		}
 
-		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
+		if full.message.precommits.len() != full.message.auth_data.len()
+			|| full.message.precommits.is_empty()
+		{
 			debug!(target: "afg", "Malformed compact commit");
 			telemetry!(CONSENSUS_DEBUG; "afg.malformed_compact_commit";
 				"precommits_len" => ?full.message.precommits.len(),
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
 			);
-			return Action::Discard(cost::MALFORMED_COMMIT);
+			return Action::Discard(cost::MALFORMED_COMMIT)
 		}
 
 		// always discard commits initially and rebroadcast after doing full
@@ -806,25 +881,31 @@ impl<Block: BlockT> Inner<Block> {
 		Action::ProcessAndDiscard(topic, benefit::BASIC_VALIDATED_COMMIT)
 	}
 
-	fn validate_catch_up_message(&mut self, who: &PeerId, full: &FullCatchUpMessage<Block>)
-		-> Action<Block::Hash>
-	{
+	fn validate_catch_up_message(
+		&mut self,
+		who: &PeerId,
+		full: &FullCatchUpMessage<Block>,
+	) -> Action<Block::Hash> {
 		match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, request, instant } => {
+			PendingCatchUp::Requesting {
+				who: peer,
+				request,
+				instant,
+			} => {
 				if peer != who {
-					return Action::Discard(Misbehavior::OutOfScopeMessage.cost());
+					return Action::Discard(Misbehavior::OutOfScopeMessage.cost())
 				}
 
 				if request.set_id != full.set_id {
-					return Action::Discard(cost::MALFORMED_CATCH_UP);
+					return Action::Discard(cost::MALFORMED_CATCH_UP)
 				}
 
 				if request.round.0 > full.message.round_number {
-					return Action::Discard(cost::MALFORMED_CATCH_UP);
+					return Action::Discard(cost::MALFORMED_CATCH_UP)
 				}
 
 				if full.message.prevotes.is_empty() || full.message.precommits.is_empty() {
-					return Action::Discard(cost::MALFORMED_CATCH_UP);
+					return Action::Discard(cost::MALFORMED_CATCH_UP)
 				}
 
 				// move request to pending processing state, we won't push out
@@ -870,26 +951,26 @@ impl<Block: BlockT> Inner<Block> {
 			// race where the peer sent us the request before it observed that
 			// we had transitioned to a new set. In this case we charge a lower
 			// cost.
-			if request.set_id.0.saturating_add(1) == local_view.set_id.0 &&
-				local_view.round.0.saturating_sub(CATCH_UP_THRESHOLD) == 0
+			if request.set_id.0.saturating_add(1) == local_view.set_id.0
+				&& local_view.round.0.saturating_sub(CATCH_UP_THRESHOLD) == 0
 			{
-				return (None, Action::Discard(cost::HONEST_OUT_OF_SCOPE_CATCH_UP));
+				return (None, Action::Discard(cost::HONEST_OUT_OF_SCOPE_CATCH_UP))
 			}
 
-			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
+			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
 		}
 
 		match self.peers.peer(who) {
-			None =>
-				return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
-			Some(peer) if peer.view.round >= request.round =>
-				return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
+			None => return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
+			Some(peer) if peer.view.round >= request.round => {
+				return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
+			},
 			_ => {},
 		}
 
 		let last_completed_round = set_state.read().last_completed_round();
 		if last_completed_round.number < request.round.0 {
-			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()));
+			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
 		}
 
 		trace!(target: "afg", "Replying to catch-up request for round {} from {} with round {}",
@@ -954,9 +1035,9 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if self.catch_up_config.request_allowed(&peer) &&
-				peer.view.set_id == local_view.set_id &&
-				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
+			if self.catch_up_config.request_allowed(&peer)
+				&& peer.view.set_id == local_view.set_id
+				&& peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
 				// send catch up request if allowed
 				let round = peer.view.round.0 - 1; // peer.view.round is > 0
@@ -983,16 +1064,24 @@ impl<Block: BlockT> Inner<Block> {
 		(catch_up, report)
 	}
 
-	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
-		-> (Vec<Block::Hash>, Action<Block::Hash>, Option<GossipMessage<Block>>, Option<Report>)
-	{
+	fn import_neighbor_message(
+		&mut self,
+		who: &PeerId,
+		update: NeighborPacket<NumberFor<Block>>,
+	) -> (
+		Vec<Block::Hash>,
+		Action<Block::Hash>,
+		Option<GossipMessage<Block>>,
+		Option<Report>,
+	) {
 		let update_res = self.peers.update_peer_state(who, update);
 
 		let (cost_benefit, topics) = match update_res {
-			Ok(view) =>
-				(benefit::NEIGHBOR_MESSAGE, view.map(|view| neighbor_topics::<Block>(view))),
-			Err(misbehavior) =>
-				(misbehavior.cost(), None),
+			Ok(view) => (
+				benefit::NEIGHBOR_MESSAGE,
+				view.map(|view| neighbor_topics::<Block>(view)),
+			),
+			Err(misbehavior) => (misbehavior.cost(), None),
 		};
 
 		let (catch_up, report) = match update_res {
@@ -1027,19 +1116,23 @@ impl<Block: BlockT> Inner<Block> {
 		catch_up_request: &CatchUpRequestMessage,
 	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+			PendingCatchUp::Requesting {
+				who: peer, instant, ..
+			} => {
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
-					return (false, None);
+					return (false, None)
 				} else {
 					// report peer for timeout
 					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
-				},
-			PendingCatchUp::Processing { instant, .. } =>
+				}
+			},
+			PendingCatchUp::Processing { instant, .. } => {
 				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
-					return (false, None);
+					return (false, None)
 				} else {
 					None
-				},
+				}
+			},
 			_ => None,
 		};
 
@@ -1067,15 +1160,12 @@ impl<Block: BlockT> Inner<Block> {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = self.round_start.elapsed();
 
-
-		if !self.config.is_authority
-			&& round_elapsed < round_duration * PROPAGATION_ALL
-		{
+		if !self.config.is_authority && round_elapsed < round_duration * PROPAGATION_ALL {
 			// non-authority nodes don't gossip any messages right away. we
 			// assume that authorities (and sentries) are strongly connected, so
 			// it should be unnecessary for non-authorities to gossip all
 			// messages right away.
-			return false;
+			return false
 		}
 
 		if peer.roles.is_authority() {
@@ -1178,7 +1268,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
-	) -> (GossipValidator<Block>, ReportStream)	{
+	) -> (GossipValidator<Block>, ReportStream) {
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
@@ -1191,7 +1281,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 	/// Note a round in the current set has started.
 	pub(super) fn note_round<F>(&self, round: Round, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	where
+		F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>),
 	{
 		let maybe_msg = self.inner.write().note_round(round);
 		if let Some((to, msg)) = maybe_msg {
@@ -1202,7 +1293,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 	/// Note that a voter set with given ID has started. Updates the current set to given
 	/// value and initializes the round to 0.
 	pub(super) fn note_set<F>(&self, set_id: SetId, authorities: Vec<AuthorityId>, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	where
+		F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>),
 	{
 		let maybe_msg = self.inner.write().note_set(set_id, authorities);
 		if let Some((to, msg)) = maybe_msg {
@@ -1212,7 +1304,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 	/// Note that we've imported a commit finalizing a given block.
 	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+	where
+		F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>),
 	{
 		let maybe_msg = self.inner.write().note_commit_finalized(finalized);
 		if let Some((to, msg)) = maybe_msg {
@@ -1221,30 +1314,41 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that we've processed a catch up message.
-	pub(super) fn note_catch_up_message_processed(&self)	{
+	pub(super) fn note_catch_up_message_processed(&self) {
 		self.inner.write().note_catch_up_message_processed();
 	}
 
 	fn report(&self, who: PeerId, cost_benefit: ReputationChange) {
-		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
+		let _ = self
+			.report_sender
+			.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
-	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
-		-> (Action<Block::Hash>, Vec<Block::Hash>, Option<GossipMessage<Block>>)
-	{
+	pub(super) fn do_validate(
+		&self,
+		who: &PeerId,
+		mut data: &[u8],
+	) -> (
+		Action<Block::Hash>,
+		Vec<Block::Hash>,
+		Option<GossipMessage<Block>>,
+	) {
 		let mut broadcast_topics = Vec::new();
 		let mut peer_reply = None;
 
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Ok(GossipMessage::Vote(ref message))
-					=> self.inner.write().validate_round_message(who, message),
-				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
+				Ok(GossipMessage::Vote(ref message)) => {
+					self.inner.write().validate_round_message(who, message)
+				},
+				Ok(GossipMessage::Commit(ref message)) => {
+					self.inner.write().validate_commit_message(who, message)
+				},
 				Ok(GossipMessage::Neighbor(update)) => {
-					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
-						who,
-						update.into_neighbor_packet(),
-					);
+					let (topics, action, catch_up, report) = self
+						.inner
+						.write()
+						.import_neighbor_message(who, update.into_neighbor_packet());
 
 					if let Some((peer, cost_benefit)) = report {
 						self.report(peer, cost_benefit);
@@ -1253,26 +1357,26 @@ impl<Block: BlockT> GossipValidator<Block> {
 					broadcast_topics = topics;
 					peer_reply = catch_up;
 					action
-				}
-				Ok(GossipMessage::CatchUp(ref message))
-					=> self.inner.write().validate_catch_up_message(who, message),
+				},
+				Ok(GossipMessage::CatchUp(ref message)) => {
+					self.inner.write().validate_catch_up_message(who, message)
+				},
 				Ok(GossipMessage::CatchUpRequest(request)) => {
-					let (reply, action) = self.inner.write().handle_catch_up_request(
-						who,
-						request,
-						&self.set_state,
-					);
+					let (reply, action) =
+						self.inner
+							.write()
+							.handle_catch_up_request(who, request, &self.set_state);
 
 					peer_reply = reply;
 					action
-				}
+				},
 				Err(e) => {
 					debug!(target: "afg", "Error decoding message: {}", e.what());
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
 					Action::Discard(Misbehavior::UndecodablePacket(len).cost())
-				}
+				},
 			}
 		};
 
@@ -1286,12 +1390,10 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone(), roles);
 
-			inner.local_view.as_ref().map(|v| {
-				NeighborPacket {
-					round: v.round,
-					set_id: v.set_id,
-					commit_finalized_height: v.last_commit.unwrap_or(Zero::zero()),
-				}
+			inner.local_view.as_ref().map(|v| NeighborPacket {
+				round: v.round,
+				set_id: v.set_id,
+				commit_finalized_height: v.last_commit.unwrap_or(Zero::zero()),
 			})
 		};
 
@@ -1305,9 +1407,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		self.inner.write().peers.peer_disconnected(who);
 	}
 
-	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
-		-> network_gossip::ValidationResult<Block::Hash>
-	{
+	fn validate(
+		&self,
+		context: &mut dyn ValidatorContext<Block>,
+		who: &PeerId,
+		data: &[u8],
+	) -> network_gossip::ValidationResult<Block::Hash> {
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
 		// not with lock held!
@@ -1324,21 +1429,21 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				self.report(who.clone(), cb);
 				context.broadcast_message(topic, data.to_vec(), false);
 				network_gossip::ValidationResult::ProcessAndKeep(topic)
-			}
+			},
 			Action::ProcessAndDiscard(topic, cb) => {
 				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::ProcessAndDiscard(topic)
-			}
+			},
 			Action::Discard(cb) => {
 				self.report(who.clone(), cb);
 				network_gossip::ValidationResult::Discard
-			}
+			},
 		}
 	}
 
-	fn message_allowed<'a>(&'a self)
-		-> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
-	{
+	fn message_allowed<'a>(
+		&'a self,
+	) -> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a> {
 		let (inner, do_rebroadcast) = {
 			use parking_lot::RwLockWriteGuard;
 
@@ -1357,7 +1462,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 		Box::new(move |who, intent, topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast;
+				return do_rebroadcast
 			}
 
 			let peer = match inner.peers.peer(who) {
@@ -1376,12 +1481,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				if maybe_round.is_some() {
 					if !inner.round_message_allowed(who, peer) {
 						// early return if the vote message isn't allowed at this stage.
-						return false;
+						return false
 					}
 				} else {
 					if !inner.global_message_allowed(who, peer) {
 						// early return if the global message isn't allowed at this stage.
-						return false;
+						return false
 					}
 				}
 			}
@@ -1405,9 +1510,9 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit &&
-						Some(full.message.target_number) > peer_best_commit
-				}
+					Some(full.message.target_number) == our_best_commit
+						&& Some(full.message.target_number) > peer_best_commit
+				},
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
 				Ok(GossipMessage::CatchUp(_)) => false,
@@ -1423,7 +1528,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			// it is expired.
 			match inner.live_topics.topic_info(&topic) {
 				None => return true,
-				Some((Some(_), _)) => return false, // round messages don't require further checking.
+				Some((Some(_), _)) => return false, // round messages don't require further
+				// checking.
 				Some((None, _)) => {},
 			};
 
@@ -1437,8 +1543,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 
 			match GossipMessage::<Block>::decode(&mut data) {
 				Err(_) => true,
-				Ok(GossipMessage::Commit(full))
-					=> Some(full.message.target_number) != best_commit,
+				Ok(GossipMessage::Commit(full)) => Some(full.message.target_number) != best_commit,
 				Ok(_) => true,
 			}
 		})
@@ -1459,8 +1564,7 @@ pub(super) struct ReportStream {
 impl ReportStream {
 	/// Consume the report stream, converting it into a future that
 	/// handles all reports.
-	pub(super) fn consume<B, N>(self, net: N)
-		-> impl Future<Item=(),Error=()> + Send + 'static
+	pub(super) fn consume<B, N>(self, net: N) -> impl Future<Item = (), Error = ()> + Send + 'static
 	where
 		B: BlockT,
 		N: super::Network<B> + Send + 'static,
@@ -1482,8 +1586,8 @@ struct ReportingTask<B, N> {
 }
 
 impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
-	type Item = ();
 	type Error = ();
+	type Item = ();
 
 	fn poll(&mut self) -> Poll<(), ()> {
 		loop {
@@ -1491,10 +1595,11 @@ impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
 				Err(_) => {
 					warn!(target: "afg", "Report stream terminated unexpectedly");
 					return Ok(Async::Ready(()))
-				}
+				},
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) =>
-					self.net.report(who, cost_benefit),
+				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) => {
+					self.net.report(who, cost_benefit)
+				},
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 			}
 		}
@@ -1503,10 +1608,9 @@ impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use super::environment::SharedVoterSetState;
-	use network_gossip::Validator as GossipValidatorT;
+	use super::{environment::SharedVoterSetState, *};
 	use network::test::Block;
+	use network_gossip::Validator as GossipValidatorT;
 	use primitives::{crypto::Public, H256};
 
 	// some random config (not really needed)
@@ -1523,44 +1627,65 @@ mod tests {
 
 	// dummy voter set state
 	fn voter_set_state() -> SharedVoterSetState<Block> {
-		use crate::authorities::AuthoritySet;
-		use crate::environment::VoterSetState;
+		use crate::{authorities::AuthoritySet, environment::VoterSetState};
 
 		let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
-		let set_state = VoterSetState::live(
-			0,
-			&voters,
-			base,
-		);
+		let set_state = VoterSetState::live(0, &voters, base);
 
 		set_state.into()
 	}
 
 	#[test]
 	fn view_vote_rules() {
-		let view = View { round: Round(100), set_id: SetId(1), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(1),
+			last_commit: Some(1000u64),
+		};
 
-		assert_eq!(view.consider_vote(Round(98), SetId(1)), Consider::RejectPast);
+		assert_eq!(
+			view.consider_vote(Round(98), SetId(1)),
+			Consider::RejectPast
+		);
 		assert_eq!(view.consider_vote(Round(1), SetId(0)), Consider::RejectPast);
-		assert_eq!(view.consider_vote(Round(1000), SetId(0)), Consider::RejectPast);
+		assert_eq!(
+			view.consider_vote(Round(1000), SetId(0)),
+			Consider::RejectPast
+		);
 
 		assert_eq!(view.consider_vote(Round(99), SetId(1)), Consider::Accept);
 		assert_eq!(view.consider_vote(Round(100), SetId(1)), Consider::Accept);
 		assert_eq!(view.consider_vote(Round(101), SetId(1)), Consider::Accept);
 
-		assert_eq!(view.consider_vote(Round(102), SetId(1)), Consider::RejectFuture);
-		assert_eq!(view.consider_vote(Round(1), SetId(2)), Consider::RejectFuture);
-		assert_eq!(view.consider_vote(Round(1000), SetId(2)), Consider::RejectFuture);
+		assert_eq!(
+			view.consider_vote(Round(102), SetId(1)),
+			Consider::RejectFuture
+		);
+		assert_eq!(
+			view.consider_vote(Round(1), SetId(2)),
+			Consider::RejectFuture
+		);
+		assert_eq!(
+			view.consider_vote(Round(1000), SetId(2)),
+			Consider::RejectFuture
+		);
 	}
 
 	#[test]
 	fn view_global_message_rules() {
-		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(2),
+			last_commit: Some(1000u64),
+		};
 
 		assert_eq!(view.consider_global(SetId(3), 1), Consider::RejectFuture);
 		assert_eq!(view.consider_global(SetId(3), 1000), Consider::RejectFuture);
-		assert_eq!(view.consider_global(SetId(3), 10000), Consider::RejectFuture);
+		assert_eq!(
+			view.consider_global(SetId(3), 10000),
+			Consider::RejectFuture
+		);
 
 		assert_eq!(view.consider_global(SetId(1), 1), Consider::RejectPast);
 		assert_eq!(view.consider_global(SetId(1), 1000), Consider::RejectPast);
@@ -1626,7 +1751,10 @@ mod tests {
 		peers.new_peer(id.clone(), Roles::AUTHORITY);
 
 		let mut check_update = move |update: NeighborPacket<_>| {
-			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
+			let view = peers
+				.update_peer_state(&id, update.clone())
+				.unwrap()
+				.unwrap();
 			assert_eq!(view.round, update.round);
 			assert_eq!(view.set_id, update.set_id);
 			assert_eq!(view.last_commit, Some(update.commit_finalized_height));
@@ -1645,11 +1773,14 @@ mod tests {
 		let id = PeerId::random();
 		peers.new_peer(id.clone(), Roles::AUTHORITY);
 
-		peers.update_peer_state(&id, NeighborPacket {
-			round: Round(10),
-			set_id: SetId(10),
-			commit_finalized_height: 10,
-		}).unwrap().unwrap();
+		peers
+			.update_peer_state(&id, NeighborPacket {
+				round: Round(10),
+				set_id: SetId(10),
+				commit_finalized_height: 10,
+			})
+			.unwrap()
+			.unwrap();
 
 		let mut check_update = move |update: NeighborPacket<_>| {
 			let err = peers.update_peer_state(&id, update.clone()).unwrap_err();
@@ -1678,10 +1809,7 @@ mod tests {
 
 	#[test]
 	fn messages_not_expired_immediately() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		let set_id = 1;
 
@@ -1713,10 +1841,7 @@ mod tests {
 	fn message_from_unknown_authority_discarded() {
 		assert!(cost::UNKNOWN_VOTER != cost::BAD_SIGNATURE);
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
@@ -1735,7 +1860,7 @@ mod tests {
 				}),
 				signature: Default::default(),
 				id: AuthorityId::from_slice(&[2u8; 32]),
-			}
+			},
 		});
 
 		let bad_sig = inner.validate_round_message(&peer, &VoteMessage {
@@ -1748,7 +1873,7 @@ mod tests {
 				}),
 				signature: Default::default(),
 				id: auth.clone(),
-			}
+			},
 		});
 
 		assert_eq!(unknown_voter, Action::Discard(cost::UNKNOWN_VOTER));
@@ -1757,10 +1882,7 @@ mod tests {
 
 	#[test]
 	fn unsolicited_catch_up_messages_discarded() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1779,26 +1901,32 @@ mod tests {
 					precommits: Default::default(),
 					base_hash: Default::default(),
 					base_number: Default::default(),
-				}
+				},
 			})
 		};
 
 		// the catch up is discarded because we have no pending request
-		assert_eq!(validate_catch_up(), Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
+		assert_eq!(
+			validate_catch_up(),
+			Action::Discard(cost::OUT_OF_SCOPE_MESSAGE)
+		);
 
-		let noted = val.inner.write().note_catch_up_request(
-			&peer,
-			&CatchUpRequestMessage {
+		let noted = val
+			.inner
+			.write()
+			.note_catch_up_request(&peer, &CatchUpRequestMessage {
 				set_id: SetId(set_id),
 				round: Round(10),
-			}
-		);
+			});
 
 		assert!(noted.0);
 
 		// catch up is allowed because we have requested it, but it's rejected
 		// because it's malformed (empty prevotes and precommits)
-		assert_eq!(validate_catch_up(), Action::Discard(cost::MALFORMED_CATCH_UP));
+		assert_eq!(
+			validate_catch_up(),
+			Action::Discard(cost::MALFORMED_CATCH_UP)
+		);
 	}
 
 	#[test]
@@ -1825,10 +1953,7 @@ mod tests {
 			set_state.into()
 		};
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			set_state.clone(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), set_state.clone());
 
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1879,10 +2004,7 @@ mod tests {
 	#[test]
 	fn detects_honest_out_of_scope_catch_requests() {
 		let set_state = voter_set_state();
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			set_state.clone(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), set_state.clone());
 
 		// the validator starts at set id 2
 		val.note_set(SetId(2), Vec::new(), |_, _| {});
@@ -1890,7 +2012,10 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		let send_request = |set_id, round| {
 			let mut inner = val.inner.write();
@@ -1919,49 +2044,28 @@ mod tests {
 		// the validator is at set id 2 and round 0. requests for set id 1
 		// should not be answered but they should be considered an honest
 		// mistake
-		assert_res(
-			send_request(1, 1),
-			true,
-		);
+		assert_res(send_request(1, 1), true);
 
-		assert_res(
-			send_request(1, 10),
-			true,
-		);
+		assert_res(send_request(1, 10), true);
 
 		// requests for set id 0 should be considered out of scope
-		assert_res(
-			send_request(0, 1),
-			false,
-		);
+		assert_res(send_request(0, 1), false);
 
-		assert_res(
-			send_request(0, 10),
-			false,
-		);
+		assert_res(send_request(0, 10), false);
 
 		// after the validator progresses further than CATCH_UP_THRESHOLD in set
 		// id 2, any request for set id 1 should no longer be considered an
 		// honest mistake.
 		val.note_round(Round(3), |_, _| {});
 
-		assert_res(
-			send_request(1, 1),
-			false,
-		);
+		assert_res(send_request(1, 1), false);
 
-		assert_res(
-			send_request(1, 2),
-			false,
-		);
+		assert_res(send_request(1, 2), false);
 	}
 
 	#[test]
 	fn issues_catch_up_request_on_neighbor_packet_import() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		// the validator starts at set id 1.
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -1969,17 +2073,20 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		let import_neighbor_message = |set_id, round| {
-			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
-				&peer,
-				NeighborPacket {
-					round: Round(round),
-					set_id: SetId(set_id),
-					commit_finalized_height: 42,
-				},
-			);
+			let (_, _, catch_up_request, _) =
+				val.inner
+					.write()
+					.import_neighbor_message(&peer, NeighborPacket {
+						round: Round(round),
+						set_id: SetId(set_id),
+						commit_finalized_height: 42,
+					});
 
 			catch_up_request
 		};
@@ -2031,10 +2138,7 @@ mod tests {
 			c
 		};
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state());
 
 		// the validator starts at set id 1.
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2042,19 +2146,22 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request but since they're disabled
 		// we should get `None`.
-		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
-			&peer,
-			NeighborPacket {
-				round: Round(42),
-				set_id: SetId(1),
-				commit_finalized_height: 50,
-			},
-		);
+		let (_, _, catch_up_request, _) =
+			val.inner
+				.write()
+				.import_neighbor_message(&peer, NeighborPacket {
+					round: Round(42),
+					set_id: SetId(1),
+					commit_finalized_height: 50,
+				});
 
 		match catch_up_request {
 			None => {},
@@ -2064,10 +2171,7 @@ mod tests {
 
 	#[test]
 	fn doesnt_send_catch_up_requests_to_non_authorities_when_observer_enabled() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		// the validator starts at set id 1.
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2077,18 +2181,24 @@ mod tests {
 		let peer_authority = PeerId::random();
 		let peer_full = PeerId::random();
 
-		val.inner.write().peers.new_peer(peer_authority.clone(), Roles::AUTHORITY);
-		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer_authority.clone(), Roles::AUTHORITY);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer_full.clone(), Roles::FULL);
 
 		let import_neighbor_message = |peer| {
-			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
-				&peer,
-				NeighborPacket {
-					round: Round(42),
-					set_id: SetId(1),
-					commit_finalized_height: 50,
-				},
-			);
+			let (_, _, catch_up_request, _) =
+				val.inner
+					.write()
+					.import_neighbor_message(&peer, NeighborPacket {
+						round: Round(42),
+						set_id: SetId(1),
+						commit_finalized_height: 50,
+					});
 
 			catch_up_request
 		};
@@ -2123,10 +2233,7 @@ mod tests {
 			c
 		};
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state());
 
 		// the validator starts at set id 1.
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2134,16 +2241,19 @@ mod tests {
 		// add the peer making the requests to the validator, otherwise it is
 		// discarded.
 		let peer_full = PeerId::random();
-		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+		val.inner
+			.write()
+			.peers
+			.new_peer(peer_full.clone(), Roles::FULL);
 
-		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
-			&peer_full,
-			NeighborPacket {
-				round: Round(42),
-				set_id: SetId(1),
-				commit_finalized_height: 50,
-			},
-		);
+		let (_, _, catch_up_request, _) =
+			val.inner
+				.write()
+				.import_neighbor_message(&peer_full, NeighborPacket {
+					round: Round(42),
+					set_id: SetId(1),
+					commit_finalized_height: 50,
+				});
 
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request, the node is not an
@@ -2161,10 +2271,7 @@ mod tests {
 	#[test]
 	fn doesnt_expire_next_round_messages() {
 		// NOTE: this is a regression test
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		// the validator starts at set id 1.
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2178,12 +2285,10 @@ mod tests {
 		// we accept messages from rounds 9, 10 and 11
 		// therefore neither of those should be considered expired
 		for round in &[9, 10, 11] {
-			assert!(
-				!is_expired(
-					crate::communication::round_topic::<Block>(*round, 1),
-					&[],
-				)
-			)
+			assert!(!is_expired(
+				crate::communication::round_topic::<Block>(*round, 1),
+				&[],
+			))
 		}
 	}
 
@@ -2193,10 +2298,7 @@ mod tests {
 		config.gossip_duration = Duration::from_secs(300); // Set to high value to prevent test race
 		let round_duration = config.gossip_duration * ROUND_DURATION;
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state());
 
 		// the validator start at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});
@@ -2209,8 +2311,14 @@ mod tests {
 		full_nodes.resize_with(30, || PeerId::random());
 
 		for i in 0..30 {
-			val.inner.write().peers.new_peer(authorities[i].clone(), Roles::AUTHORITY);
-			val.inner.write().peers.new_peer(full_nodes[i].clone(), Roles::FULL);
+			val.inner
+				.write()
+				.peers
+				.new_peer(authorities[i].clone(), Roles::AUTHORITY);
+			val.inner
+				.write()
+				.peers
+				.new_peer(full_nodes[i].clone(), Roles::FULL);
 		}
 
 		let test = |num_round, peers| {
@@ -2270,10 +2378,7 @@ mod tests {
 
 	#[test]
 	fn only_restricts_gossip_to_authorities_after_a_minimum_threshold() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
 
 		// the validator start at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});
@@ -2281,7 +2386,10 @@ mod tests {
 		let mut authorities = Vec::new();
 		for _ in 0..5 {
 			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			val.inner
+				.write()
+				.peers
+				.new_peer(peer_id.clone(), Roles::AUTHORITY);
 			authorities.push(peer_id);
 		}
 
@@ -2291,14 +2399,12 @@ mod tests {
 		// sending of gossip messages, and instead just allow them to all
 		// non-authorities on the first attempt.
 		for authority in &authorities {
-			assert!(
-				message_allowed(
-					authority,
-					MessageIntent::Broadcast,
-					&crate::communication::round_topic::<Block>(1, 0),
-					&[],
-				)
-			);
+			assert!(message_allowed(
+				authority,
+				MessageIntent::Broadcast,
+				&crate::communication::round_topic::<Block>(1, 0),
+				&[],
+			));
 		}
 	}
 
@@ -2309,10 +2415,7 @@ mod tests {
 		config.is_authority = false;
 		let round_duration = config.gossip_duration * ROUND_DURATION;
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state());
 
 		// the validator start at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});
@@ -2320,7 +2423,10 @@ mod tests {
 		let mut authorities = Vec::new();
 		for _ in 0..100 {
 			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			val.inner
+				.write()
+				.peers
+				.new_peer(peer_id.clone(), Roles::AUTHORITY);
 			authorities.push(peer_id);
 		}
 
@@ -2329,14 +2435,12 @@ mod tests {
 			// since our node is not an authority we should **never** gossip any
 			// messages on the first attempt.
 			for authority in &authorities {
-				assert!(
-					!message_allowed(
-						authority,
-						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
-						&[],
-					)
-				);
+				assert!(!message_allowed(
+					authority,
+					MessageIntent::Broadcast,
+					&crate::communication::round_topic::<Block>(1, 0),
+					&[],
+				));
 			}
 		}
 
@@ -2346,14 +2450,12 @@ mod tests {
 			// on the fourth round duration we should allow messages to authorities
 			// (on the second we would do `sqrt(authorities)`)
 			for authority in &authorities {
-				assert!(
-					message_allowed(
-						authority,
-						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
-						&[],
-					)
-				);
+				assert!(message_allowed(
+					authority,
+					MessageIntent::Broadcast,
+					&crate::communication::round_topic::<Block>(1, 0),
+					&[],
+				));
 			}
 		}
 	}

@@ -19,7 +19,7 @@
 
 use rstd::vec::Vec;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_runtime::Perbill;
 
 use crate::SessionIndex;
@@ -85,10 +85,7 @@ pub trait Offence<Offender> {
 	///
 	/// `offenders_count` - the count of unique offending authorities. It is >0.
 	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill;
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill;
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
@@ -131,7 +128,8 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) {}
+	) {
+	}
 }
 
 /// A details about an offending authority for a particular kind of offence.

@@ -18,15 +18,19 @@
 
 #![cfg(test)]
 
-use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use runtime_io;
-use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
+use crate::{AuthorityId, AuthorityList, ConsensusLog, GenesisConfig, Module, Trait};
+use codec::{Decode, Encode};
 use primitives::H256;
-use codec::{Encode, Decode};
-use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
+use runtime_io;
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+	DigestItem, Perbill,
+};
+use support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 
-impl_outer_origin!{
+impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
@@ -48,30 +52,30 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
+	type AccountId = u64;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = BlockHashCount;
 	type BlockNumber = u64;
 	type Call = ();
+	type DelegatedDispatchVerifier = ();
+	type Doughnut = ();
+	type Event = TestEvent;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Index = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type Origin = Origin;
 	type Version = ();
-	type Doughnut = ();
-	type DelegatedDispatchVerifier = ();
 }
 
 mod grandpa {
 	pub use crate::Event;
 }
 
-impl_outer_event!{
+impl_outer_event! {
 	pub enum TestEvent for Test {
 		grandpa,
 	}
@@ -84,10 +88,14 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
+	}
+	.assimilate_storage::<Test>(&mut t)
+	.unwrap();
 	t.into()
 }
 

@@ -16,11 +16,11 @@
 
 //! Util function used by this crate.
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	Ident, Error, Signature, Pat, PatType, FnArg, Type, token, TraitItemMethod, ItemTrait,
-	TraitItem, parse_quote, spanned::Spanned,
+	parse_quote, spanned::Spanned, token, Error, FnArg, Ident, ItemTrait, Pat, PatType, Signature,
+	TraitItem, TraitItemMethod, Type,
 };
 
 use proc_macro_crate::crate_name;
@@ -47,7 +47,7 @@ pub fn generate_runtime_interface_include() -> TokenStream {
 			Err(e) => {
 				let err = Error::new(Span::call_site(), &e).to_compile_error();
 				quote!( #err )
-			}
+			},
 		}
 	}
 }
@@ -55,9 +55,9 @@ pub fn generate_runtime_interface_include() -> TokenStream {
 /// Generates the access to the `sp-runtime-interface` crate.
 pub fn generate_crate_access() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
-		quote!( sp_runtime_interface )
+		quote!(sp_runtime_interface)
 	} else {
-		quote!( proc_macro_runtime_interface )
+		quote!(proc_macro_runtime_interface)
 	}
 }
 
@@ -130,11 +130,10 @@ pub fn get_function_argument_types_without_ref<'a>(
 pub fn get_function_argument_names_and_types_without_ref<'a>(
 	sig: &'a Signature,
 ) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + 'a {
-	get_function_arguments(sig)
-		.map(|pt| match *pt.ty {
-			Type::Reference(type_ref) => (pt.pat, type_ref.elem),
-			_ => (pt.pat, pt.ty),
-		})
+	get_function_arguments(sig).map(|pt| match *pt.ty {
+		Type::Reference(type_ref) => (pt.pat, type_ref.elem),
+		_ => (pt.pat, pt.ty),
+	})
 }
 
 /// Returns the `&`/`&mut` for all function argument types, minus the `self` arg. If a function
@@ -151,12 +150,11 @@ pub fn get_function_argument_types_ref_and_mut<'a>(
 }
 
 /// Returns an iterator over all trait methods for the given trait definition.
-pub fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a TraitItemMethod> {
-	trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		})
+pub fn get_trait_methods<'a>(
+	trait_def: &'a ItemTrait,
+) -> impl Iterator<Item = &'a TraitItemMethod> {
+	trait_def.items.iter().filter_map(|i| match i {
+		TraitItem::Method(ref method) => Some(method),
+		_ => None,
+	})
 }

@@ -16,11 +16,16 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
+use crate::{Authorship, Balances, MaximumBlockWeight, NegativeImbalance, System};
 use node_primitives::Balance;
-use sp_runtime::traits::{Convert, Saturating};
-use sp_runtime::{Fixed64, Perbill};
-use support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
-use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance};
+use sp_runtime::{
+	traits::{Convert, Saturating},
+	Fixed64, Perbill,
+};
+use support::{
+	traits::{Currency, Get, OnUnbalanced},
+	weights::Weight,
+};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -51,8 +56,8 @@ pub struct LinearWeightToFee<C>(rstd::marker::PhantomData<C>);
 
 impl<C: Get<Balance>> Convert<Weight, Balance> for LinearWeightToFee<C> {
 	fn convert(w: Weight) -> Balance {
-		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units of
-		// fees, hence:
+		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units
+		// of fees, hence:
 		let coefficient = C::get();
 		Balance::from(w).saturating_mul(coefficient)
 	}
@@ -101,7 +106,8 @@ impl<T: Get<Perbill>> Convert<Fixed64, Fixed64> for TargetedFeeAdjustment<T> {
 		} else {
 			// Proof: first_term > second_term. Safe subtraction.
 			let negative = first_term - second_term;
-			multiplier.saturating_sub(negative)
+			multiplier
+				.saturating_sub(negative)
 				// despite the fact that apply_to saturates weight (final fee cannot go below 0)
 				// it is crucially important to stop here and don't further reduce the weight fee
 				// multiplier. While at -1, it means that the network is so un-congested that all
@@ -115,21 +121,19 @@ impl<T: Get<Perbill>> Convert<Fixed64, Fixed64> for TargetedFeeAdjustment<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{
+		constants::currency::*, AvailableBlockRatio, MaximumBlockWeight, Runtime,
+		TargetBlockFullness, TransactionPayment,
+	};
 	use sp_runtime::assert_eq_error_rate;
-	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
-	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
 	use support::weights::Weight;
 
-	fn max() -> Weight {
-		MaximumBlockWeight::get()
-	}
+	fn max() -> Weight { MaximumBlockWeight::get() }
 
-	fn target() -> Weight {
-		TargetBlockFullness::get() * max()
-	}
+	fn target() -> Weight { TargetBlockFullness::get() * max() }
 
 	// poc reference implementation.
-	fn fee_multiplier_update(block_weight: Weight, previous: Fixed64) -> Fixed64  {
+	fn fee_multiplier_update(block_weight: Weight, previous: Fixed64) -> Fixed64 {
 		let block_weight = block_weight as f32;
 		let v: f32 = 0.00004;
 
@@ -140,18 +144,21 @@ mod tests {
 		// Current saturation in terms of weight
 		let s = block_weight;
 
-		let fm = v * (s/m - ss/m) + v.powi(2) * (s/m - ss/m).powi(2) / 2.0;
+		let fm = v * (s / m - ss / m) + v.powi(2) * (s / m - ss / m).powi(2) / 2.0;
 		let addition_fm = Fixed64::from_parts((fm * 1_000_000_000_f32).round() as i64);
 		previous.saturating_add(addition_fm)
 	}
 
-	fn feemul(parts: i64) -> Fixed64 {
-		Fixed64::from_parts(parts)
-	}
+	fn feemul(parts: i64) -> Fixed64 { Fixed64::from_parts(parts) }
 
-	fn run_with_system_weight<F>(w: Weight, assertions: F) where F: Fn() -> () {
-		let mut t: runtime_io::TestExternalities =
-			system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
+	fn run_with_system_weight<F>(w: Weight, assertions: F)
+	where
+		F: Fn() -> (),
+	{
+		let mut t: runtime_io::TestExternalities = system::GenesisConfig::default()
+			.build_storage::<Runtime>()
+			.unwrap()
+			.into();
 		t.execute_with(|| {
 			System::set_block_limits(w, 0);
 			assertions()
@@ -189,16 +196,22 @@ mod tests {
 			loop {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm);
 				fm = next;
-				if fm == Fixed64::from_rational(-1, 1) { break; }
+				if fm == Fixed64::from_rational(-1, 1) {
+					break
+				}
 				iterations += 1;
 			}
-			println!("iteration {}, new fm = {:?}. Weight fee is now zero", iterations, fm);
-			assert!(iterations > 50_000, "This assertion is just a warning; Don't panic. \
-				Current substrate/polkadot node are configured with a _slow adjusting fee_ \
-				mechanism. Hence, it is really unlikely that fees collapse to zero even on an \
-				empty chain in less than at least of couple of thousands of empty blocks. But this \
-				simulation indicates that fees collapsed to zero after {} almost-empty blocks. \
-				Check it",
+			println!(
+				"iteration {}, new fm = {:?}. Weight fee is now zero",
+				iterations, fm
+			);
+			assert!(
+				iterations > 50_000,
+				"This assertion is just a warning; Don't panic. Current substrate/polkadot node \
+				 are configured with a _slow adjusting fee_ mechanism. Hence, it is really \
+				 unlikely that fees collapse to zero even on an empty chain in less than at least \
+				 of couple of thousands of empty blocks. But this simulation indicates that fees \
+				 collapsed to zero after {} almost-empty blocks. Check it",
 				iterations,
 			);
 		})
@@ -224,14 +237,16 @@ mod tests {
 			loop {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm);
 				// if no change, panic. This should never happen in this case.
-				if fm == next { panic!("The fee should ever increase"); }
+				if fm == next {
+					panic!("The fee should ever increase");
+				}
 				fm = next;
 				iterations += 1;
 				let fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(tx_weight);
 				let adjusted_fee = fm.saturated_multiply_accumulate(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \
-					{} cents, {} dollars",
+					 {} cents, {} dollars",
 					iterations,
 					fm,
 					adjusted_fee,
@@ -258,7 +273,6 @@ mod tests {
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed64::default()),
 				feemul(-5000),
 			);
-
 		});
 		run_with_system_weight(target(), || {
 			// ideal. Original fee. No changes.
@@ -341,9 +355,12 @@ mod tests {
 			10 * mb,
 			Weight::max_value() / 2,
 			Weight::max_value(),
-		].into_iter().for_each(|i| {
+		]
+		.into_iter()
+		.for_each(|i| {
 			run_with_system_weight(i, || {
-				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed64::default());
+				let next =
+					TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed64::default());
 				let truth = fee_multiplier_update(i, Fixed64::default());
 				assert_eq_error_rate!(truth.into_inner(), next.into_inner(), 5);
 			});
@@ -351,14 +368,12 @@ mod tests {
 
 		// Some values that are all above the target and will cause an increase.
 		let t = target();
-		vec![t + 100, t * 2, t * 4]
-			.into_iter()
-			.for_each(|i| {
-				run_with_system_weight(i, || {
-					let fm = TargetedFeeAdjustment::<TargetBlockFullness>::convert(max_fm);
-					// won't grow. The convert saturates everything.
-					assert_eq!(fm, max_fm);
-				})
-			});
+		vec![t + 100, t * 2, t * 4].into_iter().for_each(|i| {
+			run_with_system_weight(i, || {
+				let fm = TargetedFeeAdjustment::<TargetBlockFullness>::convert(max_fm);
+				// won't grow. The convert saturates everything.
+				assert_eq!(fm, max_fm);
+			})
+		});
 	}
 }

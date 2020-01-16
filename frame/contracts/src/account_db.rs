@@ -21,24 +21,30 @@ use super::{
 	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
-use rstd::cell::RefCell;
-use rstd::collections::btree_map::{BTreeMap, Entry};
-use rstd::prelude::*;
+use rstd::{
+	cell::RefCell,
+	collections::btree_map::{BTreeMap, Entry},
+	prelude::*,
+};
 use runtime_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
-use support::{storage::child, StorageMap};
+use support::{
+	storage::child,
+	traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome},
+	StorageMap,
+};
 use system;
 
 // Note: we don't provide Option<Contract> because we can't create
 // the trie_id in the overlay, thus we provide an overlay on the fields
 // specifically.
 pub struct ChangeEntry<T: Trait> {
-	/// If Some(_), then the account balance is modified to the value. If None and `reset` is false,
-	/// the balance unmodified. If None and `reset` is true, the balance is reset to 0.
+	/// If Some(_), then the account balance is modified to the value. If None and `reset` is
+	/// false, the balance unmodified. If None and `reset` is true, the balance is reset to 0.
 	balance: Option<BalanceOf<T>>,
-	/// If Some(_), then a contract is instantiated with the code hash. If None and `reset` is false,
-	/// then the contract code is unmodified. If None and `reset` is true, the contract is deleted.
+	/// If Some(_), then a contract is instantiated with the code hash. If None and `reset` is
+	/// false, then the contract code is unmodified. If None and `reset` is true, the contract is
+	/// deleted.
 	code_hash: Option<CodeHash<T>>,
 	/// If Some(_), then the rent allowance is set to the value. If None and `reset` is false, then
 	/// the rent allowance is unmodified. If None and `reset` is true, the contract is deleted.
@@ -108,7 +114,12 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
+	fn get_storage(
+		&self,
+		account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey,
+	) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	/// If account has an alive contract then return the rent allowance associated.
@@ -126,22 +137,27 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		&self,
 		_account: &T::AccountId,
 		trie_id: Option<&TrieId>,
-		location: &StorageKey
+		location: &StorageKey,
 	) -> Option<Vec<u8>> {
 		trie_id.and_then(|id| child::get_raw(id, &blake2_256(location)))
 	}
+
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
 	}
+
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.rent_allowance))
 	}
+
 	fn contract_exists(&self, account: &T::AccountId) -> bool {
 		<ContractInfoOf<T>>::exists(account)
 	}
+
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		T::Currency::free_balance(account)
 	}
+
 	fn commit(&mut self, s: ChangeSet<T>) {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
@@ -149,10 +165,11 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				let (imbalance, outcome) = T::Currency::make_free_balance_be(&address, balance);
 				total_imbalance = total_imbalance.merge(imbalance);
 				if let UpdateBalanceOutcome::AccountKilled = outcome {
-					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
-					// which will make removal of CodeHashOf and AccountStorage for this account.
-					// In order to avoid writing over the deleted properties we `continue` here.
-					continue;
+					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero`
+					// callback which will make removal of CodeHashOf and AccountStorage for this
+					// account. In order to avoid writing over the deleted properties we `continue`
+					// here.
+					continue
 				}
 			}
 
@@ -175,8 +192,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(true, Some(info), None) => {
 						child::kill_storage(&info.trie_id);
 						<ContractInfoOf<T>>::remove(&address);
-						continue;
-					}
+						continue
+					},
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
 						child::kill_storage(&info.trie_id);
@@ -188,18 +205,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 							rent_allowance: <BalanceOf<T>>::max_value(),
 							last_write: None,
 						}
-					}
+					},
 					// New contract is being instantiated.
-					(_, None, Some(code_hash)) => {
-						AliveContractInfo::<T> {
-							code_hash,
-							storage_size: T::StorageSizeOffset::get(),
-							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-							deduct_block: <system::Module<T>>::block_number(),
-							rent_allowance: <BalanceOf<T>>::max_value(),
-							last_write: None,
-						}
-					}
+					(_, None, Some(code_hash)) => AliveContractInfo::<T> {
+						code_hash,
+						storage_size: T::StorageSizeOffset::get(),
+						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
+						deduct_block: <system::Module<T>>::block_number(),
+						rent_allowance: <BalanceOf<T>>::max_value(),
+						last_write: None,
+					},
 					// There is no existing at the address nor a new one to be instantiated.
 					(_, None, None) => continue,
 				};
@@ -242,9 +257,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			// then it's indicative of a buggy contracts system.
 			// Panicking is far from ideal as it opens up a DoS attack on block validators, however
 			// it's a less bad option than allowing arbitrary value to be created.
-			SignedImbalance::Positive(ref p) if !p.peek().is_zero() =>
-				panic!("contract subsystem resulting in positive imbalance!"),
-			_ => {}
+			SignedImbalance::Positive(ref p) if !p.peek().is_zero() => {
+				panic!("contract subsystem resulting in positive imbalance!")
+			},
+			_ => {},
 		}
 	}
 }
@@ -260,9 +276,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		}
 	}
 
-	pub fn into_change_set(self) -> ChangeSet<T> {
-		self.local.into_inner()
-	}
+	pub fn into_change_set(self) -> ChangeSet<T> { self.local.into_inner() }
 
 	pub fn set_storage(
 		&mut self,
@@ -270,7 +284,8 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		location: StorageKey,
 		value: Option<Vec<u8>>,
 	) {
-		self.local.borrow_mut()
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.storage
@@ -284,11 +299,13 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		code_hash: CodeHash<T>,
 	) -> Result<(), &'static str> {
 		if self.contract_exists(account) {
-			return Err("Alive contract or tombstone already exists");
+			return Err("Alive contract or tombstone already exists")
 		}
 
 		let mut local = self.local.borrow_mut();
-		let contract = local.entry(account.clone()).or_insert_with(|| Default::default());
+		let contract = local
+			.entry(account.clone())
+			.or_insert_with(|| Default::default());
 
 		contract.code_hash = Some(code_hash);
 		contract.rent_allowance = Some(<BalanceOf<T>>::max_value());
@@ -299,13 +316,10 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	/// Mark a contract as deleted.
 	pub fn destroy_contract(&mut self, account: &T::AccountId) {
 		let mut local = self.local.borrow_mut();
-		local.insert(
-			account.clone(),
-			ChangeEntry {
-				reset: true,
-				..Default::default()
-			}
-		);
+		local.insert(account.clone(), ChangeEntry {
+			reset: true,
+			..Default::default()
+		});
 	}
 
 	/// Assume contract exists
@@ -316,6 +330,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.or_insert(Default::default())
 			.rent_allowance = Some(rent_allowance);
 	}
+
 	pub fn set_balance(&mut self, account: &T::AccountId, balance: BalanceOf<T>) {
 		self.local
 			.borrow_mut()
@@ -330,7 +345,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 		&self,
 		account: &T::AccountId,
 		trie_id: Option<&TrieId>,
-		location: &StorageKey
+		location: &StorageKey,
 	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()
@@ -338,6 +353,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|changes| changes.storage(location))
 			.unwrap_or_else(|| self.underlying.get_storage(account, trie_id, location))
 	}
+
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
 			.borrow()
@@ -345,6 +361,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|changes| changes.code_hash())
 			.unwrap_or_else(|| self.underlying.get_code_hash(account))
 	}
+
 	fn get_rent_allowance(&self, account: &T::AccountId) -> Option<BalanceOf<T>> {
 		self.local
 			.borrow()
@@ -352,6 +369,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|changes| changes.rent_allowance())
 			.unwrap_or_else(|| self.underlying.get_rent_allowance(account))
 	}
+
 	fn contract_exists(&self, account: &T::AccountId) -> bool {
 		self.local
 			.borrow()
@@ -359,6 +377,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|changes| changes.code_hash().map(|code_hash| code_hash.is_some()))
 			.unwrap_or_else(|| self.underlying.contract_exists(account))
 	}
+
 	fn get_balance(&self, account: &T::AccountId) -> BalanceOf<T> {
 		self.local
 			.borrow()
@@ -366,6 +385,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.and_then(|changes| changes.balance())
 			.unwrap_or_else(|| self.underlying.get_balance(account))
 	}
+
 	fn commit(&mut self, s: ChangeSet<T>) {
 		let mut local = self.local.borrow_mut();
 
@@ -381,10 +401,10 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 						value.rent_allowance = changed.rent_allowance.or(value.rent_allowance);
 						value.storage.extend(changed.storage.into_iter());
 					}
-				}
+				},
 				Entry::Vacant(e) => {
 					e.insert(changed);
-				}
+				},
 			}
 		}
 	}

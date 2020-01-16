@@ -16,9 +16,9 @@
 
 //! Errors that can occur during the service operation.
 
-use network;
-use keystore;
 use consensus_common;
+use keystore;
+use network;
 use sp_blockchain;
 
 /// Service Result typedef.
@@ -38,16 +38,14 @@ pub enum Error {
 	/// Keystore error.
 	Keystore(keystore::Error),
 	/// Best chain selection strategy is missing.
-	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
+	#[display(fmt = "Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
 	/// Other error.
 	Other(String),
 }
 
 impl<'a> From<&'a str> for Error {
-	fn from(s: &'a str) -> Self {
-		Error::Other(s.into())
-	}
+	fn from(s: &'a str) -> Self { Error::Other(s.into()) }
 }
 
 impl std::error::Error for Error {

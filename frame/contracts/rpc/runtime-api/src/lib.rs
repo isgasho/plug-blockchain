@@ -22,8 +22,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Codec, Decode, Encode};
 use rstd::vec::Vec;
-use codec::{Encode, Decode, Codec};
 use sp_runtime::RuntimeDebug;
 
 /// A result of execution of a contract.

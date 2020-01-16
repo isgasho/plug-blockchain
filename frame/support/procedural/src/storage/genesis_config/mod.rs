@@ -17,14 +17,14 @@
 //! Declaration of genesis config structure and implementation of build storage trait and
 //! functions.
 
-use proc_macro2::{TokenStream, Span};
-use quote::quote;
-use super::{DeclStorageDefExt, instance_trait::DEFAULT_INSTANTIABLE_TRAIT_NAME};
-use genesis_config_def::GenesisConfigDef;
+use super::{instance_trait::DEFAULT_INSTANTIABLE_TRAIT_NAME, DeclStorageDefExt};
 use builder_def::BuilderDef;
+use genesis_config_def::GenesisConfigDef;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 
-mod genesis_config_def;
 mod builder_def;
+mod genesis_config_def;
 
 const DEFAULT_INSTANCE_NAME: &str = "__GeneratedInstance";
 
@@ -49,7 +49,10 @@ fn decl_genesis_config_and_impl_default(
 		for typ in genesis_config.fields.iter().map(|c| &c.typ) {
 			let typ = quote!( #typ );
 			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", typ, scrate));
-			b_dser.push_str(&format!("{} : {}::serde::de::DeserializeOwned, ", typ, scrate));
+			b_dser.push_str(&format!(
+				"{} : {}::serde::de::DeserializeOwned, ",
+				typ, scrate
+			));
 		}
 
 		quote! {
@@ -115,19 +118,16 @@ fn impl_build_storage(
 	let genesis_impl = &genesis_config.genesis_impl;
 	let genesis_where_clause = &genesis_config.genesis_where_clause;
 
-	let (
-		fn_generic,
-		fn_traitinstance,
-		fn_where_clause
-	) = if !genesis_config.is_generic && builders.is_generic {
-		(
-			quote!( <#runtime_generic: #runtime_trait, #optional_instance_bound> ),
-			quote!( #runtime_generic, #optional_instance ),
-			Some(&def.where_clause),
-		)
-	} else {
-		(quote!(), quote!(), None)
-	};
+	let (fn_generic, fn_traitinstance, fn_where_clause) =
+		if !genesis_config.is_generic && builders.is_generic {
+			(
+				quote!( <#runtime_generic: #runtime_trait, #optional_instance_bound> ),
+				quote!( #runtime_generic, #optional_instance ),
+				Some(&def.where_clause),
+			)
+		} else {
+			(quote!(), quote!(), None)
+		};
 
 	let builder_blocks = &builders.blocks;
 
@@ -135,7 +135,7 @@ fn impl_build_storage(
 		#scrate::sp_runtime::BuildModuleGenesisStorage<#runtime_generic, #inherent_instance>
 	);
 
-	quote!{
+	quote! {
 		#[cfg(feature = "std")]
 		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
 			pub fn build_storage #fn_generic (&self) -> std::result::Result<
@@ -196,7 +196,7 @@ pub fn genesis_config_and_build_storage(
 			decl_genesis_config_and_impl_default(scrate, &genesis_config);
 		let impl_build_storage = impl_build_storage(scrate, def, &genesis_config, &builders);
 
-		quote!{
+		quote! {
 			#decl_genesis_config_and_impl_default
 			#impl_build_storage
 		}

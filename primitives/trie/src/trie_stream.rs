@@ -16,13 +16,15 @@
 
 //! `TrieStream` implementation for Substrate's trie format.
 
-use hash_db::Hasher;
-use trie_root;
+use crate::{
+	node_codec::Bitmap,
+	node_header::{size_and_prefix_iterator, NodeKind},
+	trie_constants,
+};
 use codec::Encode;
+use hash_db::Hasher;
 use rstd::vec::Vec;
-use crate::trie_constants;
-use crate::node_header::{NodeKind, size_and_prefix_iterator};
-use crate::node_codec::Bitmap;
+use trie_root;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -42,12 +44,13 @@ fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
 	let mut bitmap: u16 = 0;
 	let mut cursor: u16 = 1;
 	for v in has_children {
-		if v { bitmap |= cursor }
+		if v {
+			bitmap |= cursor
+		}
 		cursor <<= 1;
 	}
-	((bitmap % 256 ) as u8, (bitmap / 256 ) as u8)
+	((bitmap % 256) as u8, (bitmap / 256) as u8)
 }
-
 
 /// Create a leaf/branch node, encoding a number of nibbles.
 fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Item = u8> + 'a {
@@ -55,26 +58,32 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
-		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
-		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
+		NodeKind::BranchNoValue => {
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK)
+		},
+		NodeKind::BranchWithValue => {
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK)
+		},
 	};
 	iter_start
-		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
-		.chain(nibbles[nibbles.len() % 2..].chunks(2).map(|ch| ch[0] << 4 | ch[1]))
+		.chain(
+			if nibbles.len() % 2 == 1 {
+				Some(nibbles[0])
+			} else {
+				None
+			},
+		)
+		.chain(
+			nibbles[nibbles.len() % 2..]
+				.chunks(2)
+				.map(|ch| ch[0] << 4 | ch[1]),
+		)
 }
 
-
 impl trie_root::TrieStream for TrieStream {
+	fn new() -> Self { TrieStream { buffer: Vec::new() } }
 
-	fn new() -> Self {
-		TrieStream {
-			buffer: Vec::new()
-		}
-	}
-
-	fn append_empty_data(&mut self) {
-		self.buffer.push(trie_constants::EMPTY_TRIE);
-	}
+	fn append_empty_data(&mut self) { self.buffer.push(trie_constants::EMPTY_TRIE); }
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
 		self.buffer.extend(fuse_nibbles_node(key, NodeKind::Leaf));
@@ -89,15 +98,18 @@ impl trie_root::TrieStream for TrieStream {
 	) {
 		if let Some(partial) = maybe_partial {
 			if maybe_value.is_some() {
-				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
+				self.buffer
+					.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
 			} else {
-				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
+				self.buffer
+					.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
 			}
 			let bm = branch_node_bit_mask(has_children);
-			self.buffer.extend([bm.0,bm.1].iter());
+			self.buffer.extend([bm.0, bm.1].iter());
 		} else {
 			debug_assert!(false, "trie stream codec only for no extension trie");
-			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
+			self.buffer
+				.extend(&branch_node(maybe_value.is_some(), has_children));
 		}
 		if let Some(value) = maybe_value {
 			value.encode_to(&mut self.buffer);
@@ -125,9 +137,9 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	result
 }
 
-fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8]) 
-	where
-		I: Iterator<Item = bool>,
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut [u8])
+where
+	I: Iterator<Item = bool>,
 {
 	let first = if has_value {
 		BRANCH_NODE_WITH_VALUE

@@ -15,21 +15,29 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	RuntimeInfo, error::{Error, Result},
+	error::{Error, Result},
 	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+	RuntimeInfo,
 };
 
 use runtime_version::{NativeVersion, RuntimeVersion};
 
 use codec::{Decode, Encode};
 
-use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use primitives::{
+	traits::{CodeExecutor, Externalities},
+	NativeOrEncoded,
+};
 
 use log::trace;
 
-use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
+use std::{
+	cell::RefCell,
+	panic::{AssertUnwindSafe, UnwindSafe},
+	result,
+};
 
-use wasm_interface::{HostFunctions, Function};
+use wasm_interface::{Function, HostFunctions};
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -39,7 +47,8 @@ thread_local! {
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
 pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
+where
+	F: UnwindSafe + FnOnce() -> U,
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable
 	// termination for the native call.
@@ -51,7 +60,8 @@ pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
+where
+	F: UnwindSafe + FnOnce() -> U,
 {
 	externalities::set_and_run_with_externalities(ext, move || safe_call(f))
 }
@@ -100,9 +110,8 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
 		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
 		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
-		host_functions.extend(
-			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
-		);
+		host_functions
+			.extend(crate::deprecated_host_interface::SubstrateExternals::host_functions());
 
 		// Add the custom host functions provided by the user.
 		host_functions.extend(D::ExtendHostFunctions::host_functions());
@@ -137,7 +146,10 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			&'a RuntimeVersion,
 			AssertUnwindSafe<&'a mut E>,
 		) -> Result<Result<R>>,
-	) -> Result<R> where E: Externalities {
+	) -> Result<R>
+	where
+		E: Externalities,
+	{
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
 			let (runtime, version, code_hash) = cache.fetch_runtime(
@@ -155,7 +167,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 				Err(e) => {
 					cache.invalidate_runtime(self.fallback_method, code_hash);
 					Err(e)
-				}
+				},
 			}
 		})
 	}
@@ -174,14 +186,9 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 }
 
 impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
-	fn native_version(&self) -> &NativeVersion {
-		&self.native_version
-	}
+	fn native_version(&self) -> &NativeVersion { &self.native_version }
 
-	fn runtime_version<E: Externalities>(
-		&self,
-		ext: &mut E,
-	) -> Result<RuntimeVersion> {
+	fn runtime_version<E: Externalities>(&self, ext: &mut E) -> Result<RuntimeVersion> {
 		self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone())))
 	}
 }
@@ -189,8 +196,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call
-	<
+	fn call<
 		E: Externalities,
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
@@ -201,7 +207,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool){
+	) -> (Result<NativeOrEncoded<R>>, bool) {
 		let mut used_native = false;
 		let result = self.with_runtime(ext, |mut runtime, onchain_version, mut ext| {
 			match (
@@ -217,15 +223,17 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						onchain_version,
 					);
 
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
-					)
-				}
-				(false, _, _) => {
-					safe_call(
-						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
-					)
+					safe_call(move || {
+						runtime
+							.call(&mut **ext, method, data)
+							.map(NativeOrEncoded::Encoded)
+					})
 				},
+				(false, _, _) => safe_call(move || {
+					runtime
+						.call(&mut **ext, method, data)
+						.map(NativeOrEncoded::Encoded)
+				}),
 				(true, true, Some(call)) => {
 					trace!(
 						target: "executor",
@@ -235,14 +243,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 					);
 
 					used_native = true;
-					let res = with_native_environment(&mut **ext, move || (call)())
-						.and_then(|r| r
-							.map(NativeOrEncoded::Native)
+					let res = with_native_environment(&mut **ext, move || (call)()).and_then(|r| {
+						r.map(NativeOrEncoded::Native)
 							.map_err(|s| Error::ApiError(s.to_string()))
-						);
+					});
 
 					Ok(res)
-				}
+				},
 				_ => {
 					trace!(
 						target: "executor",
@@ -253,7 +260,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 
 					used_native = true;
 					Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
-				}
+				},
 			}
 		});
 		(result, used_native)
@@ -297,7 +304,6 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 ///
 /// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
 /// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
-///
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
@@ -356,11 +362,17 @@ mod tests {
 	#[test]
 	fn native_executor_registers_custom_interface() {
 		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None);
-		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
-			assert_eq!(
-				executor.host_functions.iter().filter(|f| f == &function).count(),
-				2,
-			);
-		});
+		my_interface::HostFunctions::host_functions()
+			.iter()
+			.for_each(|function| {
+				assert_eq!(
+					executor
+						.host_functions
+						.iter()
+						.filter(|f| f == &function)
+						.count(),
+					2,
+				);
+			});
 	}
 }

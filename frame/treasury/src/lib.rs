@@ -57,25 +57,29 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use codec::{Decode, Encode};
 use rstd::prelude::*;
-use support::{decl_module, decl_storage, decl_event, ensure, print};
-use support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
-	ReservableCurrency, WithdrawReason
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime::{
+	traits::{AccountIdConversion, EnsureOrigin, Saturating, StaticLookup, Zero},
+	ModuleId, Permill,
 };
-use sp_runtime::{Permill, ModuleId};
-use sp_runtime::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
+use support::{
+	decl_event, decl_module, decl_storage, ensure, print,
+	traits::{
+		Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, ReservableCurrency,
+		WithdrawReason,
+	},
+	weights::SimpleDispatchInfo,
 };
-use support::weights::SimpleDispatchInfo;
-use codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type PositiveImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
@@ -259,9 +263,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
-	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
-	}
+	pub fn account_id() -> T::AccountId { MODULE_ID.into_account() }
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
@@ -317,7 +319,7 @@ impl<T: Trait> Module<T> {
 			&Self::account_id(),
 			imbalance,
 			WithdrawReason::Transfer.into(),
-			ExistenceRequirement::KeepAlive
+			ExistenceRequirement::KeepAlive,
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
 			// Nothing else to do here.
@@ -351,11 +353,13 @@ impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 	use primitives::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, OnFinalize},
+		Perbill,
 	};
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -370,23 +374,23 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
 		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -395,14 +399,14 @@ mod tests {
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
-		type Event = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
+		type DustRemoval = ();
+		type Event = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
+		type TransferFee = TransferFee;
+		type TransferPayment = ();
 	}
 	parameter_types! {
 		pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -411,27 +415,33 @@ mod tests {
 		pub const Burn: Permill = Permill::from_percent(50);
 	}
 	impl Trait for Test {
-		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64, ()>;
-		type RejectOrigin = system::EnsureRoot<u64, ()>;
+		type Burn = Burn;
+		type Currency = balances::Module<Test>;
 		type Event = ();
-		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
 		type ProposalBondMinimum = ProposalBondMinimum;
+		type ProposalRejection = ();
+		type RejectOrigin = system::EnsureRoot<u64, ()>;
 		type SpendPeriod = SpendPeriod;
-		type Burn = Burn;
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
+		balances::GenesisConfig::<Test> {
 			// Total issuance will be 200 with treasury account initialized at ED.
 			balances: vec![(0, 100), (1, 98), (2, 1)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
-		GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
+		GenesisConfig::default()
+			.assimilate_storage::<Test>(&mut t)
+			.unwrap();
 		t.into()
 	}
 
@@ -473,7 +483,10 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
+			assert_noop!(
+				Treasury::propose_spend(Origin::signed(2), 100, 3),
+				"Proposer's balance too low"
+			);
 		});
 	}
 
@@ -525,21 +538,30 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(
+				Treasury::reject_proposal(Origin::ROOT, 0),
+				"No proposal at that index"
+			);
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(
+				Treasury::reject_proposal(Origin::ROOT, 0),
+				"No proposal at that index"
+			);
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(
+				Treasury::approve_proposal(Origin::ROOT, 0),
+				"No proposal at that index"
+			);
 		});
 	}
 
@@ -550,7 +572,10 @@ mod tests {
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(
+				Treasury::approve_proposal(Origin::ROOT, 0),
+				"No proposal at that index"
+			);
 		});
 	}
 
@@ -597,13 +622,21 @@ mod tests {
 			assert_eq!(Treasury::pot(), 100);
 			let treasury_balance = Balances::free_balance(&Treasury::account_id());
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), treasury_balance, 3));
+			assert_ok!(Treasury::propose_spend(
+				Origin::signed(0),
+				treasury_balance,
+				3
+			));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), Treasury::pot(), 3));
+			assert_ok!(Treasury::propose_spend(
+				Origin::signed(0),
+				Treasury::pot(),
+				3
+			));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
@@ -616,11 +649,15 @@ mod tests {
 	// This is usefull for chain that will just update runtime.
 	#[test]
 	fn inexisting_account_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
+		balances::GenesisConfig::<Test> {
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		// Treasury genesis config is not build thus treasury account does not exist
 		let mut t: runtime_io::TestExternalities = t.into();
 

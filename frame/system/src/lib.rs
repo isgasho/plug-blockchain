@@ -17,17 +17,19 @@
 //! # System Module
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
-//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! It acts as the base layer for other SRML modules to interact with the Substrate framework
+//! components.
 //!
 //! - [`system::Trait`](./trait.Trait.html)
 //!
 //! ## Overview
 //!
 //! The System module defines the core data types used in a Substrate runtime.
-//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other runtime modules.
+//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other
+//! runtime modules.
 //!
-//! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
-//! among other things that support the execution of the current block.
+//! In addition, it manages the storage items for extrinsics data, indexes, event records, and
+//! digest items, among other things that support the execution of the current block.
 //!
 //! It also handles low-level tasks like depositing logs, basic set up and take down of
 //! temporary storage entries, and access to previous block hashes.
@@ -68,56 +70,57 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
 //! use frame_system::{self as system, ensure_signed};
+//! use support::{decl_module, dispatch::Result};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn system_module_example(origin) -> Result {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
-//! 			let _parent_hash = <system::Module<T>>::parent_hash();
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
+//! pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub fn system_module_example(origin) -> Result {
+//! 		let _sender = ensure_signed(origin)?;
+//! 		let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 		let _parent_hash = <system::Module<T>>::parent_hash();
+//! 		Ok(())
+//! 			}
+//! 			}
+//! 			}
 //! # fn main() { }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-use serde::Serialize;
-use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
-use rstd::marker::PhantomData;
-use rstd::fmt::Debug;
-use sp_version::RuntimeVersion;
+use rstd::{fmt::Debug, marker::PhantomData, prelude::*};
+#[cfg(feature = "std")]
+use serde::Serialize;
 use sp_runtime::{
-	RuntimeDebug,
-	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
-	transaction_validity::{
-		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
-		InvalidTransaction, TransactionValidity,
-	},
+	generic::{self, Era},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
-		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
-		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded, PlugDoughnutApi,
+		self, Bounded, CheckEqual, EnsureOrigin, Hash, Lookup, LookupError, MaybeDisplay,
+		MaybeSerialize, MaybeSerializeDeserialize, Member, One, PlugDoughnutApi,
+		SaturatedConversion, SignedExtension, SimpleArithmetic, SimpleBitOps, StaticLookup, Zero,
 	},
+	transaction_validity::{
+		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionValidity,
+		TransactionValidityError, ValidTransaction,
+	},
+	DispatchError, DispatchOutcome, Perbill, RuntimeDebug,
 };
+use sp_version::RuntimeVersion;
 
+use codec::{Decode, Encode};
 use primitives::storage::well_known_keys;
 use support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
-	additional_traits::{DelegatedDispatchVerifier as DelegatedDispatchVerifierT, MaybeDoughnutRef},
+	additional_traits::{
+		DelegatedDispatchVerifier as DelegatedDispatchVerifierT, MaybeDoughnutRef,
+	},
+	decl_error, decl_event, decl_module, decl_storage, storage,
 	traits::{Contains, Get},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, SimpleDispatchInfo, Weight},
+	Parameter,
 };
-use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::TestExternalities;
@@ -141,9 +144,7 @@ pub trait IsDeadAccount<AccountId> {
 }
 
 impl<AccountId> IsDeadAccount<AccountId> for () {
-	fn is_dead_account(_who: &AccountId) -> bool {
-		true
-	}
+	fn is_dead_account(_who: &AccountId) -> bool { true }
 }
 
 /// Compute the trie root of a list of extrinsics.
@@ -152,38 +153,64 @@ pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output
 }
 
 /// Compute the trie root of a list of extrinsics.
-pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	H::ordered_trie_root(xts)
-}
+pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output { H::ordered_trie_root(xts) }
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
-	type Origin: Into<Result<RawOrigin<Self::AccountId, Self::Doughnut>, Self::Origin>> + From<RawOrigin<Self::AccountId, Self::Doughnut>> + MaybeDoughnutRef<Doughnut=Self::Doughnut>;
+	type Origin: Into<Result<RawOrigin<Self::AccountId, Self::Doughnut>, Self::Origin>>
+		+ From<RawOrigin<Self::AccountId, Self::Doughnut>>
+		+ MaybeDoughnutRef<Doughnut = Self::Doughnut>;
 
 	/// The aggregated `Call` type.
 	type Call: Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
-	type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic
+	type Index: Parameter
+		+ Member
+		+ MaybeSerialize
+		+ Debug
+		+ Default
+		+ MaybeDisplay
+		+ SimpleArithmetic
 		+ Copy;
 
 	/// The block number type used by the runtime.
-	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
-		+ Default + Bounded + Copy + rstd::hash::Hash;
+	type BlockNumber: Parameter
+		+ Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ MaybeDisplay
+		+ SimpleArithmetic
+		+ Default
+		+ Bounded
+		+ Copy
+		+ rstd::hash::Hash;
 
 	/// The output of the `Hashing` function.
-	type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
-		+ Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Parameter
+		+ Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ MaybeDisplay
+		+ SimpleBitOps
+		+ Default
+		+ Copy
+		+ CheckEqual
+		+ rstd::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
-	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
+	type AccountId: Parameter
+		+ Member
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ MaybeDisplay
+		+ Ord
 		+ Default;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
@@ -195,10 +222,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
 	/// The block header.
-	type Header: Parameter + traits::Header<
-		Number = Self::BlockNumber,
-		Hash = Self::Hash,
-	>;
+	type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event> + Debug;
@@ -210,7 +234,10 @@ pub trait Trait: 'static + Eq + Clone {
 	type Doughnut: Parameter + Member + PlugDoughnutApi;
 
 	/// A type which verifies a doughnut in order to dispatch a `Call` with delegated authority
-	type DelegatedDispatchVerifier: DelegatedDispatchVerifierT<Doughnut = Self::Doughnut, AccountId = Self::AccountId>;
+	type DelegatedDispatchVerifier: DelegatedDispatchVerifierT<
+		Doughnut = Self::Doughnut,
+		AccountId = Self::AccountId,
+	>;
 
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
@@ -340,10 +367,11 @@ pub enum RawOrigin<AccountId, Doughnut> {
 	/// It is signed by some public key and we provide the `AccountId`.
 	Signed(AccountId),
 	/// This dispatch uses a doughnut delegation proof.
-	/// The runtime will replace the extrinsic signer's `AccountId` with the Doughnut issuer's PublicKey after validating it.
-	/// i.e. a transformation like: `RawOrigin::Signed(signer) => RawOrigin::Delegated(doughnut.issuer(), doughnut)` occurs.
-	/// The `origin` keeps the doughnut proof so that the runtime is aware of the delegation having taken place at all times
-	/// during the dispatch execution.
+	/// The runtime will replace the extrinsic signer's `AccountId` with the Doughnut issuer's
+	/// PublicKey after validating it. i.e. a transformation like: `RawOrigin::Signed(signer) =>
+	/// RawOrigin::Delegated(doughnut.issuer(), doughnut)` occurs. The `origin` keeps the doughnut
+	/// proof so that the runtime is aware of the delegation having taken place at all times during
+	/// the dispatch execution.
 	Delegated(AccountId, Doughnut),
 	/// It is signed by nobody, can be either:
 	/// * included and agreed upon by the validators anyway,
@@ -351,7 +379,9 @@ pub enum RawOrigin<AccountId, Doughnut> {
 	None,
 }
 
-impl<AccountId, Doughnut> From<(Option<AccountId>, Option<Doughnut>)> for RawOrigin<AccountId, Doughnut> {
+impl<AccountId, Doughnut> From<(Option<AccountId>, Option<Doughnut>)>
+	for RawOrigin<AccountId, Doughnut>
+{
 	fn from(val: (Option<AccountId>, Option<Doughnut>)) -> RawOrigin<AccountId, Doughnut> {
 		match (val.0, val.1) {
 			(Some(who), None) => RawOrigin::Signed(who),
@@ -451,11 +481,13 @@ decl_storage! {
 
 pub struct EnsureRoot<AccountId, Doughnut>(::rstd::marker::PhantomData<(AccountId, Doughnut)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
-	AccountId,
-	Doughnut,
-> EnsureOrigin<O> for EnsureRoot<AccountId, Doughnut> {
+		O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
+		AccountId,
+		Doughnut,
+	> EnsureOrigin<O> for EnsureRoot<AccountId, Doughnut>
+{
 	type Success = ();
+
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(()),
@@ -466,11 +498,13 @@ impl<
 
 pub struct EnsureSigned<AccountId, Doughnut>(::rstd::marker::PhantomData<(AccountId, Doughnut)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
-	AccountId,
-	Doughnut,
-> EnsureOrigin<O> for EnsureSigned<AccountId, Doughnut> {
+		O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
+		AccountId,
+		Doughnut,
+	> EnsureOrigin<O> for EnsureSigned<AccountId, Doughnut>
+{
 	type Success = AccountId;
+
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(who) => Ok(who),
@@ -479,14 +513,18 @@ impl<
 	}
 }
 
-pub struct EnsureSignedBy<Who, AccountId, Doughnut>(::rstd::marker::PhantomData<(Who, AccountId, Doughnut)>);
+pub struct EnsureSignedBy<Who, AccountId, Doughnut>(
+	::rstd::marker::PhantomData<(Who, AccountId, Doughnut)>,
+);
 impl<
-	O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
-	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone,
-	Doughnut,
-> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId, Doughnut> {
+		O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
+		Who: Contains<AccountId>,
+		AccountId: PartialEq + Clone,
+		Doughnut,
+	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId, Doughnut>
+{
 	type Success = AccountId;
+
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
@@ -497,11 +535,13 @@ impl<
 
 pub struct EnsureNone<AccountId, Doughnut>(::rstd::marker::PhantomData<(AccountId, Doughnut)>);
 impl<
-	O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
-	AccountId,
-	Doughnut,
-> EnsureOrigin<O> for EnsureNone<AccountId, Doughnut> {
+		O: Into<Result<RawOrigin<AccountId, Doughnut>, O>> + From<RawOrigin<AccountId, Doughnut>>,
+		AccountId,
+		Doughnut,
+	> EnsureOrigin<O> for EnsureNone<AccountId, Doughnut>
+{
 	type Success = ();
+
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::None => Ok(()),
@@ -513,48 +553,53 @@ impl<
 pub struct EnsureNever<T>(rstd::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		Err(o)
-	}
+
+	fn try_origin(o: O) -> Result<Self::Success, O> { Err(o) }
 }
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
-pub fn ensure_signed<OuterOrigin, AccountId, Doughnut>(o: OuterOrigin) -> Result<AccountId, &'static str>
-	where OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>
+pub fn ensure_signed<OuterOrigin, AccountId, Doughnut>(
+	o: OuterOrigin,
+) -> Result<AccountId, &'static str>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>,
 {
 	match o.into() {
-		// Assuming the delegation proof has been validated, a `RawOrigin::Delegated` should also be considered a valid `RawOrigin::Signed`
+		// Assuming the delegation proof has been validated, a `RawOrigin::Delegated` should also be
+		// considered a valid `RawOrigin::Signed`
 		Ok(RawOrigin::Signed(t)) | Ok(RawOrigin::Delegated(t, _)) => Ok(t),
 		_ => Err("bad origin: expected to be a signed origin"),
 	}
 }
 
-/// Ensure that 'origin' represents a signed or delegated extrinsic. If 'origin' is a delegated one, ensure that doughnut verifies
-/// the issuers's privilage to call dest (destination contract). Return `Ok` with the account id of the issuer who signed the extrinsic
-/// or delegated it, otherwise `Err`.
+/// Ensure that 'origin' represents a signed or delegated extrinsic. If 'origin' is a delegated one,
+/// ensure that doughnut verifies the issuers's privilage to call dest (destination contract).
+/// Return `Ok` with the account id of the issuer who signed the extrinsic or delegated it,
+/// otherwise `Err`.
 pub fn ensure_verified_contract_call<T: Trait>(
-    origin: T::Origin,
-    dest: &T::AccountId,
+	origin: T::Origin,
+	dest: &T::AccountId,
 ) -> Result<T::AccountId, &'static str> {
-    match origin.into() {
-        Ok(RawOrigin::Signed(t)) => Ok(t),
-        Ok(RawOrigin::Delegated(t, doughnut)) => {
-            if let Err(msg) =
-                T::DelegatedDispatchVerifier::verify_runtime_to_contract_call(&t, &doughnut, dest)
-            {
-                Err(msg)
-            } else {
-                Ok(t)
-            }
-        }
-        _ => Err("bad origin: expected to be a signed origin"),
-    }
+	match origin.into() {
+		Ok(RawOrigin::Signed(t)) => Ok(t),
+		Ok(RawOrigin::Delegated(t, doughnut)) => {
+			if let Err(msg) =
+				T::DelegatedDispatchVerifier::verify_runtime_to_contract_call(&t, &doughnut, dest)
+			{
+				Err(msg)
+			} else {
+				Ok(t)
+			}
+		},
+		_ => Err("bad origin: expected to be a signed origin"),
+	}
 }
 
 /// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_root<OuterOrigin, AccountId, Doughnut>(o: OuterOrigin) -> Result<(), Error>
-	where OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>,
 {
 	match o.into() {
 		Ok(RawOrigin::Root) => Ok(()),
@@ -564,7 +609,8 @@ pub fn ensure_root<OuterOrigin, AccountId, Doughnut>(o: OuterOrigin) -> Result<(
 
 /// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_none<OuterOrigin, AccountId, Doughnut>(o: OuterOrigin) -> Result<(), Error>
-	where OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId, Doughnut>, OuterOrigin>>,
 {
 	match o.into() {
 		Ok(RawOrigin::None) => Ok(()),
@@ -609,19 +655,19 @@ impl<T: Trait> Module<T> {
 		// when we try to insert more than `u32::max_value()` events.
 		//
 		// We perform early return if we've reached the maximum capacity of the event list,
-		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
-		// (since the event list is cleared at the block initialization).
+		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of
+		// execution (since the event list is cleared at the block initialization).
 		if <Events<T>>::append([event].iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
-			return;
+			return
 		}
 
 		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
 			if <EventTopics<T>>::append(&(), topic, &[(block_no, event_idx)]).is_err() {
-				return;
+				return
 			}
 		}
 	}
@@ -632,18 +678,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Gets extrinsics count.
-	pub fn extrinsic_count() -> u32 {
-		ExtrinsicCount::get().unwrap_or_default()
-	}
+	pub fn extrinsic_count() -> u32 { ExtrinsicCount::get().unwrap_or_default() }
 
 	/// Gets a total weight of all executed extrinsics.
-	pub fn all_extrinsics_weight() -> Weight {
-		AllExtrinsicsWeight::get().unwrap_or_default()
-	}
+	pub fn all_extrinsics_weight() -> Weight { AllExtrinsicsWeight::get().unwrap_or_default() }
 
-	pub fn all_extrinsics_len() -> u32 {
-		AllExtrinsicsLen::get().unwrap_or_default()
-	}
+	pub fn all_extrinsics_len() -> u32 { AllExtrinsicsLen::get().unwrap_or_default() }
 
 	/// Inform the system module of some additional weight that should be accounted for, in the
 	/// current block.
@@ -664,7 +704,9 @@ impl<T: Trait> Module<T> {
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
 		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
-		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
+		let next_weight = current_weight
+			.saturating_add(weight)
+			.min(T::MaximumBlockWeight::get());
 		AllExtrinsicsWeight::put(next_weight);
 	}
 
@@ -718,7 +760,7 @@ impl<T: Trait> Module<T> {
 		if let Some(storage_changes_root) = storage_changes_root {
 			let item = generic::DigestItem::ChangesTrieRoot(
 				T::Hash::decode(&mut &storage_changes_root[..])
-					.expect("Node is configured to use the same hash; qed")
+					.expect("Node is configured to use the same hash; qed"),
 			);
 			digest.push(item);
 		}
@@ -731,7 +773,13 @@ impl<T: Trait> Module<T> {
 		//
 		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Header>::new(
+			number,
+			extrinsics_root,
+			storage_root,
+			parent_hash,
+			digest,
+		)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
@@ -744,19 +792,20 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
-		TestExternalities::new((map![
-			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
-			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
-		], map![]))
+		TestExternalities::new((
+			map![
+				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
+				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
+			],
+			map![],
+		))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_number(n: T::BlockNumber) {
-		<Number<T>>::put(n);
-	}
+	pub fn set_block_number(n: T::BlockNumber) { <Number<T>>::put(n); }
 
 	/// Sets the index of extrinsic that is currently executing.
 	#[cfg(any(feature = "std", test))]
@@ -767,9 +816,7 @@ impl<T: Trait> Module<T> {
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_parent_hash(n: T::Hash) {
-		<ParentHash<T>>::put(n);
-	}
+	pub fn set_parent_hash(n: T::Hash) { <ParentHash<T>>::put(n); }
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
@@ -798,12 +845,10 @@ impl<T: Trait> Module<T> {
 
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
-		Self::deposit_event(
-			match r {
-				Ok(()) => Event::ExtrinsicSuccess(info),
-				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
-			}
-		);
+		Self::deposit_event(match r {
+			Ok(()) => Event::ExtrinsicSuccess(info),
+			Err(err) => Event::ExtrinsicFailed(err.clone(), info),
+		});
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
@@ -813,15 +858,16 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
-			.unwrap_or_default();
+		let extrinsic_index: u32 =
+			storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
 		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
-			.map(ExtrinsicData::take).collect();
+			.map(ExtrinsicData::take)
+			.collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -883,20 +929,18 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_priority(info: <Self as SignedExtension>::DispatchInfo) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
-			DispatchClass::Operational => Bounded::max_value()
+			DispatchClass::Operational => Bounded::max_value(),
 		}
 	}
 
 	/// Creates new `SignedExtension` to check weight of the extrinsic.
-	pub fn new() -> Self {
-		Self(PhantomData)
-	}
+	pub fn new() -> Self { Self(PhantomData) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Call = T::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -927,27 +971,26 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		// discards any transaction which is bigger than the length or weight limit **alone**, which
 		// is a guarantee that it will fail in the pre-dispatch phase.
 		if let Err(e) = Self::check_block_length(info, len) {
-			return Err(e);
+			return Err(e)
 		}
 
 		if let Err(e) = Self::check_weight(info) {
-			return Err(e);
+			return Err(e)
 		}
 
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+		Ok(ValidTransaction {
+			priority: Self::get_priority(info),
+			..Default::default()
+		})
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckWeight")
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { write!(f, "CheckWeight") }
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 /// Nonce check and increment to give replay protection for transactions.
@@ -956,27 +999,21 @@ pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
 
 impl<T: Trait> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.
-	pub fn from(nonce: T::Index) -> Self {
-		Self(nonce)
-	}
+	pub fn from(nonce: T::Index) -> Self { Self(nonce) }
 }
 
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		self.0.fmt(f)
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { self.0.fmt(f) }
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Call = T::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -991,13 +1028,12 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	) -> Result<(), TransactionValidityError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
-			return Err(
-				if self.0 < expected {
-					InvalidTransaction::Stale
-				} else {
-					InvalidTransaction::Future
-				}.into()
-			)
+			return Err(if self.0 < expected {
+				InvalidTransaction::Stale
+			} else {
+				InvalidTransaction::Future
+			}
+			.into())
 		}
 
 		<AccountNonce<T>>::insert(who, expected + T::Index::one());
@@ -1040,27 +1076,21 @@ pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>))
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
-	pub fn from(era: Era) -> Self {
-		Self((era, rstd::marker::PhantomData))
-	}
+	pub fn from(era: Era) -> Self { Self((era, rstd::marker::PhantomData)) }
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		self.0.fmt(f)
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { self.0.fmt(f) }
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
+	type Call = T::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -1081,7 +1111,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = (self.0)
+			.0
+			.birth(current_u64)
+			.saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::exists(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
@@ -1096,27 +1129,21 @@ pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckGenesis")
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { write!(f, "CheckGenesis") }
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait + Send + Sync> CheckGenesis<T> {
 	/// Creates new `SignedExtension` to check genesis hash.
-	pub fn new() -> Self {
-		Self(rstd::marker::PhantomData)
-	}
+	pub fn new() -> Self { Self(rstd::marker::PhantomData) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
+	type Call = <T as Trait>::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -1131,27 +1158,21 @@ pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckVersion")
-	}
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { write!(f, "CheckVersion") }
 
 	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
-	}
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result { Ok(()) }
 }
 
 impl<T: Trait + Send + Sync> CheckVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
-	pub fn new() -> Self {
-		Self(rstd::marker::PhantomData)
-	}
+	pub fn new() -> Self { Self(rstd::marker::PhantomData) }
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
+	type Call = <T as Trait>::Call;
 	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
@@ -1162,9 +1183,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 
 pub struct ChainContext<T>(rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
-	fn default() -> Self {
-		ChainContext(rstd::marker::PhantomData)
-	}
+	fn default() -> Self { ChainContext(rstd::marker::PhantomData) }
 }
 
 impl<T: Trait> Lookup for ChainContext<T> {
@@ -1180,7 +1199,11 @@ impl<T: Trait> Lookup for ChainContext<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		DispatchError,
+	};
 	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
@@ -1198,23 +1221,23 @@ mod tests {
 	}
 
 	impl Trait for Test {
-		type Origin = Origin;
-		type Call = ();
-		type Index = u64;
+		type AccountId = u64;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockHashCount = BlockHashCount;
 		type BlockNumber = u64;
+		type Call = ();
+		type DelegatedDispatchVerifier = ();
+		type Doughnut = ();
+		type Event = u16;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = u16;
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type Index = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type MaximumBlockLength = MaximumBlockLength;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type Origin = Origin;
 		type Version = ();
-		type Doughnut = ();
-		type DelegatedDispatchVerifier = ();
 	}
 
 	impl From<Event> for u16 {
@@ -1231,7 +1254,10 @@ mod tests {
 	const CALL: &<Test as Trait>::Call = &();
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap()
+			.into()
 	}
 
 	fn normal_weight_limit() -> Weight {
@@ -1259,37 +1285,59 @@ mod tests {
 	#[test]
 	fn deposit_event_should_work() {
 		new_test_ext().execute_with(|| {
-			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
 			System::finalize();
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::Finalization,
-						event: 1u16,
-						topics: vec![],
-					}
-				]
-			);
+			assert_eq!(System::events(), vec![EventRecord {
+				phase: Phase::Finalization,
+				event: 1u16,
+				topics: vec![],
+			}]);
 
-			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&2,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+			);
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
-			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0, Default::default());
+			System::note_applied_extrinsic(
+				&Err(DispatchError::new(Some(1), 2, None)),
+				0,
+				Default::default(),
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
-					EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
-				]
-			);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: 42u16,
+					topics: vec![]
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: 100u16,
+					topics: vec![]
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: 101u16,
+					topics: vec![]
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: 3u16,
+					topics: vec![]
+				}
+			]);
 		});
 	}
 
@@ -1320,41 +1368,38 @@ mod tests {
 			System::finalize();
 
 			// Check that topics are reflected in the event record.
-			assert_eq!(
-				System::events(),
-				vec![
-					EventRecord {
-						phase: Phase::Finalization,
-						event: 1u16,
-						topics: topics[0..3].to_vec(),
-					},
-					EventRecord {
-						phase: Phase::Finalization,
-						event: 2u16,
-						topics: topics[0..1].to_vec(),
-					},
-					EventRecord {
-						phase: Phase::Finalization,
-						event: 3u16,
-						topics: topics[1..2].to_vec(),
-					}
-				]
-			);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Finalization,
+					event: 1u16,
+					topics: topics[0..3].to_vec(),
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: 2u16,
+					topics: topics[0..1].to_vec(),
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: 3u16,
+					topics: topics[1..2].to_vec(),
+				}
+			]);
 
 			// Check that the topic-events mapping reflects the deposited topics.
 			// Note that these are indexes of the events.
-			assert_eq!(
-				System::event_topics(&(), &topics[0]),
-				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 1)],
-			);
-			assert_eq!(
-				System::event_topics(&(), &topics[1]),
-				vec![(BLOCK_NUMBER, 0), (BLOCK_NUMBER, 2)],
-			);
-			assert_eq!(
-				System::event_topics(&(), &topics[2]),
-				vec![(BLOCK_NUMBER, 0)],
-			);
+			assert_eq!(System::event_topics(&(), &topics[0]), vec![
+				(BLOCK_NUMBER, 0),
+				(BLOCK_NUMBER, 1)
+			],);
+			assert_eq!(System::event_topics(&(), &topics[1]), vec![
+				(BLOCK_NUMBER, 0),
+				(BLOCK_NUMBER, 2)
+			],);
+			assert_eq!(System::event_topics(&(), &topics[2]), vec![(
+				BLOCK_NUMBER,
+				0
+			)],);
 		});
 	}
 
@@ -1375,18 +1420,12 @@ mod tests {
 
 			// first 5 block hashes are pruned
 			for n in 0..5 {
-				assert_eq!(
-					System::block_hash(n),
-					H256::zero(),
-				);
+				assert_eq!(System::block_hash(n), H256::zero(),);
 			}
 
 			// the remaining 10 are kept
 			for n in 5..15 {
-				assert_eq!(
-					System::block_hash(n),
-					[n as u8; 32].into(),
-				);
+				assert_eq!(System::block_hash(n), [n as u8; 32].into(),);
 			}
 		})
 	}
@@ -1399,13 +1438,19 @@ mod tests {
 			let len = 0_usize;
 			// stale
 			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(0)
+				.pre_dispatch(&1, CALL, info, len)
+				.is_err());
 			// correct
 			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1)
+				.pre_dispatch(&1, CALL, info, len)
+				.is_ok());
 			// future
 			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(5)
+				.pre_dispatch(&1, CALL, info, len)
+				.is_err());
 		})
 	}
 
@@ -1413,7 +1458,10 @@ mod tests {
 	fn signed_ext_check_weight_works_normal_tx() {
 		new_test_ext().execute_with(|| {
 			let normal_limit = normal_weight_limit();
-			let small = DispatchInfo { weight: 100, ..Default::default() };
+			let small = DispatchInfo {
+				weight: 100,
+				..Default::default()
+			};
 			let medium = DispatchInfo {
 				weight: normal_limit - 1,
 				..Default::default()
@@ -1427,7 +1475,11 @@ mod tests {
 			let reset_check_weight = |i, f, s| {
 				AllExtrinsicsWeight::put(s);
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
-				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
+				if f {
+					assert!(r.is_err())
+				} else {
+					assert!(r.is_ok())
+				}
 			};
 
 			reset_check_weight(small, false, 0);
@@ -1439,7 +1491,10 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_fee_works() {
 		new_test_ext().execute_with(|| {
-			let free = DispatchInfo { weight: 0, ..Default::default() };
+			let free = DispatchInfo {
+				weight: 0,
+				..Default::default()
+			};
 			let len = 0_usize;
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
@@ -1452,7 +1507,10 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_max_works() {
 		new_test_ext().execute_with(|| {
-			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
+			let max = DispatchInfo {
+				weight: Weight::max_value(),
+				..Default::default()
+			};
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
@@ -1466,31 +1524,54 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
+			let normal = DispatchInfo {
+				weight: 100,
+				..Default::default()
+			};
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
 			// given almost full block
 			AllExtrinsicsWeight::put(normal_limit);
 			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData)
+				.pre_dispatch(&1, CALL, normal, len)
+				.is_err());
 			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData)
+				.pre_dispatch(&1, CALL, op, len)
+				.is_ok());
 
 			// likewise for length limit.
 			let len = 100_usize;
 			AllExtrinsicsLen::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData)
+				.pre_dispatch(&1, CALL, normal, len)
+				.is_err());
+			assert!(CheckWeight::<Test>(PhantomData)
+				.pre_dispatch(&1, CALL, op, len)
+				.is_ok());
 		})
 	}
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
+			let normal = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Normal,
+				pays_fee: true,
+			};
+			let op = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
@@ -1515,7 +1596,11 @@ mod tests {
 			let reset_check_weight = |tx, s, f| {
 				AllExtrinsicsLen::put(0);
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, tx, s);
-				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
+				if f {
+					assert!(r.is_err())
+				} else {
+					assert!(r.is_ok())
+				}
 			};
 
 			reset_check_weight(normal, normal_limit - 1, false);
@@ -1523,7 +1608,11 @@ mod tests {
 			reset_check_weight(normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
-			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: true };
+			let op = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: true,
+			};
 			reset_check_weight(op, normal_limit, false);
 			reset_check_weight(op, normal_limit + 100, false);
 			reset_check_weight(op, 1024, false);
@@ -1536,21 +1625,30 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
-				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				CheckEra::<Test>::from(Era::mortal(4, 2))
+					.additional_signed()
+					.err()
+					.unwrap(),
 				InvalidTransaction::AncientBirthBlock.into(),
 			);
 
 			// correct
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
-			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+			assert!(CheckEra::<Test>::from(Era::mortal(4, 12))
+				.additional_signed()
+				.is_ok());
 		})
 	}
 
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
+			let normal = DispatchInfo {
+				weight: 100,
+				class: DispatchClass::Normal,
+				pays_fee: true,
+			};
 			let len = 0_usize;
 			let ext = (
 				CheckWeight::<Test>(PhantomData),
