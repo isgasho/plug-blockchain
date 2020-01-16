@@ -26,19 +26,20 @@
 
 use codec::Encode;
 
-use primitives::ExecutionContext;
-use sp_api::{ApiErrorFor, ApiExt, Core};
-use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		ApiRef, Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One,
-		ProvideRuntimeApi,
-	},
+		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
+		NumberFor, One,
+	}
 };
+use sp_blockchain::{ApplyExtrinsicFailed, Error};
+use primitives::ExecutionContext;
 use state_machine::StorageProof;
+use sp_api::{Core, ApiExt, ApiErrorFor};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
+
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
@@ -83,7 +84,9 @@ where
 
 		let block_id = BlockId::Hash(parent_hash);
 
-		api.initialize_block_with_context(&block_id, ExecutionContext::BlockConstruction, &header)?;
+		api.initialize_block_with_context(
+			&block_id, ExecutionContext::BlockConstruction, &header,
+		)?;
 
 		Ok(Self {
 			header,
@@ -105,9 +108,9 @@ where
 			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
 				block_id,
 				|version| version < 4,
-			)? {
+			)?
+		{
 			// Run compatibility fallback for v3.
-			#[rustfmt::skip]
 			self.api.map_api_result(|api| {
 				#[allow(deprecated)]
 				match api.apply_extrinsic_before_version_4_with_context(
@@ -132,7 +135,7 @@ where
 					Ok(_) => {
 						extrinsics.push(xt);
 						Ok(())
-					},
+					}
 					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into())?,
 				}
 			})
@@ -146,9 +149,9 @@ where
 	}
 
 	fn bake_impl(&mut self) -> Result<(), ApiErrorFor<A, Block>> {
-		self.header = self
-			.api
-			.finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
+		self.header = self.api.finalize_block_with_context(
+			&self.block_id, ExecutionContext::BlockConstruction
+		)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
@@ -165,9 +168,9 @@ where
 	///
 	/// The proof will be `Some(_)`, if proof recording was enabled while creating
 	/// the block builder.
-	pub fn bake_and_extract_proof(
-		mut self,
-	) -> Result<(Block, Option<StorageProof>), ApiErrorFor<A, Block>> {
+	pub fn bake_and_extract_proof(mut self)
+		-> Result<(Block, Option<StorageProof>), ApiErrorFor<A, Block>>
+	{
 		self.bake_impl()?;
 
 		let proof = self.api.extract_proof();

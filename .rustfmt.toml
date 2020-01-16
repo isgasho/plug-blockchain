@@ -8,7 +8,10 @@ format_code_in_doc_comments = true
 format_macro_matchers = true
 format_strings = true
 hard_tabs = true
-ignore = []
+ignore = [
+    "client/block-builder/src/lib.rs",
+    "client/rpc/src/state/tests.rs",
+]
 match_block_trailing_comma = true
 max_width = 100
 merge_imports = true
