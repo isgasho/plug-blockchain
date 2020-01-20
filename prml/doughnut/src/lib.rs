@@ -17,7 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode};
-use rstd::{self};
+use sp_std::{self};
 use sp_runtime::{Doughnut};
 use sp_runtime::traits::{PlugDoughnutApi, Member};
 use support::Parameter;

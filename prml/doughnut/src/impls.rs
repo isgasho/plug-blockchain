@@ -17,7 +17,7 @@ use primitives::{
 	ed25519::{self},
 	sr25519::{self},
 };
-use rstd::{self, prelude::*};
+use sp_std::{self, prelude::*};
 use sp_std::convert::{TryFrom};
 use sp_runtime::{Doughnut};
 use sp_runtime::traits::{PlugDoughnutApi, DoughnutApi, DoughnutVerify, SignedExtension, Verify, VerifyError};

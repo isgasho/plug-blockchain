@@ -28,7 +28,7 @@ use frame_support::{
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
-pub type DoughnutOf<T> = <T as system::Trait>::Doughnut;
+pub type DoughnutOf<T> = <T as frame_system::Trait>::Doughnut;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Trait>::Hash;

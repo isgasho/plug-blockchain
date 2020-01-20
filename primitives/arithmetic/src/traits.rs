@@ -16,7 +16,7 @@
 
 //! Primitives for the runtime modules.
 
-use std::{self, convert::{TryFrom, TryInto}};
+use sp_std::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{

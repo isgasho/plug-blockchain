@@ -23,7 +23,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
-use system::{ensure_none, Trait as SystemTrait};
+use frame_system::{self as system, ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
@@ -32,7 +32,7 @@ pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
 pub trait Trait: SystemTrait {
 	/// Something which can be notified when the timestamp is set. Set this to `()`
 	/// if not needed.
-	type OnFinalizationStalled: OnFinalizationStalled<Self::BlockNumber>;
+type OnFinalizationStalled: OnFinalizationStalled<Self::BlockNumber>;
 	/// The number of recent samples to keep from this chain. Default is 101.
 	type WindowSize: Get<Self::BlockNumber>;
 	/// The delay after which point things become suspicious. Default is 1000.
@@ -80,7 +80,7 @@ decl_module! {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
 			ensure!(
-				system::Module::<T>::block_number() >= hint,
+				frame_system::Module::<T>::block_number() >= hint,
 				Error::<T>::BadHint,
 			);
 			<Self as Store>::Update::put(hint);
@@ -155,7 +155,7 @@ impl<T: Trait> Module<T> {
 		<Self as Store>::Median::put(median);
 
 		if T::BlockNumber::from(our_window_size) == window_size {
-			let now = system::Module::<T>::block_number();
+			let now = frame_system::Module::<T>::block_number();
 			let latency = T::ReportLatency::get();
 
 			// the delay is the latency plus half the window size.
@@ -210,7 +210,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
 	};
 	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
-	use system;
+	use frame_system as system;
 	use std::cell::RefCell;
 
 	#[derive(Clone, PartialEq, Debug)]
@@ -274,7 +274,7 @@ mod tests {
 		type ReportLatency = ReportLatency;
 	}
 
-	type System = system::Module<Test>;
+	type System = frame_system::Module<Test>;
 	type FinalityTracker = Module<Test>;
 
 	#[test]

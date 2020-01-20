@@ -25,7 +25,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use frame_support::{decl_module, decl_storage, decl_error, dispatch, ensure};
 use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
-use frame_system::ensure_none;
+use frame_system::{self as system, ensure_none};
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use frame_support::weights::SimpleDispatchInfo;
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
