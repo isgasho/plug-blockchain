@@ -17,7 +17,7 @@
 //! Extra trait implementations for the `GenericAsset` module
 
 use crate::{Module, NegativeImbalance, PositiveImbalance, SpendingAssetIdAuthority, Trait};
-use rstd::result;
+use sp_std::result;
 use sp_runtime::traits::CheckedSub;
 use support::dispatch::Result;
 use support::{

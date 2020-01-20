@@ -6,7 +6,7 @@ use crate::traits::{
 	ExistenceRequirement, Imbalance, SignedImbalance, UpdateBalanceOutcome, WithdrawReasons,
 };
 use codec::FullCodec;
-use rstd::{fmt::Debug, marker::PhantomData, result};
+use sp_std::{fmt::Debug, marker::PhantomData, result};
 use sp_runtime::traits::{
 	PlugDoughnutApi, MaybeSerializeDeserialize, SimpleArithmetic, Zero,
 };
@@ -35,7 +35,7 @@ pub trait ChargeFee<AccountId> {
 }
 
 /// Dummy `ChargeFee` implementation, mainly for testing purpose.
-pub struct DummyChargeFee<T, U>(PhantomData<(T, U)>);
+pub struct DummyChargeFee<T, U>(sp_std::marker::PhantomData<(T, U)>);
 
 impl<T, U> ChargeExtrinsicFee<T, U> for DummyChargeFee<T, U> {
 	fn charge_extrinsic_fee<'a>(
@@ -171,11 +171,11 @@ impl MaybeDoughnutRef for () {
 /// Currencies in the system are identifiable by a unique `CurrencyId`
 pub trait MultiCurrencyAccounting {
 	/// The ID type for an account in the system
-	type AccountId: FullCodec + Debug + Default;
+	type AccountId: FullCodec + sp_std::fmt::Debug + Default;
 	/// The balance of an account for a particular currency
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + sp_std::fmt::Debug + Default;
 	/// The ID type of a currency in the system
-	type CurrencyId: FullCodec + Debug + Default;
+	type CurrencyId: FullCodec + sp_std::fmt::Debug + Default;
 	/// A type the is aware of the default network currency ID
 	/// When the currency ID is not specified for a `MultiCurrencyAccounting` method, it will be used
 	/// by default

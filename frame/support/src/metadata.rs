@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -241,7 +241,7 @@ mod tests {
 	mod system {
 		use super::*;
 
-		pub trait Trait {
+		pub trait Trait: 'static {
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId, Self::Doughnut>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId, Self::Doughnut>> + MaybeDoughnutRef<Doughnut=()>;
@@ -250,6 +250,7 @@ mod tests {
 			type SomeValue: Get<u32>;
 			type Doughnut;
 			type DelegatedDispatchVerifier: DelegatedDispatchVerifier<Doughnut = ()>;
+			type ModuleToIndex: crate::traits::ModuleToIndex;
 		}
 
 		decl_module! {
@@ -292,7 +293,7 @@ mod tests {
 		use crate::dispatch::DispatchResult;
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Trait: super::system::Trait {
 			type Balance;
 		}
 
@@ -306,14 +307,14 @@ mod tests {
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = system {
-				type Error = Error;
+				type Error = Error<T>;
 
-				fn aux_0(_origin) -> DispatchResult<Error> { unreachable!() }
+				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}
 
 		crate::decl_error! {
-			pub enum Error {
+			pub enum Error for Module<T: Trait> {
 				/// Some user input error
 				UserInputError,
 				/// Something bad happened
@@ -397,6 +398,7 @@ mod tests {
 		type SomeValue = SystemValue;
 		type DelegatedDispatchVerifier = ();
 		type Doughnut = ();
+		type ModuleToIndex = ();
 	}
 
 	impl_runtime_metadata!(

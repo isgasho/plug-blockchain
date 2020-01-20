@@ -57,7 +57,7 @@ impl_outer_dispatch! {
 	}
 }
 
-pub struct MockDelegatedDispatchVerifier<T: system::Trait>(rstd::marker::PhantomData<T>);
+pub struct MockDelegatedDispatchVerifier<T: system::Trait>(sp_std::marker::PhantomData<T>);
 impl<T: system::Trait> DelegatedDispatchVerifier for MockDelegatedDispatchVerifier<T> {
 	type Doughnut = T::Doughnut;
 	type AccountId = T::AccountId;

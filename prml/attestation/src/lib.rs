@@ -36,7 +36,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use primitives::uint::U256;
-use support::rstd::prelude::*;
+use support::sp_std::prelude::*;
 use support::{decl_event, decl_module, decl_storage, dispatch::Result};
 use system::ensure_signed;
 
